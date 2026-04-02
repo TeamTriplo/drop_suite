@@ -1,0 +1,269 @@
+<?php
+/**
+ * @file
+ * Drop Monitor — server and site health monitoring for Drop Suite.
+ *
+ * Collects data from three sources per server:
+ * - HTTP check (response code, time, SSL cert expiry)
+ * - Status agent script (disk, updates, PHP, Backdrop, cron, DB size)
+ * - Linode API (CPU, RAM, transfer, uptime)
+ */
+
+/**
+ * Implements hook_config_info().
+ */
+function dropmonitor_config_info() {
+  return array(
+    'dropmonitor.settings' => array(
+      'label' => t('Drop Monitor settings'),
+      'group' => t('Drop Suite'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function dropmonitor_permission() {
+  return array(
+    'access dropmonitor' => array(
+      'title' => t('View server monitoring dashboard'),
+    ),
+    'administer dropmonitor' => array(
+      'title' => t('Administer Drop Monitor'),
+      'description' => t('Manage servers, settings, and run manual checks.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_init().
+ */
+function dropmonitor_init() {
+  if (strpos(current_path(), 'drop/monitor') === 0) {
+    backdrop_add_css(backdrop_get_path('module', 'dropmonitor') . '/dropmonitor.css');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dropmonitor_menu() {
+  $items = array();
+
+  // Dashboard.
+  $items['drop/monitor'] = array(
+    'title' => 'Server Monitor',
+    'page callback' => 'dropmonitor_dashboard_page',
+    'access arguments' => array('access dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+  );
+
+  $items['drop/monitor/dashboard'] = array(
+    'title' => 'Dashboard',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  // Server detail page.
+  $items['drop/monitor/server/%dropmonitor_server'] = array(
+    'title callback' => 'dropmonitor_server_title',
+    'title arguments' => array(3),
+    'page callback' => 'dropmonitor_server_detail_page',
+    'page arguments' => array(3),
+    'access arguments' => array('access dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+  );
+
+  // Manual refresh.
+  $items['drop/monitor/refresh'] = array(
+    'title' => 'Refresh all',
+    'page callback' => 'dropmonitor_refresh_all',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Refresh single server.
+  $items['drop/monitor/server/%dropmonitor_server/refresh'] = array(
+    'title' => 'Refresh',
+    'page callback' => 'dropmonitor_refresh_server',
+    'page arguments' => array(3),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Settings.
+  $items['drop/monitor/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_settings_form'),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 10,
+  );
+
+  // Server management.
+  $items['drop/monitor/servers'] = array(
+    'title' => 'Servers',
+    'page callback' => 'dropmonitor_servers_list',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 5,
+  );
+
+  $items['drop/monitor/servers/add'] = array(
+    'title' => 'Add server',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_server_form'),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  $items['drop/monitor/servers/%dropmonitor_server/edit'] = array(
+    'title' => 'Edit server',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_server_form', 3),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+  );
+
+  $items['drop/monitor/servers/%dropmonitor_server/delete'] = array(
+    'title' => 'Delete server',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_server_delete_form', 3),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function dropmonitor_drop_nav_links() {
+  return array(
+    'dropmonitor' => array(
+      'title' => t('Monitor'),
+      'path' => 'drop/monitor',
+      'weight' => 85,
+    ),
+  );
+}
+
+/**
+ * Menu loader for %dropmonitor_server.
+ */
+function dropmonitor_server_load($sid) {
+  $server = db_select('dropmonitor_server', 's')
+    ->fields('s')
+    ->condition('sid', $sid)
+    ->execute()
+    ->fetchObject();
+  return $server ?: FALSE;
+}
+
+/**
+ * Title callback for server detail page.
+ */
+function dropmonitor_server_title($server) {
+  return check_plain($server->label);
+}
+
+/**
+ * Implements hook_cron().
+ */
+function dropmonitor_cron() {
+  $config = config('dropmonitor.settings');
+  $interval = $config->get('check_interval');
+  $last_run = state_get('dropmonitor_last_cron', 0);
+
+  if ((REQUEST_TIME - $last_run) < $interval) {
+    return;
+  }
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.checks');
+  dropmonitor_run_all_checks();
+  state_set('dropmonitor_last_cron', REQUEST_TIME);
+}
+
+// -------------------------------------------------------------------------
+// Helper functions.
+// -------------------------------------------------------------------------
+
+/**
+ * Returns all active servers.
+ */
+function dropmonitor_get_servers($active_only = TRUE) {
+  $query = db_select('dropmonitor_server', 's')
+    ->fields('s')
+    ->orderBy('weight')
+    ->orderBy('label');
+  if ($active_only) {
+    $query->condition('active', 1);
+  }
+  return $query->execute()->fetchAll();
+}
+
+/**
+ * Returns the latest check results for a server, keyed by check_type.
+ */
+function dropmonitor_get_checks($sid) {
+  return db_select('dropmonitor_check', 'c')
+    ->fields('c')
+    ->condition('sid', $sid)
+    ->execute()
+    ->fetchAllAssoc('check_type');
+}
+
+/**
+ * Saves a check result (upserts on sid + check_type).
+ */
+function dropmonitor_save_check($sid, $check_type, $status, $data = array()) {
+  db_merge('dropmonitor_check')
+    ->key(array(
+      'sid' => $sid,
+      'check_type' => $check_type,
+    ))
+    ->fields(array(
+      'status' => $status,
+      'data' => json_encode($data),
+      'checked' => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Returns a status label with CSS class.
+ */
+function dropmonitor_status_badge($status) {
+  $labels = array(
+    'ok' => t('OK'),
+    'warning' => t('Warning'),
+    'critical' => t('Critical'),
+    'error' => t('Error'),
+    'unknown' => t('Unknown'),
+  );
+  $label = isset($labels[$status]) ? $labels[$status] : $labels['unknown'];
+  return '<span class="dropmonitor-status dropmonitor-status-' . $status . '">' . $label . '</span>';
+}
+
+/**
+ * Returns the worst status from an array of check results.
+ */
+function dropmonitor_overall_status($checks) {
+  $severity = array('ok' => 0, 'warning' => 1, 'critical' => 2, 'error' => 3);
+  $worst = 'ok';
+  foreach ($checks as $check) {
+    $s = $check->status;
+    if (isset($severity[$s]) && $severity[$s] > $severity[$worst]) {
+      $worst = $s;
+    }
+  }
+  return $worst;
+}

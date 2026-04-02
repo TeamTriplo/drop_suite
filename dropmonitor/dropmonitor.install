@@ -1,0 +1,136 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for Drop Monitor.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropmonitor_schema() {
+  $schema = array();
+
+  // Servers to monitor.
+  $schema['dropmonitor_server'] = array(
+    'description' => 'Servers monitored by Drop Monitor.',
+    'fields' => array(
+      'sid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'Human-readable server label.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'linode_id' => array(
+        'description' => 'Linode instance ID (optional).',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'site_url' => array(
+        'description' => 'Primary site URL for HTTP checks.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'agent_url' => array(
+        'description' => 'Status agent script URL (e.g. https://example.com/status.php).',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'agent_token' => array(
+        'description' => 'Shared secret token for the status agent.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'active' => array(
+        'description' => 'Whether this server is actively monitored.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'weight' => array(
+        'description' => 'Sort weight for display order.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when added.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('sid'),
+    'indexes' => array(
+      'active' => array('active'),
+    ),
+  );
+
+  // Check results — one row per server per check type.
+  $schema['dropmonitor_check'] = array(
+    'description' => 'Latest check results per server.',
+    'fields' => array(
+      'cid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'sid' => array(
+        'description' => 'Server ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'check_type' => array(
+        'description' => 'Type of check: http, agent, linode.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Result status: ok, warning, critical, error.',
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'data' => array(
+        'description' => 'JSON-encoded check result data.',
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => FALSE,
+      ),
+      'checked' => array(
+        'description' => 'Unix timestamp of this check.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('cid'),
+    'unique keys' => array(
+      'server_type' => array('sid', 'check_type'),
+    ),
+    'indexes' => array(
+      'sid' => array('sid'),
+    ),
+  );
+
+  return $schema;
+}
