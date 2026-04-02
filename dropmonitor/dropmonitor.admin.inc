@@ -99,6 +99,18 @@ function dropmonitor_settings_form_submit($form, &$form_state) {
  * Server list page.
  */
 function dropmonitor_servers_list() {
+  $output = '';
+
+  // Sync button.
+  $output .= '<div style="margin-bottom: 20px;">';
+  $sync_url = url('drop/monitor/servers/sync', array(
+    'query' => array('token' => backdrop_get_token('dropmonitor-sync')),
+  ));
+  $output .= l(t('Sync from Linode API'), $sync_url, array(
+    'attributes' => array('class' => 'button button-primary'),
+  ));
+  $output .= '</div>';
+
   $servers = dropmonitor_get_servers(FALSE);
 
   $header = array(
@@ -131,7 +143,8 @@ function dropmonitor_servers_list() {
     ));
   }
 
-  return theme('table', array('header' => $header, 'rows' => $rows));
+  $output .= theme('table', array('header' => $header, 'rows' => $rows));
+  return $output;
 }
 
 // -------------------------------------------------------------------------
@@ -276,4 +289,31 @@ function dropmonitor_server_delete_form_submit($form, &$form_state) {
   db_delete('dropmonitor_server')->condition('sid', $server->sid)->execute();
   backdrop_set_message(t('Server %label deleted.', array('%label' => $server->label)));
   $form_state['redirect'] = 'drop/monitor/servers';
+}
+
+// -------------------------------------------------------------------------
+// Sync from Linode API.
+// -------------------------------------------------------------------------
+
+/**
+ * Callback for syncing servers from Linode API.
+ */
+function dropmonitor_sync_callback() {
+  if (!backdrop_valid_token($_GET['token'], 'dropmonitor-sync')) {
+    return MENU_NOT_FOUND;
+  }
+
+  $result = dropmonitor_sync_servers_from_linode();
+
+  if (isset($result['error'])) {
+    backdrop_set_message(t('Sync failed: @error', array('@error' => $result['error'])), 'error');
+  }
+  else {
+    backdrop_set_message(t('Sync complete: Added @added servers, updated @updated servers.', array(
+      '@added' => $result['added'],
+      '@updated' => $result['updated'],
+    )));
+  }
+
+  backdrop_goto('drop/monitor/servers');
 }

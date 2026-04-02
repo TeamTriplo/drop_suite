@@ -140,6 +140,15 @@ function dropmonitor_menu() {
     'file' => 'dropmonitor.admin.inc',
   );
 
+  // Sync servers from Linode API.
+  $items['drop/monitor/servers/sync'] = array(
+    'title' => 'Sync from Linode',
+    'page callback' => 'dropmonitor_sync_callback',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.admin.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
 }
 
@@ -266,4 +275,115 @@ function dropmonitor_overall_status($checks) {
     }
   }
   return $worst;
+}
+
+/**
+ * Syncs servers from Linode API.
+ *
+ * Fetches all instances from Linode, creates new servers, and updates
+ * metadata for existing ones.
+ *
+ * @return array
+ *   Array with 'added' and 'updated' counts.
+ */
+function dropmonitor_sync_servers_from_linode() {
+  $config = config('dropmonitor.settings');
+  $api_token = $config->get('linode_api_token');
+
+  if (empty($api_token)) {
+    return array(
+      'added' => 0,
+      'updated' => 0,
+      'error' => 'No Linode API token configured.',
+    );
+  }
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.checks');
+  $instances = _dropmonitor_linode_api('linode/instances', $api_token);
+
+  if (!$instances || !isset($instances['data'])) {
+    return array(
+      'added' => 0,
+      'updated' => 0,
+      'error' => 'Failed to fetch servers from Linode API.',
+    );
+  }
+
+  $added = 0;
+  $updated = 0;
+
+  foreach ($instances['data'] as $instance) {
+    $linode_id = $instance['id'];
+
+    // Extract metadata.
+    $disk_size = isset($instance['specs']['disk']) ? $instance['specs']['disk'] / 1024 : NULL;
+    $memory = isset($instance['specs']['memory']) ? $instance['specs']['memory'] : NULL;
+    $vcpus = isset($instance['specs']['vcpus']) ? $instance['specs']['vcpus'] : NULL;
+    $region = isset($instance['region']) ? $instance['region'] : NULL;
+    $linode_type = isset($instance['type']) ? $instance['type'] : NULL;
+    $linode_status = isset($instance['status']) ? $instance['status'] : NULL;
+    $ipv4 = isset($instance['ipv4'][0]) ? $instance['ipv4'][0] : NULL;
+    $label = isset($instance['label']) ? $instance['label'] : 'Linode ' . $linode_id;
+
+    // Convert Linode created timestamp to Unix time.
+    $linode_created = NULL;
+    if (isset($instance['created'])) {
+      $linode_created = strtotime($instance['created']);
+    }
+
+    // Check if server already exists.
+    $existing = db_select('dropmonitor_server', 's')
+      ->fields('s')
+      ->condition('linode_id', $linode_id)
+      ->execute()
+      ->fetchObject();
+
+    if ($existing) {
+      // Update metadata.
+      db_update('dropmonitor_server')
+        ->fields(array(
+          'disk_size' => $disk_size,
+          'memory' => $memory,
+          'vcpus' => $vcpus,
+          'region' => $region,
+          'linode_type' => $linode_type,
+          'linode_status' => $linode_status,
+          'ipv4' => $ipv4,
+          'linode_created' => $linode_created,
+        ))
+        ->condition('linode_id', $linode_id)
+        ->execute();
+      $updated++;
+    }
+    else {
+      // Create new server with placeholder site_url.
+      $site_url = !empty($ipv4) ? 'http://' . $ipv4 : 'http://localhost';
+      db_insert('dropmonitor_server')
+        ->fields(array(
+          'label' => $label,
+          'linode_id' => $linode_id,
+          'site_url' => $site_url,
+          'agent_url' => '',
+          'agent_token' => '',
+          'active' => 1,
+          'weight' => 0,
+          'created' => REQUEST_TIME,
+          'disk_size' => $disk_size,
+          'memory' => $memory,
+          'vcpus' => $vcpus,
+          'region' => $region,
+          'linode_type' => $linode_type,
+          'linode_status' => $linode_status,
+          'ipv4' => $ipv4,
+          'linode_created' => $linode_created,
+        ))
+        ->execute();
+      $added++;
+    }
+  }
+
+  return array(
+    'added' => $added,
+    'updated' => $updated,
+  );
 }

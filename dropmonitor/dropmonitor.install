@@ -73,6 +73,50 @@ function dropmonitor_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'disk_size' => array(
+        'description' => 'Disk allocation in GB from Linode.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'memory' => array(
+        'description' => 'RAM in MB from Linode.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'vcpus' => array(
+        'description' => 'CPU cores from Linode.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'region' => array(
+        'description' => 'Linode region (e.g., us-west, us-southeast).',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => FALSE,
+      ),
+      'linode_type' => array(
+        'description' => 'Instance type from Linode (e.g., g6-standard-2).',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => FALSE,
+      ),
+      'linode_status' => array(
+        'description' => 'Server status from Linode (running, offline, etc).',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+      ),
+      'ipv4' => array(
+        'description' => 'Primary IPv4 address from Linode.',
+        'type' => 'varchar',
+        'length' => 45,
+        'not null' => FALSE,
+      ),
+      'linode_created' => array(
+        'description' => 'Unix timestamp when created on Linode.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
     ),
     'primary key' => array('sid'),
     'indexes' => array(
@@ -133,4 +177,85 @@ function dropmonitor_schema() {
   );
 
   return $schema;
+}
+
+/**
+ * Add Linode metadata columns to dropmonitor_server table.
+ */
+function dropmonitor_update_7001(&$sandbox) {
+  $spec = array(
+    'description' => 'Disk allocation in GB from Linode.',
+    'type' => 'int',
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'disk_size')) {
+    db_add_field('dropmonitor_server', 'disk_size', $spec);
+  }
+
+  $spec = array(
+    'description' => 'RAM in MB from Linode.',
+    'type' => 'int',
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'memory')) {
+    db_add_field('dropmonitor_server', 'memory', $spec);
+  }
+
+  $spec = array(
+    'description' => 'CPU cores from Linode.',
+    'type' => 'int',
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'vcpus')) {
+    db_add_field('dropmonitor_server', 'vcpus', $spec);
+  }
+
+  $spec = array(
+    'description' => 'Linode region (e.g., us-west, us-southeast).',
+    'type' => 'varchar',
+    'length' => 64,
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'region')) {
+    db_add_field('dropmonitor_server', 'region', $spec);
+  }
+
+  $spec = array(
+    'description' => 'Instance type from Linode (e.g., g6-standard-2).',
+    'type' => 'varchar',
+    'length' => 64,
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'linode_type')) {
+    db_add_field('dropmonitor_server', 'linode_type', $spec);
+  }
+
+  $spec = array(
+    'description' => 'Server status from Linode (running, offline, etc).',
+    'type' => 'varchar',
+    'length' => 32,
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'linode_status')) {
+    db_add_field('dropmonitor_server', 'linode_status', $spec);
+  }
+
+  $spec = array(
+    'description' => 'Primary IPv4 address from Linode.',
+    'type' => 'varchar',
+    'length' => 45,
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'ipv4')) {
+    db_add_field('dropmonitor_server', 'ipv4', $spec);
+  }
+
+  $spec = array(
+    'description' => 'Unix timestamp when created on Linode.',
+    'type' => 'int',
+    'not null' => FALSE,
+  );
+  if (!db_field_exists('dropmonitor_server', 'linode_created')) {
+    db_add_field('dropmonitor_server', 'linode_created', $spec);
+  }
 }
