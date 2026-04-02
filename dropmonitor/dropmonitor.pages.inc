@@ -95,49 +95,6 @@ function dropmonitor_dashboard_page() {
           );
         }
 
-        // Updates.
-        if (isset($agent['pending_updates'])) {
-          $update_class = '';
-          if ($agent['pending_security'] > 0) {
-            $update_class = 'dropmonitor-warning';
-          }
-          $update_detail = '';
-          if ($agent['pending_security'] > 0) {
-            $update_detail = $agent['pending_security'] . ' ' . t('security');
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Updates'),
-            $agent['pending_updates'] . ' ' . t('pending'),
-            $update_detail,
-            $update_class
-          );
-        }
-
-        // PHP + Backdrop.
-        $versions = array();
-        if (!empty($agent['php_version'])) {
-          $versions[] = 'PHP ' . $agent['php_version'];
-        }
-        if (!empty($agent['backdrop_version'])) {
-          $versions[] = 'Backdrop ' . $agent['backdrop_version'];
-        }
-        if (!empty($versions)) {
-          $output .= _dropmonitor_metric_item(t('Stack'), implode(', ', $versions), '');
-        }
-
-        // Cron.
-        if (isset($agent['cron_age_hours'])) {
-          $cron_class = '';
-          if ($agent['cron_age_hours'] > 24) {
-            $cron_class = 'dropmonitor-warning';
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Cron'),
-            $agent['cron_age_hours'] . 'h ' . t('ago'),
-            '',
-            $cron_class
-          );
-        }
 
         // DB size.
         if (isset($agent['db_size_mb'])) {
