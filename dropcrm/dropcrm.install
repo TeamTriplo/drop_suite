@@ -1,0 +1,1187 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the DropCRM module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropcrm_schema() {
+  $schema = array();
+
+  $schema['drop_project'] = array(
+    'description' => 'Projects that can be linked to contacts and used for time tracking.',
+    'fields' => array(
+      'pid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => '',
+        'description' => 'Project name.',
+      ),
+      'color' => array(
+        'type'     => 'varchar',
+        'length'   => 7,
+        'not null' => TRUE,
+        'default'  => '#1565c0',
+        'description' => 'Display color as a CSS hex value.',
+      ),
+      'active' => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'not null' => TRUE,
+        'default'  => 1,
+        'description' => '1 = active, 0 = archived.',
+      ),
+      'cid' => array(
+        'description' => 'Optional linked DropCRM contact ID.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'prefix' => array(
+        'description' => 'Short prefix for ticket numbers, e.g. TRIP for TRIP-42.',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'ticket_counter' => array(
+        'description' => 'Auto-incrementing counter for ticket labels within this project.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'changed' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+    ),
+    'primary key' => array('pid'),
+    'indexes' => array(
+      'uid'    => array('uid'),
+      'active' => array('active'),
+      'cid'    => array('cid'),
+    ),
+  );
+
+  $schema['crm_contact'] = array(
+    'description' => 'Base table for CRM contacts (persons, organizations, households).',
+    'fields' => array(
+      'cid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'Bundle: crm_person, crm_organization, or crm_household.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'name' => array(
+        'description' => 'Display name. Computed from first/last for persons; set directly for orgs and households.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Active status: 1 = active, 0 = inactive.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'uid' => array(
+        'description' => 'User ID of the person who created this contact.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the contact was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when the contact was last modified.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('cid'),
+    'indexes' => array(
+      'type' => array('type'),
+      'name' => array('name'),
+      'status' => array('status'),
+      'uid' => array('uid'),
+    ),
+  );
+
+  $schema['crm_contact_method'] = array(
+    'description' => 'Base table for CRM contact methods: email, telephone, and address.',
+    'fields' => array(
+      'cmid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'Bundle: email, telephone, or address.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'cid' => array(
+        'description' => 'Foreign key to crm_contact.cid.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'label' => array(
+        'description' => 'Human label for this method, e.g. Work, Home, Mobile.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'value' => array(
+        'description' => 'The contact method value: email address, phone number, or formatted address.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'is_primary' => array(
+        'description' => 'Whether this is the primary method of this type for the contact.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the contact method was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when the contact method was last modified.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('cmid'),
+    'indexes' => array(
+      'cid' => array('cid'),
+      'type' => array('type'),
+      'is_primary' => array('is_primary'),
+    ),
+  );
+
+  $schema['crm_activity'] = array(
+    'description' => 'Base table for CRM activities: logged interactions and planned tasks.',
+    'fields' => array(
+      'aid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'Activity type: call, email, meeting, note, task.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => 'note',
+      ),
+      'subject' => array(
+        'description' => 'Short subject or title of the activity.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Activity status: completed or planned.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => 'completed',
+      ),
+      'priority' => array(
+        'description' => 'Priority: 0 = normal, 1 = high.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'direction' => array(
+        'description' => 'Direction for calls and emails: inbound or outbound. Empty for other types.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'activity_date' => array(
+        'description' => 'Date the activity occurred (Unix timestamp).',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'due_date' => array(
+        'description' => 'Optional due date for planned activities (Unix timestamp). NULL if not set.',
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'is_outreach' => array(
+        'description' => 'Whether this activity counts toward the outreach goal: 1 = yes, 0 = no.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uid' => array(
+        'description' => 'User ID of the person who created this activity.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the activity was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when the activity was last modified.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('aid'),
+    'indexes' => array(
+      'type' => array('type'),
+      'status' => array('status'),
+      'priority' => array('priority'),
+      'activity_date' => array('activity_date'),
+      'uid' => array('uid'),
+    ),
+  );
+
+  $schema['crm_relationship'] = array(
+    'description' => 'Stores person-to-person relationships between CRM contacts.',
+    'fields' => array(
+      'rid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'cid_a' => array(
+        'description' => 'Foreign key to crm_contact.cid for the first contact.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'cid_b' => array(
+        'description' => 'Foreign key to crm_contact.cid for the second contact.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'type' => array(
+        'description' => 'Relationship type key, e.g. spouse, colleague.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'notes' => array(
+        'description' => 'Optional notes about this relationship.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the relationship was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('rid'),
+    'indexes' => array(
+      'cid_a' => array('cid_a'),
+      'cid_b' => array('cid_b'),
+      'type'  => array('type'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Creates the default field bases and instances for all CRM entity bundles.
+ */
+function dropcrm_install() {
+  _dropcrm_create_fields();
+
+  module_load_include('inc', 'dropcrm', 'dropcrm.admin');
+  $config = config('dropcrm.settings');
+  if (!$config->get('relationship_types')) {
+    $config->set('relationship_types', _dropcrm_default_relationship_types());
+    $config->save();
+  }
+}
+
+/**
+ * Creates all default field bases and instances for DropCRM entities.
+ */
+function _dropcrm_create_fields() {
+  // --- Field bases ---
+  $fields = array(
+    // Person: first name.
+    array(
+      'field_name' => 'field_crm_first_name',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Person: last name.
+    array(
+      'field_name' => 'field_crm_last_name',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Person: middle name.
+    array(
+      'field_name' => 'field_crm_middle_name',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Person: job title.
+    array(
+      'field_name' => 'field_crm_job_title',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Person: employer (entity reference to crm_organization).
+    array(
+      'field_name' => 'field_crm_employer',
+      'type' => 'entityreference',
+      'cardinality' => 1,
+      'settings' => array(
+        'target_type' => 'crm_contact',
+        'handler' => 'base',
+        'handler_settings' => array(
+          'target_bundles' => array('crm_organization' => 'crm_organization'),
+          'sort' => array('type' => 'none'),
+        ),
+      ),
+    ),
+    // Organization: description.
+    array(
+      'field_name' => 'field_crm_org_description',
+      'type' => 'text_long',
+      'cardinality' => 1,
+    ),
+    // Organization: website.
+    array(
+      'field_name' => 'field_crm_website',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Activity: body / notes.
+    array(
+      'field_name' => 'field_crm_activity_body',
+      'type' => 'text_long',
+      'cardinality' => 1,
+    ),
+    // Activity: linked contacts (entity reference, multiple).
+    array(
+      'field_name' => 'field_crm_contacts',
+      'type' => 'entityreference',
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+      'settings' => array(
+        'target_type' => 'crm_contact',
+        'handler' => 'base',
+        'handler_settings' => array(
+          'target_bundles' => array(),
+          'sort' => array('type' => 'none'),
+        ),
+      ),
+    ),
+    // Address: street.
+    array(
+      'field_name' => 'field_crm_street',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Address: city.
+    array(
+      'field_name' => 'field_crm_city',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Address: state or province.
+    array(
+      'field_name' => 'field_crm_state_province',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Address: postal code.
+    array(
+      'field_name' => 'field_crm_postal_code',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+    // Address: country.
+    array(
+      'field_name' => 'field_crm_country',
+      'type' => 'text',
+      'cardinality' => 1,
+    ),
+  );
+
+  foreach ($fields as $field) {
+    if (!field_info_field($field['field_name'])) {
+      field_create_field($field);
+    }
+  }
+
+  // --- Field instances ---
+  $instances = array(
+    // crm_person instances.
+    array(
+      'field_name' => 'field_crm_first_name',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_person',
+      'label' => t('First Name'),
+      'required' => TRUE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_last_name',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_person',
+      'label' => t('Last Name'),
+      'required' => TRUE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_middle_name',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_person',
+      'label' => t('Middle Name'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_job_title',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_person',
+      'label' => t('Job Title'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_employer',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_person',
+      'label' => t('Organization'),
+      'required' => FALSE,
+      'widget' => array('type' => 'entityreference_autocomplete'),
+    ),
+    // crm_organization instances.
+    array(
+      'field_name' => 'field_crm_org_description',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_organization',
+      'label' => t('Description'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textarea'),
+    ),
+    array(
+      'field_name' => 'field_crm_website',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_organization',
+      'label' => t('Website'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    // crm_activity instances.
+    array(
+      'field_name' => 'field_crm_activity_body',
+      'entity_type' => 'crm_activity',
+      'bundle' => 'crm_activity',
+      'label' => t('Notes'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textarea', 'settings' => array('rows' => 6)),
+    ),
+    array(
+      'field_name' => 'field_crm_contacts',
+      'entity_type' => 'crm_activity',
+      'bundle' => 'crm_activity',
+      'label' => t('Contacts'),
+      'required' => FALSE,
+      'widget' => array('type' => 'entityreference_autocomplete_tags'),
+    ),
+    // crm_contact_method / address instances.
+    array(
+      'field_name' => 'field_crm_street',
+      'entity_type' => 'crm_contact_method',
+      'bundle' => 'address',
+      'label' => t('Street'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_city',
+      'entity_type' => 'crm_contact_method',
+      'bundle' => 'address',
+      'label' => t('City'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_state_province',
+      'entity_type' => 'crm_contact_method',
+      'bundle' => 'address',
+      'label' => t('State / Province'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_postal_code',
+      'entity_type' => 'crm_contact_method',
+      'bundle' => 'address',
+      'label' => t('Postal Code'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+    array(
+      'field_name' => 'field_crm_country',
+      'entity_type' => 'crm_contact_method',
+      'bundle' => 'address',
+      'label' => t('Country'),
+      'required' => FALSE,
+      'widget' => array('type' => 'text_textfield'),
+    ),
+  );
+
+  foreach ($instances as $instance) {
+    if (!field_info_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dropcrm_uninstall() {
+  // Delete all field instances for our entity types.
+  $entity_types = array('crm_contact', 'crm_contact_method', 'crm_activity');
+  foreach ($entity_types as $entity_type) {
+    $instances = field_read_instances(array('entity_type' => $entity_type), array('include_deleted' => FALSE));
+    foreach ($instances as $instance) {
+      field_delete_instance($instance, FALSE);
+    }
+  }
+
+  // Delete field bases that belong exclusively to this module.
+  $crm_fields = array(
+    'field_crm_first_name',
+    'field_crm_last_name',
+    'field_crm_middle_name',
+    'field_crm_job_title',
+    'field_crm_employer',
+    'field_crm_org_description',
+    'field_crm_website',
+    'field_crm_activity_body',
+    'field_crm_contacts',
+    'field_crm_street',
+    'field_crm_city',
+    'field_crm_state_province',
+    'field_crm_postal_code',
+    'field_crm_country',
+  );
+  foreach ($crm_fields as $field_name) {
+    $field = field_info_field($field_name);
+    if ($field) {
+      field_delete_field($field_name);
+    }
+  }
+
+  field_purge_batch(1000);
+
+  // Drop the relationship table.
+  db_drop_table('crm_relationship');
+
+  // Delete config.
+  config('dropcrm.settings')->delete();
+}
+
+/**
+ * Rename the field_crm_employer instance label from "Employer" to "Organization".
+ */
+function dropcrm_update_1001() {
+  $instance = field_read_instance('crm_contact', 'field_crm_employer', 'crm_person');
+  if ($instance) {
+    $instance['label'] = 'Organization';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Set a custom autocomplete path on field_crm_employer so the organization
+ * picker searches only organizations and supports up to 50 results.
+ */
+function dropcrm_update_1002() {
+  $instance = field_read_instance('crm_contact', 'field_crm_employer', 'crm_person');
+  if ($instance) {
+    $instance['widget']['settings']['path'] = 'crm/autocomplete/organizations';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Create the crm_relationship table and set default relationship types.
+ */
+function dropcrm_update_1003() {
+  if (!db_table_exists('crm_relationship')) {
+    db_create_table('crm_relationship', drupal_get_schema_unprocessed('dropcrm', 'crm_relationship'));
+  }
+  module_load_include('inc', 'dropcrm', 'dropcrm.admin');
+  $config = config('dropcrm.settings');
+  if (!$config->get('relationship_types')) {
+    $config->set('relationship_types', _dropcrm_default_relationship_types());
+    $config->save();
+  }
+}
+
+/**
+ * Allow a person to belong to multiple organizations.
+ *
+ * Changes field_crm_employer to unlimited cardinality and switches the widget
+ * to entityreference_autocomplete_tags so all orgs appear in one autocomplete
+ * textfield (comma-separated) rather than stacked "Add another item" rows.
+ */
+function dropcrm_update_1004() {
+  $field = field_info_field('field_crm_employer');
+  if ($field && $field['cardinality'] != FIELD_CARDINALITY_UNLIMITED) {
+    $field['cardinality'] = FIELD_CARDINALITY_UNLIMITED;
+    field_update_field($field);
+  }
+
+  $instance = field_read_instance('crm_contact', 'field_crm_employer', 'crm_person');
+  if ($instance) {
+    $instance['widget']['type']     = 'entityreference_autocomplete_tags';
+    $instance['widget']['module']   = 'entityreference';
+    $instance['widget']['settings']['path'] = 'crm/autocomplete/organizations';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Switch field_crm_employer widget back to entityreference_autocomplete with
+ * "Add another item" behaviour. The tags widget autocomplete is incompatible
+ * with the custom endpoint; the standard widget works correctly.
+ */
+function dropcrm_update_1005() {
+  $instance = field_read_instance('crm_contact', 'field_crm_employer', 'crm_person');
+  if ($instance) {
+    $instance['widget']['type']     = 'entityreference_autocomplete';
+    $instance['widget']['module']   = 'entityreference';
+    $instance['widget']['settings']['path'] = 'crm/autocomplete/organizations';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Add due_date column to crm_activity for optional per-task due dates.
+ */
+function dropcrm_update_1006() {
+  if (!db_field_exists('crm_activity', 'due_date')) {
+    db_add_field('crm_activity', 'due_date', array(
+      'description' => 'Optional due date for planned activities (Unix timestamp). NULL if not set.',
+      'type'        => 'int',
+      'not null'    => FALSE,
+      'default'     => NULL,
+    ));
+  }
+}
+
+/**
+ * Switch field_crm_employer to the Inline Entity Form (multiple values) widget
+ * so that a new organisation can be created inline while editing a person.
+ *
+ * allow_existing = TRUE  → existing orgs can still be found via autocomplete.
+ * allow_new      = TRUE  → a "Create new organization" button is shown.
+ * delete_references = 0  → removing a person from an org never deletes the org.
+ */
+function dropcrm_update_1009() {
+  $instance = field_read_instance('crm_contact', 'field_crm_employer', 'crm_person');
+  if ($instance) {
+    $instance['widget']['type']   = 'inline_entity_form';
+    $instance['widget']['module'] = 'inline_entity_form';
+    $instance['widget']['settings'] = array(
+      'fields' => array(),
+      'type_settings' => array(
+        'allow_new'        => 1,
+        'allow_existing'   => 1,
+        'match_operator'   => 'CONTAINS',
+        'allow_clone'      => 0,
+        'delete_references' => 0,
+        'override_labels'  => 1,
+        'label_singular'   => 'organization',
+        'label_plural'     => 'organizations',
+      ),
+    );
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Point field_crm_contacts on activities to our custom all-contacts autocomplete
+ * so that people, organisations and households all appear as suggestions.
+ */
+function dropcrm_update_1008() {
+  $instance = field_read_instance('crm_activity', 'field_crm_contacts', 'crm_activity');
+  if ($instance) {
+    $instance['widget']['settings']['path'] = 'crm/autocomplete/contacts';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Migrate priority values: expand from 2-level (0=Normal, 1=High) to
+ * 3-level (0=Low, 1=Normal, 2=High). Existing Normal→1, High→2.
+ */
+function dropcrm_update_1007() {
+  // Remap High (1) → 2 first, then Normal (0) → 1.
+  db_update('crm_activity')->fields(array('priority' => 2))->condition('priority', 1)->execute();
+  db_update('crm_activity')->fields(array('priority' => 1))->condition('priority', 0)->execute();
+}
+
+/**
+ * Add is_outreach column to crm_activity for outreach goal tracking.
+ */
+function dropcrm_update_1010() {
+  if (!db_field_exists('crm_activity', 'is_outreach')) {
+    db_add_field('crm_activity', 'is_outreach', array(
+      'description' => 'Whether this activity counts toward the outreach goal.',
+      'type'     => 'int',
+      'size'     => 'tiny',
+      'not null' => TRUE,
+      'default'  => 0,
+    ));
+  }
+}
+
+/**
+ * Add Website / Social (url) contact method bundle labels to config.
+ */
+function dropcrm_update_1011() {
+  $config = config('dropcrm.settings');
+  $labels = $config->get('contact_method_labels');
+  if (empty($labels['url'])) {
+    $labels['url'] = array('LinkedIn', 'Twitter', 'GitHub', 'Facebook', 'Instagram', 'Website', 'Other');
+    $config->set('contact_method_labels', $labels);
+    $config->save();
+  }
+}
+
+/**
+ * Add field_crm_meeting_notes (text_long) to crm_activity for Zoom AI notes.
+ */
+function dropcrm_update_1012() {
+  if (!field_info_field('field_crm_meeting_notes')) {
+    field_create_field(array(
+      'field_name'  => 'field_crm_meeting_notes',
+      'type'        => 'text_long',
+    ));
+  }
+  if (!field_info_instance('crm_activity', 'field_crm_meeting_notes', 'crm_activity')) {
+    field_create_instance(array(
+      'field_name'  => 'field_crm_meeting_notes',
+      'entity_type' => 'crm_activity',
+      'bundle'      => 'crm_activity',
+      'label'       => t('Details'),
+      'required'    => FALSE,
+      'settings'    => array('text_processing' => 1),
+      'widget'      => array(
+        'type'     => 'text_textarea',
+        'weight'   => 20,
+        'settings' => array('rows' => 20),
+      ),
+    ));
+  }
+}
+
+/**
+ * Enable text_processing on field_crm_meeting_notes to activate WYSIWYG.
+ */
+function dropcrm_update_1013() {
+  $instance = field_read_instance('crm_activity', 'field_crm_meeting_notes', 'crm_activity');
+  if ($instance && empty($instance['settings']['text_processing'])) {
+    $instance['settings']['text_processing'] = 1;
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Add 1–5 star prospect rating field to person and organization contacts.
+ */
+function dropcrm_update_1014() {
+  if (!field_info_field('field_crm_rating')) {
+    field_create_field(array(
+      'field_name'  => 'field_crm_rating',
+      'type'        => 'list_integer',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          1 => '★',
+          2 => '★★',
+          3 => '★★★',
+          4 => '★★★★',
+          5 => '★★★★★',
+        ),
+      ),
+    ));
+  }
+
+  foreach (array('crm_person', 'crm_organization') as $bundle) {
+    if (!field_info_instance('crm_contact', 'field_crm_rating', $bundle)) {
+      field_create_instance(array(
+        'field_name'  => 'field_crm_rating',
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => t('Rating'),
+        'required'    => FALSE,
+        'widget'      => array('type' => 'options_buttons'),
+      ));
+    }
+  }
+}
+
+/**
+ * Expand rating field from 3 stars to 5 stars.
+ */
+function dropcrm_update_1015() {
+  $field = field_info_field('field_crm_rating');
+  if ($field) {
+    $field['settings']['allowed_values'] = array(
+      1 => '★',
+      2 => '★★',
+      3 => '★★★',
+      4 => '★★★★',
+      5 => '★★★★★',
+    );
+    field_update_field($field);
+  }
+}
+
+/**
+ * Move drop_project ownership to DropCRM; add cid column if missing.
+ *
+ * The drop_project table was previously declared in droptime_schema(). It now
+ * lives in dropcrm_schema(). The table itself does not change — we only ensure
+ * the cid column exists (it was added by droptime_crm if that sub-module was
+ * ever enabled; this makes it unconditional).
+ */
+function dropcrm_update_1016() {
+  if (!db_field_exists('drop_project', 'cid')) {
+    db_add_field('drop_project', 'cid', array(
+      'description' => 'Optional linked DropCRM contact ID.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => FALSE,
+      'default'     => NULL,
+    ));
+  }
+  if (!db_index_exists('drop_project', 'cid')) {
+    db_add_index('drop_project', 'cid', array('cid'));
+  }
+}
+
+/**
+ * Attach field_drop_tags to all crm_contact bundles; seed default client tags.
+ */
+function dropcrm_update_1017() {
+  // Ensure the drop_tags vocabulary exists (created by droptasks on install,
+  // but dropcrm may be used without droptasks on some sites).
+  $vocab = taxonomy_vocabulary_machine_name_load('drop_tags');
+  if (!$vocab) {
+    $vocab = new TaxonomyVocabulary(array(
+      'name'         => 'Drop Tags',
+      'machine_name' => 'drop_tags',
+      'description'  => 'Shared tags used across the Drop module suite.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  // Ensure the field_drop_tags field exists.
+  if (!field_info_field('field_drop_tags')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_tags',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_tags', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  // Attach to each crm_contact bundle.
+  $bundles = array('crm_person', 'crm_organization', 'crm_household');
+  foreach ($bundles as $bundle) {
+    if (!field_info_instance('crm_contact', 'field_drop_tags', $bundle)) {
+      field_create_instance(array(
+        'field_name'  => 'field_drop_tags',
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => 'Tags',
+        'required'    => FALSE,
+        'description' => 'Tags for this contact, e.g. Client, Prospect, Partner.',
+        'widget'      => array(
+          'type'     => 'taxonomy_autocomplete',
+          'settings' => array('size' => 60),
+        ),
+        'display' => array(
+          'default' => array(
+            'label'  => 'above',
+            'type'   => 'taxonomy_term_reference_link',
+            'weight' => 5,
+          ),
+        ),
+      ));
+    }
+  }
+
+  // Seed default client-relationship tags if they don't already exist.
+  $default_tags = array('Client', 'Past Client', 'Prospect', 'Partner', 'Vendor');
+  foreach ($default_tags as $tag_name) {
+    $existing = taxonomy_term_load_multiple(array(), array(
+      'name' => $tag_name,
+      'vocabulary' => $vocab->machine_name,
+    ));
+    if (empty($existing)) {
+      $term = new TaxonomyTerm(array(
+        'name'       => $tag_name,
+        'vocabulary' => $vocab->machine_name,
+      ));
+      taxonomy_term_save($term);
+    }
+  }
+}
+
+/**
+ * Add Status field to Organizations and Households; migrate old field_crm_tags
+ * data into field_drop_tags and remove the old field.
+ */
+function dropcrm_update_1018() {
+  // Add field_crm_status to crm_organization if not already there.
+  if (!field_info_instance('crm_contact', 'field_crm_status', 'crm_organization')) {
+    field_create_instance(array(
+      'field_name'  => 'field_crm_status',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_organization',
+      'label'       => 'Status',
+      'required'    => FALSE,
+      'description' => 'A short note on this contact\'s current status.',
+      'widget'      => array(
+        'type'     => 'text_textarea',
+        'settings' => array('rows' => 3),
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'above',
+          'type'   => 'text_default',
+          'weight' => 6,
+        ),
+      ),
+    ));
+  }
+
+  // Add field_crm_status to crm_household if not already there.
+  if (!field_info_instance('crm_contact', 'field_crm_status', 'crm_household')) {
+    field_create_instance(array(
+      'field_name'  => 'field_crm_status',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_household',
+      'label'       => 'Status',
+      'required'    => FALSE,
+      'description' => 'A short note on this contact\'s current status.',
+      'widget'      => array(
+        'type'     => 'text_textarea',
+        'settings' => array('rows' => 3),
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'above',
+          'type'   => 'text_default',
+          'weight' => 6,
+        ),
+      ),
+    ));
+  }
+
+  // Migrate field_crm_tags data into field_drop_tags.
+  // field_crm_tags is a taxonomy_term_reference — tids map directly.
+  $old_rows = db_select('field_data_field_crm_tags', 'f')
+    ->fields('f')
+    ->execute()
+    ->fetchAll();
+
+  foreach ($old_rows as $row) {
+    // Only insert if this entity/tid combo doesn't already exist in drop_tags.
+    $exists = db_select('field_data_field_drop_tags', 'n')
+      ->condition('entity_type', $row->entity_type)
+      ->condition('entity_id', $row->entity_id)
+      ->condition('field_drop_tags_tid', $row->field_crm_tags_tid)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+
+    if (!$exists) {
+      // Find the next available delta for this entity.
+      $max_delta = db_select('field_data_field_drop_tags', 'n')
+        ->condition('entity_type', $row->entity_type)
+        ->condition('entity_id', $row->entity_id)
+        ->condition('bundle', $row->bundle)
+        ->condition('revision_id', $row->revision_id)
+        ->condition('language', $row->language)
+        ->condition('deleted', 0)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+
+      db_insert('field_data_field_drop_tags')
+        ->fields(array(
+          'entity_type'         => $row->entity_type,
+          'bundle'              => $row->bundle,
+          'deleted'             => 0,
+          'entity_id'           => $row->entity_id,
+          'revision_id'         => $row->revision_id,
+          'language'            => $row->language,
+          'delta'               => (int) $max_delta,
+          'field_drop_tags_tid' => $row->field_crm_tags_tid,
+        ))
+        ->execute();
+    }
+  }
+
+  // Delete the old field_crm_tags instance and field entirely.
+  if (field_info_instance('crm_contact', 'field_crm_tags', 'crm_person')) {
+    field_delete_instance(field_info_instance('crm_contact', 'field_crm_tags', 'crm_person'));
+  }
+  if (field_info_field('field_crm_tags')) {
+    field_delete_field('field_crm_tags');
+  }
+}
+
+/**
+ * Rename field_crm_meeting_notes label from "Meeting Notes" to "Details".
+ */
+function dropcrm_update_1019() {
+  $instance = field_read_instance('crm_activity', 'field_crm_meeting_notes', 'crm_activity');
+  if ($instance) {
+    $instance['label'] = 'Details';
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Migrate person-to-organization entries from crm_relationship to
+ * field_crm_employer, then delete those relationship rows.
+ *
+ * Relationships should only link two people. The field_crm_employer entity
+ * reference field on crm_person contacts is the correct way to associate a
+ * person with an organization.
+ */
+function dropcrm_update_1020() {
+  // Find all rows in crm_relationship where one side is a person and the other
+  // is an organization.
+  $result = db_query("
+    SELECT r.rid,
+      CASE WHEN ca.type = 'crm_person' THEN r.cid_a ELSE r.cid_b END AS person_cid,
+      CASE WHEN ca.type = 'crm_organization' THEN r.cid_a ELSE r.cid_b END AS org_cid
+    FROM {crm_relationship} r
+    INNER JOIN {crm_contact} ca ON ca.cid = r.cid_a
+    INNER JOIN {crm_contact} cb ON cb.cid = r.cid_b
+    WHERE (ca.type = 'crm_person' AND cb.type = 'crm_organization')
+       OR (ca.type = 'crm_organization' AND cb.type = 'crm_person')
+  ");
+
+  $rids     = array();
+  $migrated = 0;
+  $lang     = LANGUAGE_NONE;
+
+  foreach ($result as $row) {
+    $rids[] = (int) $row->rid;
+
+    $person = crm_contact_load((int) $row->person_cid);
+    if (!$person) {
+      continue;
+    }
+
+    // Collect existing employer target IDs to avoid duplicates.
+    $existing = array();
+    if (!empty($person->field_crm_employer[$lang])) {
+      foreach ($person->field_crm_employer[$lang] as $item) {
+        $existing[] = (int) $item['target_id'];
+      }
+    }
+
+    if (!in_array((int) $row->org_cid, $existing)) {
+      $person->field_crm_employer[$lang][] = array('target_id' => (int) $row->org_cid);
+      $person->save();
+      $migrated++;
+    }
+  }
+
+  // Remove the now-migrated relationship rows.
+  if ($rids) {
+    db_delete('crm_relationship')
+      ->condition('rid', $rids, 'IN')
+      ->execute();
+  }
+
+  return t('Migrated @m person–organization relationship(s) to the Employer field; deleted @d relationship row(s).', array(
+    '@m' => $migrated,
+    '@d' => count($rids),
+  ));
+}

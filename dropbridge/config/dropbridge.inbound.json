@@ -1,0 +1,9 @@
+{
+  "_config_name": "dropbridge.inbound",
+  "enabled": false,
+  "webhook_token": "",
+  "forward_to": "support@triplo.co",
+  "default_pid": 0,
+  "drop_unverified": false,
+  "allowlist": []
+}

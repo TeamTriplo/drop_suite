@@ -1,0 +1,532 @@
+/**
+ * @file
+ * Drop Base — shared CSS variables and utility classes.
+ *
+ * This is the single source of truth for colours and patterns shared across
+ * DropCRM and DropTasks. Update values here; both modules inherit the change
+ * automatically via CSS custom properties.
+ *
+ * DO NOT duplicate these values in dropcrm.admin.css or droptasks.css.
+ * Module-specific layout/structure styles belong in the module's own CSS file.
+ */
+
+/* ---------------------------------------------------------------------------
+   Shared colour tokens
+   --------------------------------------------------------------------------- */
+
+:root {
+  /* Priority — 5 levels: none / low / normal / high / critical */
+  --drop-priority-critical-color:  #7b0000;
+  --drop-priority-critical-bg:     #7b0000;
+  --drop-priority-critical-text:   #ffffff;
+  --drop-priority-critical-row-bg: #fff5f5;
+  --drop-priority-high-color:      #c62828;
+  --drop-priority-high-bg:         #c62828;
+  --drop-priority-high-text:       #ffffff;
+  --drop-priority-normal-color:    #1565c0;
+  --drop-priority-normal-bg:       #e3f2fd;
+  --drop-priority-normal-text:     #1565c0;
+  --drop-priority-low-color:       #757575;
+  --drop-priority-low-bg:          #f5f5f5;
+  --drop-priority-low-text:        #757575;
+  --drop-priority-none-color:      #bdbdbd;
+  --drop-priority-none-bg:         #f9f9f9;
+  --drop-priority-none-text:       #9e9e9e;
+
+  /* Due date status */
+  --drop-overdue-color:            #c62828;
+  --drop-overdue-bg:               #fff5f5;
+  --drop-due-soon-color:           #e65100;
+  --drop-due-soon-bg:              #ffe082;
+  --drop-due-today-color:          #e65100;
+  --drop-due-today-bg:             #fff8e1;
+}
+
+/* ---------------------------------------------------------------------------
+   Priority — text utilities
+   Used when priority is shown inline as coloured text.
+   --------------------------------------------------------------------------- */
+
+/* Critical gets text colour + bold + a row background tint for maximum visibility. */
+.drop-priority-critical {
+  color: var(--drop-priority-critical-color);
+  font-weight: bold;
+}
+
+tr.drop-priority-critical td {
+  background-color: var(--drop-priority-critical-row-bg);
+}
+
+.drop-priority-high {
+  color: var(--drop-priority-high-color);
+  font-weight: bold;
+}
+
+.drop-priority-normal {
+  color: var(--drop-priority-normal-color);
+}
+
+.drop-priority-low {
+  color: var(--drop-priority-low-color);
+}
+
+.drop-priority-none {
+  color: var(--drop-priority-none-color);
+}
+
+/* ---------------------------------------------------------------------------
+   Priority — table cell badge utilities
+   Used when priority fills a table cell as a coloured badge.
+   --------------------------------------------------------------------------- */
+
+td.drop-priority-critical {
+  background-color: var(--drop-priority-critical-bg) !important;
+  color: var(--drop-priority-critical-text) !important;
+  font-weight: bold;
+  text-align: center;
+}
+
+td.drop-priority-high {
+  background-color: var(--drop-priority-high-bg) !important;
+  color: var(--drop-priority-high-text) !important;
+  font-weight: bold;
+  text-align: center;
+}
+
+td.drop-priority-normal {
+  background-color: var(--drop-priority-normal-bg) !important;
+  color: var(--drop-priority-normal-text) !important;
+  font-weight: bold;
+  text-align: center;
+}
+
+td.drop-priority-low {
+  background-color: var(--drop-priority-low-bg) !important;
+  color: var(--drop-priority-low-text) !important;
+  font-weight: bold;
+  text-align: center;
+}
+
+td.drop-priority-none {
+  background-color: var(--drop-priority-none-bg) !important;
+  color: var(--drop-priority-none-text) !important;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Due date status — text utilities
+   --------------------------------------------------------------------------- */
+
+.drop-overdue {
+  color: var(--drop-overdue-color);
+  font-weight: bold;
+}
+
+.drop-due-soon {
+  color: var(--drop-due-soon-color);
+  font-weight: bold;
+}
+
+.drop-due-today {
+  color: var(--drop-due-today-color);
+  font-weight: bold;
+}
+
+/* ---------------------------------------------------------------------------
+   Due date status — row highlight utilities
+   --------------------------------------------------------------------------- */
+
+tr.drop-row-overdue td {
+  background-color: var(--drop-overdue-bg);
+}
+
+tr.drop-row-due-soon td {
+  background-color: var(--drop-due-soon-bg);
+}
+
+/* ---------------------------------------------------------------------------
+   Section headers
+   A flex row with a title on the left and optional add-link(s) on the right.
+   Used on entity view pages across the Drop module family.
+   --------------------------------------------------------------------------- */
+
+.drop-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid #ddd;
+  margin: 1.5em 0 0.5em 0;
+  padding-bottom: 0.25em;
+}
+
+.drop-section-header h2 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+a.drop-section-add {
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.drop-section-add-group {
+  display: flex;
+  gap: 0.6em;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------------------------
+   Page action links bar
+   --------------------------------------------------------------------------- */
+
+.drop-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin-bottom: 1.2em;
+}
+
+.drop-page-actions a {
+  display: inline-block;
+  padding: 0.2em 0.75em;
+  border: 1px solid #aaa;
+  border-radius: 2em;
+  font-size: 0.82em;
+  line-height: 1.6;
+  color: #333;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.drop-page-actions a:hover {
+  background-color: #f0f0f0;
+  border-color: #777;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Drop nav bar
+   Shared top navigation across all Drop admin pages.
+   --------------------------------------------------------------------------- */
+
+.drop-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0 0.75rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--drop-border, #e0e0e0);
+}
+
+.drop-nav a {
+  padding: 0.3rem 0.9rem;
+  border-radius: 2em;
+  font-size: 0.875em;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--drop-text-secondary, #555);
+  border: 1px solid transparent;
+  transition: background 0.1s, color 0.1s;
+}
+
+.drop-nav a:hover {
+  background: var(--drop-border, #eee);
+  color: var(--drop-text, #222);
+}
+
+.drop-nav a.drop-nav-active {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  border-color: var(--drop-primary, #1565c0);
+}
+
+/* ===========================================================================
+   Drop Admin — layout region chrome
+   Applies to the shared header, top, and tab areas used across all Drop pages.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Header region
+   The l-header contains breadcrumb + Drop Navigation block. Remove the nav's
+   standalone border/margin — the header boundary provides the separation.
+   --------------------------------------------------------------------------- */
+
+.l-header {
+  border-bottom: 1px solid #c8c8c8;
+  padding-bottom: 0.1rem;
+}
+
+.l-header .drop-nav {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Top region
+   Contains: page title, local task tabs, local actions, system messages.
+   --------------------------------------------------------------------------- */
+
+.l-top {
+  padding-top: 0.85rem;
+  padding-bottom: 0.25rem;
+}
+
+.l-top h1.page-title {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Local task tabs — lighter than Backdrop's default admin box-tab style */
+.l-top .tabs {
+  margin-bottom: 0.4rem;
+}
+
+.l-top ul.tabs.primary {
+  background: transparent;
+  border-bottom: 1px solid #d0d0d0;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.l-top ul.tabs.primary li a {
+  background: #f2f2f2;
+  border: 1px solid #d4d4d4;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  color: #555;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.3em 0.8em;
+  text-transform: none;
+}
+
+.l-top ul.tabs.primary li a:hover {
+  background: #e6e6e6;
+  color: #222;
+  text-decoration: none;
+}
+
+.l-top ul.tabs.primary li.active a {
+  background: #fff;
+  border-bottom-color: #fff;
+  color: var(--drop-primary, #1565c0);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Report pin/unpin action
+   Renders in the action-links area on report sub-tab pages.
+   --------------------------------------------------------------------------- */
+
+ul.drop-pin-action-list {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+}
+
+a.drop-pin-link,
+span.drop-pin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.82em;
+  font-weight: 500;
+  color: #666;
+  text-decoration: none;
+  padding: 0.2em 0.65em;
+  border-radius: 2em;
+  border: 1px solid #d4d4d4;
+  background: #f7f7f7;
+  white-space: nowrap;
+}
+
+a.drop-pin-link:hover {
+  background: #ebebeb;
+  color: #333;
+  text-decoration: none;
+}
+
+a.drop-pin-link.drop-pin-active {
+  color: var(--drop-primary, #1565c0);
+  border-color: var(--drop-primary, #1565c0);
+  background: #e8f0fe;
+}
+
+a.drop-pin-link.drop-pin-active:hover {
+  background: #d2e3fc;
+}
+
+span.drop-pin-link.drop-pin-disabled {
+  color: #aaa;
+  border-color: #e0e0e0;
+  background: #fafafa;
+  cursor: default;
+}
+
+/* Local actions in top region (+ Add ticket etc.) */
+.l-top ul.action-links {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+}
+
+.l-top ul.action-links li {
+  display: inline-block;
+  margin-right: 0.75rem;
+}
+
+.l-top ul.action-links li a {
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   Drop Suite Secondary Navigation (drop-snav)
+   Replaces Backdrop's local task tabs on Drop Suite section pages.
+   ========================================================================== */
+
+.drop-snav {
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.drop-snav__extras {
+  display: flex;
+  align-items: center;
+  padding-bottom: 0.4rem;
+  gap: 0.5rem;
+}
+
+.drop-snav__action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.85rem;
+  background: #1565c0;
+  color: #fff !important;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.drop-snav__action-btn:hover {
+  background: #0d47a1;
+  text-decoration: none !important;
+}
+
+.drop-snav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.drop-snav__item a {
+  display: inline-block;
+  padding: 0.5rem 0.875rem;
+  text-decoration: none;
+  color: #555;
+  font-size: 0.875rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.drop-snav__item a:hover {
+  color: #1565c0;
+  border-bottom-color: #90caf9;
+  text-decoration: none;
+}
+
+.drop-snav__item.is-active a {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+  font-weight: 600;
+}
+
+/* Admin-only items — de-emphasised, separated by a subtle gap */
+.drop-snav__item--admin {
+  margin-left: 0.25rem;
+}
+
+.drop-snav__item--admin a {
+  color: #aaa;
+  font-size: 0.78rem;
+}
+
+.drop-snav__item--admin a:hover {
+  color: #666;
+  border-bottom-color: #ccc;
+}
+
+.drop-snav__item--admin.is-active a {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+}
+
+/* Pinned report items — pin icon prefix */
+.drop-snav__item--pinned a::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%23aaa' d='M236.07 98.21 157.79 19.93a16 16 0 0 0-22.63 0l-28.29 28.29a16 16 0 0 0-3.55 17.38l-33.91 33.91A16 16 0 0 0 52 99.43a16.27 16.27 0 0 0 .39 3.55L19.72 135.63a16 16 0 0 0 0 22.63l13.17 13.17L19.72 184.6a16 16 0 0 0 22.63 22.62l13.17-13.17 11.64 11.64a16 16 0 0 0 22.63 0l32.64-32.64A16.27 16.27 0 0 0 125.94 173a16 16 0 0 0-.47-3.17L157.79 137a16 16 0 0 0 17.38-3.55l28.29-28.28a16 16 0 0 0 0-22.63z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: contain;
+  margin-right: 4px;
+  opacity: 0.5;
+  vertical-align: middle;
+}
+
+/* Badges */
+.drop-snav__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1565c0;
+  color: #fff;
+  border-radius: 10px;
+  min-width: 1.3em;
+  height: 1.3em;
+  padding: 0 0.35em;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.drop-snav__item.is-active .drop-snav__badge {
+  background: #1565c0;
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Full-width content when no sidebar regions are populated.
+ * drop_base_preprocess_layout() adds layout--no-sidebar when empty.
+ * --------------------------------------------------------------------------- */
+.layout--no-sidebar .l-content {
+  flex: 0 0 100%;
+  max-width: 100%;
+  width: 100%;
+}
+.layout--no-sidebar .l-sidebar {
+  display: none;
+}

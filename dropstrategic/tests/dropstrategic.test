@@ -1,0 +1,234 @@
+<?php
+/**
+ * @file
+ * Tests for the Drop Strategic module.
+ */
+
+// ---------------------------------------------------------------------------
+// Progress calculation tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests dropstrategic_calculate_progress() with various key result configurations.
+ */
+class DropStrategicProgressTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop Strategic Progress Calculation',
+      'description' => 'Verifies that progress is calculated correctly from key results.',
+      'group'       => 'Drop Strategic',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'entity_plus', 'dropstrategic');
+  }
+
+  /**
+   * Builds a mock key result object.
+   *
+   * @param bool $done
+   * @param string|null $target
+   * @param string|null $current_value
+   *
+   * @return object
+   */
+  protected function makeKr($done, $target = NULL, $current_value = NULL) {
+    return (object) array(
+      'done'          => $done ? 1 : 0,
+      'target'        => $target,
+      'current_value' => $current_value,
+    );
+  }
+
+  /**
+   * An empty key results array returns 0.
+   */
+  public function testEmptyKeyResultsReturnsZero() {
+    $this->assertEqual(0, dropstrategic_calculate_progress(array()),
+      'Empty key results returns 0%.');
+  }
+
+  /**
+   * A single done checkbox KR returns 100.
+   */
+  public function testSingleCheckboxDoneReturns100() {
+    $this->assertEqual(100, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE),
+    )), 'Single done checkbox KR returns 100%.');
+  }
+
+  /**
+   * A single undone checkbox KR returns 0.
+   */
+  public function testSingleCheckboxUndoneReturns0() {
+    $this->assertEqual(0, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE),
+    )), 'Single undone checkbox KR returns 0%.');
+  }
+
+  /**
+   * Half of checkbox KRs done returns 50.
+   */
+  public function testHalfCheckboxKrsDoneReturns50() {
+    $this->assertEqual(50, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE),
+      $this->makeKr(FALSE),
+    )), 'Half of checkbox KRs done returns 50%.');
+  }
+
+  /**
+   * All checkbox KRs done returns 100.
+   */
+  public function testAllCheckboxKrsDoneReturns100() {
+    $this->assertEqual(100, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE),
+      $this->makeKr(TRUE),
+      $this->makeKr(TRUE),
+    )), 'All checkbox KRs done returns 100%.');
+  }
+
+  /**
+   * A numeric KR at full progress (current == target) returns 100.
+   */
+  public function testNumericKrAtFullProgressReturns100() {
+    $this->assertEqual(100, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE, '10', '10'),
+    )), 'Numeric KR with current == target returns 100%.');
+  }
+
+  /**
+   * A numeric KR at half progress returns 50.
+   */
+  public function testNumericKrAtHalfProgressReturns50() {
+    $this->assertEqual(50, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE, '100', '50'),
+    )), 'Numeric KR with current = half of target returns 50%.');
+  }
+
+  /**
+   * A numeric KR where current exceeds target is capped at 100.
+   */
+  public function testNumericKrExceedingTargetCappedAt100() {
+    $this->assertEqual(100, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE, '10', '200'),
+    )), 'Numeric KR with current > target is capped at 100%.');
+  }
+
+  /**
+   * A numeric KR with no current value is treated as 0% progress.
+   */
+  public function testNumericKrWithNoCurrentValueReturns0() {
+    $this->assertEqual(0, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE, '100', NULL),
+    )), 'Numeric KR with no current value returns 0%.');
+  }
+
+  /**
+   * A KR with a zero target is treated as a checkbox (not a numeric KR).
+   */
+  public function testZeroTargetTreatedAsCheckbox() {
+    $this->assertEqual(0, dropstrategic_calculate_progress(array(
+      $this->makeKr(FALSE, '0', '0'),
+    )), 'KR with target=0 is treated as checkbox (undone = 0%).');
+
+    $this->assertEqual(100, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE, '0', '0'),
+    )), 'KR with target=0 is treated as checkbox (done = 100%).');
+  }
+
+  /**
+   * Mixed KR types: one done checkbox + one numeric at 50% = 75%.
+   */
+  public function testMixedKrTypesAveragedCorrectly() {
+    $this->assertEqual(75, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE),          // checkbox, done → 100%
+      $this->makeKr(FALSE, '100', '50'), // numeric, 50% → 50%
+    )), 'Mixed KR types: done checkbox (100%) + half numeric (50%) = 75%.');
+  }
+
+  /**
+   * Three KRs of varying completion average correctly.
+   */
+  public function testThreeKrsAveragedCorrectly() {
+    $this->assertEqual(50, dropstrategic_calculate_progress(array(
+      $this->makeKr(TRUE),               // 100%
+      $this->makeKr(FALSE, '100', '50'), // 50%
+      $this->makeKr(FALSE),              // 0%
+    )), 'Three KRs at 100%, 50%, 0% average to 50%.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard access tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that the strategic goals dashboard respects permissions.
+ */
+class DropStrategicAccessTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop Strategic Access Control',
+      'description' => 'Verifies that the strategic goals dashboard and CRUD require correct permissions.',
+      'group'       => 'Drop Strategic',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'entity_plus', 'dropstrategic');
+  }
+
+  /**
+   * Anonymous users cannot access the strategic goals dashboard.
+   */
+  public function testAnonymousCannotAccessDashboard() {
+    $this->backdropGet('drop/strategic');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user with 'view strategic goals' can access the dashboard.
+   */
+  public function testViewerCanAccessDashboard() {
+    $viewer = $this->backdropCreateUser(array('view strategic goals'));
+    $this->backdropLogin($viewer);
+    $this->backdropGet('drop/strategic');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user without 'view strategic goals' is denied the dashboard.
+   */
+  public function testUserWithoutPermissionDeniedDashboard() {
+    $noAccess = $this->backdropCreateUser(array());
+    $this->backdropLogin($noAccess);
+    $this->backdropGet('drop/strategic');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user with 'create strategic goals' can access the add goal form.
+   */
+  public function testCreatorCanAccessAddForm() {
+    $creator = $this->backdropCreateUser(array(
+      'view strategic goals',
+      'create strategic goals',
+    ));
+    $this->backdropLogin($creator);
+    $this->backdropGet('drop/strategic/add');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user without 'create strategic goals' is denied the add form.
+   */
+  public function testUserWithoutCreatePermissionDeniedAddForm() {
+    $viewer = $this->backdropCreateUser(array('view strategic goals'));
+    $this->backdropLogin($viewer);
+    $this->backdropGet('drop/strategic/add');
+    $this->assertResponse(403);
+  }
+}

@@ -1,0 +1,105 @@
+<?php
+/**
+ * @file
+ * Install / schema for Drop Email.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropemail_schema() {
+  $schema['drop_email_log'] = array(
+    'description' => 'Log of outgoing emails sent via Drop Email.',
+    'fields' => array(
+      'eid' => array(
+        'description' => 'Primary key.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'UID of the sender.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'sent_at' => array(
+        'description' => 'Unix timestamp when the email was sent.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'to_email' => array(
+        'description' => 'Recipient email address.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'from_email' => array(
+        'description' => 'Sender email address (From header).',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'reply_to' => array(
+        'description' => 'Reply-To header, if different from from_email.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'subject' => array(
+        'description' => 'Email subject line.',
+        'type'        => 'varchar',
+        'length'      => 500,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'body' => array(
+        'description' => 'Email body text.',
+        'type'        => 'text',
+        'size'        => 'big',
+        'not null'    => TRUE,
+      ),
+      'status' => array(
+        'description' => 'Send status: sent or failed.',
+        'type'        => 'varchar',
+        'length'      => 16,
+        'not null'    => TRUE,
+        'default'     => 'sent',
+      ),
+      'cid' => array(
+        'description' => 'CRM contact ID, if sent from a contact page.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'tid' => array(
+        'description' => 'Ticket ID, if sent from a ticket page.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'aid' => array(
+        'description' => 'CRM activity ID created for this email.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+    ),
+    'primary key' => array('eid'),
+    'indexes' => array(
+      'cid' => array('cid'),
+      'tid' => array('tid'),
+      'uid' => array('uid'),
+    ),
+  );
+  return $schema;
+}
+

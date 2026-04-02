@@ -1,0 +1,1770 @@
+/**
+ * @file
+ * DropTickets styles.
+ */
+
+/* ---------------------------------------------------------------------------
+   Ticket form two-column layout
+   --------------------------------------------------------------------------- */
+
+.droptickets-form-layout {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.droptickets-form-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.droptickets-form-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.droptickets-form-sidebar .form-item {
+  margin-bottom: 1rem;
+}
+
+.droptickets-form-sidebar select,
+.droptickets-form-sidebar input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 700px) {
+  .droptickets-form-layout {
+    flex-direction: column;
+  }
+  .droptickets-form-sidebar {
+    width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Filter row (status dropdown + project dropdown + search + add link)
+   --------------------------------------------------------------------------- */
+
+.droptickets-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.droptickets-filter-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.droptickets-filter-select {
+  font-size: 0.875em;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--drop-border, #ccc);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--drop-text, #333);
+  cursor: pointer;
+}
+
+/* Active tag badge — shown when a tag filter is in use. */
+.droptickets-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  background: var(--drop-highlight, #e3f2fd);
+  border: 1px solid var(--drop-primary, #1565c0);
+  border-radius: 999px;
+  font-size: 0.82em;
+  color: var(--drop-primary, #1565c0);
+  text-decoration: none;
+}
+
+.droptickets-tag-badge:hover {
+  background: #ffebee;
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.droptickets-unverified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  background: #fff3e0;
+  border: 1px solid #e65100;
+  border-radius: 999px;
+  font-size: 0.82em;
+  color: #e65100;
+  text-decoration: none;
+  margin-left: 0.5rem;
+}
+
+.droptickets-unverified-badge:hover {
+  background: #ffebee;
+  border-color: #c62828;
+  color: #c62828;
+}
+
+/* De-emphasised admin-only tabs (Stale, Manage Fields, etc.). */
+.tabs a.droptickets-tab-admin {
+  color: var(--color-gray-500, #9e9e9e);
+  font-size: 0.85em;
+}
+
+.tabs li.active a.droptickets-tab-admin {
+  color: inherit;
+}
+
+/* Count badge inside the Flagged tab label. */
+.droptickets-tab-count {
+  display: inline-block;
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0 5px;
+  font-size: 0.75em;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------------
+   Ticket list
+   --------------------------------------------------------------------------- */
+
+.droptickets-list {
+  width: 100%;
+}
+
+.droptickets-list td,
+.droptickets-list th {
+  padding: 0.45rem 0.6rem;
+  vertical-align: middle;
+}
+
+
+.droptickets-ticket-id {
+  font-family: monospace;
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #666);
+  white-space: nowrap;
+}
+
+.droptickets-col-title {
+  width: 40%;
+}
+
+.droptickets-col-comments {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.droptickets-comment-count {
+  display: inline-block;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #1565c0;
+  background: #e3f2fd;
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 1.5em;
+  text-align: center;
+}
+
+.droptickets-comment-count--none {
+  background: none;
+  color: var(--drop-text-secondary, #aaa);
+  font-weight: normal;
+}
+
+.droptickets-empty {
+  color: var(--drop-text-secondary, #888);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+   Type badges
+   --------------------------------------------------------------------------- */
+
+.droptickets-type {
+  display: inline-block;
+  padding: 0.15em 0.55em;
+  border-radius: 3px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.droptickets-type--bug         { background: #ffebee; color: #c62828; }
+.droptickets-type--feature     { background: #e8f5e9; color: #2e7d32; }
+.droptickets-type--task        { background: #e3f2fd; color: #1565c0; }
+.droptickets-type--improvement { background: #f3e5f5; color: #7b1fa2; }
+
+/* ---------------------------------------------------------------------------
+   Status badges
+   --------------------------------------------------------------------------- */
+
+.droptickets-status {
+  display: inline-block;
+  padding: 0.15em 0.55em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.droptickets-status--icebox          { background: #eceff1; color: #546e7a; }
+.droptickets-status--open            { background: #e3f2fd; color: #1565c0; }
+.droptickets-status--todo            { background: #e8eaf6; color: #283593; }
+.droptickets-status--in_progress     { background: #fff8e1; color: #f57c00; }
+.droptickets-status--in_review       { background: #f3e5f5; color: #7b1fa2; }
+.droptickets-status--blocked         { background: #ffebee; color: #c62828; }
+.droptickets-status--done            { background: #e8f5e9; color: #2e7d32; }
+.droptickets-status--closed          { background: #f5f5f5; color: #757575; }
+.droptickets-status--disc_open       { background: #e0f7fa; color: #006064; }
+.droptickets-status--disc_active     { background: #fce4ec; color: #880e4f; }
+.droptickets-status--disc_concluded  { background: #f5f5f5; color: #757575; }
+
+/* Inline status select — shares badge color classes, styled to look interactive */
+.droptickets-status-select {
+  appearance: auto;
+  border: none;
+  border-left: 3px solid #0891b2;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+.droptickets-status-select:focus {
+  outline: 2px solid #90caf9;
+  outline-offset: 1px;
+}
+.droptickets-status-select.droptickets-status-saving {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.droptickets-assignee-select {
+  appearance: auto;
+  border: 1px solid #ddd;
+  border-left: 3px solid #0891b2;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 0.88em;
+  cursor: pointer;
+  width: 100%;
+  background: #fff;
+}
+
+.droptickets-assignee-select:focus {
+  outline: 2px solid #90caf9;
+  outline-offset: 1px;
+}
+
+.droptickets-assignee-select.droptickets-saving {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* ---------------------------------------------------------------------------
+   Ticket view — page wrapper, two-column layout, cards
+   --------------------------------------------------------------------------- */
+
+/* Page-level background wrapping the whole ticket view */
+.droptickets-view-page {
+  background: #e9e6e2;
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.droptickets-back {
+  margin: 0 0 1rem;
+  font-size: 0.9em;
+}
+
+.droptickets-view-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.droptickets-view-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* White cards for content sections */
+.droptickets-card {
+  background: #fff;
+  border: 1px solid #cbc7c2;
+  border-top: 3px solid #0891b2;
+  border-radius: 5px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.droptickets-body {
+  line-height: 1.7;
+  margin-bottom: 2rem;
+}
+
+.droptickets-body p:last-child {
+  margin-bottom: 0;
+}
+
+
+/* Sidebar — white card with flat dividers */
+.droptickets-view-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #cbc7c2;
+  border-top: 3px solid #0891b2;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.droptickets-sidebar-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  background: #f0ece8;
+  border-bottom: 1px solid #cbc7c2;
+}
+
+.droptickets-sidebar-edit {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.droptickets-sidebar-activate {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.droptickets-sidebar-flag {
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid #cbc7c2;
+  font-size: 0.85em;
+}
+
+.droptickets-sidebar-flag .droptickets-flag-off {
+  color: var(--drop-text-secondary, #666);
+}
+
+.droptickets-sidebar-flag .droptickets-flag-off:hover {
+  color: #e65100;
+  text-decoration: none;
+}
+
+.droptickets-sidebar-flag .droptickets-flag-on {
+  color: #e65100;
+  font-weight: 600;
+}
+
+.droptickets-sidebar-flag .droptickets-flag-on:hover {
+  color: #bf360c;
+  text-decoration: none;
+}
+
+.droptickets-sidebar-close {
+  font-size: 0.85em;
+  color: #757575;
+}
+
+.droptickets-sidebar-delete {
+  font-size: 0.85em;
+  color: #c62828;
+  margin-left: auto;
+}
+
+.droptickets-sidebar-item {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #e4e0dc;
+}
+
+.droptickets-sidebar-item:last-child {
+  border-bottom: none;
+}
+
+.droptickets-sidebar-label {
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+  margin-bottom: 0.25rem;
+}
+
+.droptickets-sidebar-value {
+  font-size: 0.88em;
+  color: #1a1a1a;
+}
+
+/* Section headings inside cards (Related Tickets) */
+.droptickets-section-heading {
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #666;
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e0ddd8;
+}
+
+/* Comments section heading lives outside the card on the page bg */
+.droptickets-view-main > .droptickets-section-heading {
+  margin-top: 0.25rem;
+  color: #555;
+}
+
+/* Timeline header row: heading + toggle button */
+.droptickets-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e0ddd8;
+}
+
+.droptickets-timeline-header .droptickets-section-heading {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 1;
+}
+
+.droptickets-toggle-events {
+  font-size: 0.75em;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.droptickets-toggle-events:hover {
+  color: #333;
+}
+
+/* Activity event items */
+.droptickets-event {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.85em;
+  color: #666;
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.droptickets-event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ccc;
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+.droptickets-event-text {
+  flex: 1;
+}
+
+.droptickets-event-text strong {
+  color: #444;
+}
+
+.droptickets-event-date {
+  color: #aaa;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* Hidden state when events are toggled off */
+.droptickets-events-hidden .droptickets-event {
+  display: none;
+}
+
+/* Reply / new comment form embedded in the timeline */
+.droptickets-reply-form {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: #faf9f7;
+  border: 1px solid #e0ddd8;
+  border-top: 3px solid #0891b2;
+  border-radius: 6px;
+}
+
+@media (max-width: 700px) {
+  .droptickets-view-layout {
+    flex-direction: column;
+  }
+  .droptickets-view-sidebar {
+    width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Comments
+   --------------------------------------------------------------------------- */
+
+.droptickets-comment {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid #ddd;
+  border-top: 3px solid #0891b2;
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.85rem;
+  background: #fff;
+}
+
+.droptickets-comment--unread {
+  border-left: 3px solid var(--drop-primary, #1565c0);
+  background: #f0f7ff;
+}
+.droptickets-comment--email-out {
+  border-left: 3px solid #0891b2;
+  background: #f0fdfa;
+}
+.droptickets-comment--email-in {
+  border-left: 3px solid #7c3aed;
+  background: #faf5ff;
+}
+.droptickets-comment-email-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+.droptickets-comment-email-badge--out {
+  background: #ccfbf1;
+  color: #0e7490;
+}
+.droptickets-comment-email-badge--in {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+/* Avatar circle */
+.droptickets-comment-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 0.1rem;
+}
+
+.droptickets-comment-avatar--0 { background: #1565c0; }
+.droptickets-comment-avatar--1 { background: #2e7d32; }
+.droptickets-comment-avatar--2 { background: #6a1b9a; }
+.droptickets-comment-avatar--3 { background: #e65100; }
+.droptickets-comment-avatar--4 { background: #00695c; }
+.droptickets-comment-avatar--5 { background: #c62828; }
+
+/* Content area */
+.droptickets-comment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.droptickets-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.droptickets-comment-author {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: var(--drop-text, #222);
+}
+
+.droptickets-comment-date {
+  font-size: 0.8em;
+  color: var(--drop-text-secondary, #999);
+}
+
+.droptickets-comment-actions {
+  font-size: 0.8em;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.droptickets-comment:hover .droptickets-comment-actions {
+  opacity: 1;
+}
+
+.droptickets-comment-new {
+  display: inline-block;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: #fff;
+  background: var(--drop-primary, #1565c0);
+  border-radius: 999px;
+  padding: 0.1em 0.5em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.droptickets-comment-body {
+  line-height: 1.6;
+}
+
+.droptickets-comment-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* Image preview panel shown below the comment textarea while composing */
+.droptickets-comment-img-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.droptickets-comment-img-preview img {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  object-fit: contain;
+}
+
+/* ---------------------------------------------------------------------------
+   Related tickets
+   --------------------------------------------------------------------------- */
+
+/* Hierarchy card — combined parent + child tickets */
+.droptickets-hierarchy-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.droptickets-hierarchy-summary::-webkit-details-marker {
+  display: none;
+}
+
+.droptickets-hierarchy-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.droptickets-hierarchy-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.droptickets-parent-ticket-label {
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--drop-text-secondary, #888);
+  white-space: nowrap;
+}
+
+.droptickets-hierarchy-child-count {
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #888);
+  white-space: nowrap;
+}
+
+.droptickets-hierarchy-summary a {
+  font-size: 0.85em;
+}
+
+details.droptickets-hierarchy[open] > summary,
+details.droptickets-related[open] > summary {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--drop-border, #e0ddd8);
+}
+
+details.droptickets-hierarchy > summary::after,
+details.droptickets-related > summary::after {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%23888' d='m213.66 101.66-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 53.66 90.34L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32Z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+}
+
+details.droptickets-hierarchy[open] > summary::after,
+details.droptickets-related[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+/* Collapsible cards — <details>/<summary> pattern */
+
+
+.droptickets-related {
+  /* Styled as a .droptickets-card — no additional layout needed. */
+}
+
+.droptickets-related-list {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+}
+
+.droptickets-related-list th,
+.droptickets-related-list td {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  font-size: 0.9em;
+  border-bottom: 1px solid var(--drop-border, #eee);
+}
+
+.droptickets-related-list th {
+  font-weight: 600;
+  color: var(--drop-text-secondary, #666);
+  border-bottom-width: 2px;
+}
+
+.droptickets-rel-type {
+  font-style: italic;
+  color: var(--drop-text-secondary, #555);
+}
+
+.droptickets-related-add {
+  margin: 0.5rem 0 0;
+  font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------------------
+   Watchers sidebar section
+   --------------------------------------------------------------------------- */
+
+.droptickets-sidebar-watchers {
+  border-top: 2px solid #cbc7c2;
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.droptickets-sidebar-section-label {
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+  margin-bottom: 0.5rem;
+}
+
+.droptickets-watchers-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.droptickets-watch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82em;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #555;
+  text-decoration: none;
+  background: #f8f8f8;
+  align-self: flex-start;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.droptickets-watch-btn:hover {
+  background: #eee;
+  border-color: #aaa;
+  text-decoration: none;
+}
+
+.droptickets-watch-btn.is-watching {
+  background: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+.droptickets-watcher-names {
+  font-size: 0.8em;
+  color: #888;
+  line-height: 1.3;
+}
+
+.droptickets-watchers-manage {
+  margin-top: 0.25rem;
+}
+
+.droptickets-watchers-manage summary {
+  font-size: 0.78em;
+  color: #aaa;
+  cursor: pointer;
+  user-select: none;
+}
+
+.droptickets-watchers-manage summary:hover {
+  color: #666;
+}
+
+.droptickets-watchers-manage .form-checkboxes {
+  margin: 0.4rem 0 0.4rem;
+}
+
+.droptickets-watchers-manage .form-item {
+  margin: 0.2rem 0;
+}
+
+.droptickets-watchers-manage .form-item label {
+  font-size: 0.85em;
+}
+
+.droptickets-watchers-manage .form-submit {
+  font-size: 0.78em;
+  padding: 0.2rem 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Notifications page
+   --------------------------------------------------------------------------- */
+
+.drop-notifications-list {
+  width: 100%;
+}
+
+.drop-notifications-list td,
+.drop-notifications-list th {
+  padding: 0.5rem 0.7rem;
+  vertical-align: middle;
+}
+
+.drop-notif-unread td {
+  background: #fff;
+  font-weight: 600;
+}
+
+.drop-notif-read td {
+  background: #f7f7f7;
+  color: #777;
+}
+
+.drop-notif-col-dot {
+  width: 1.2rem;
+  text-align: center;
+  padding-right: 0;
+}
+
+.drop-notif-dot {
+  color: #1565c0;
+  font-size: 0.7em;
+}
+
+.drop-notif-dot--read {
+  color: #ccc;
+}
+
+/* ---------------------------------------------------------------------------
+   Nav bell icon
+   --------------------------------------------------------------------------- */
+
+.drop-nav-extras {
+  display: flex;
+  align-items: center;
+}
+
+.drop-nav-bell {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.drop-nav-bell:hover {
+  opacity: 1;
+}
+
+.drop-nav-bell--active {
+  opacity: 1;
+  color: var(--drop-primary, #1565c0);
+}
+
+.drop-nav-bell-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  background: #c62828;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 0.3em;
+}
+
+/* ---------------------------------------------------------------------------
+   Assignee mode badges (The Team / On Hold)
+   --------------------------------------------------------------------------- */
+
+.droptickets-assignee-mode {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border-radius: 3px;
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.droptickets-assignee-mode--team {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.droptickets-assignee-mode--on-hold {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* ---------------------------------------------------------------------------
+   Flagged indicator bar
+   --------------------------------------------------------------------------- */
+
+.droptickets-flagged-bar {
+  margin-bottom: 0.75rem;
+}
+
+.droptickets-flagged-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.7rem;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #e65100;
+  text-decoration: none;
+}
+
+.droptickets-flagged-indicator:hover {
+  background: #ffe0b2;
+  color: #bf360c;
+}
+
+.droptickets-flagged-indicator svg {
+  color: #e65100;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Flag column
+   --------------------------------------------------------------------------- */
+
+.droptickets-col-flag {
+  width: 1.5rem;
+  text-align: center;
+  padding-right: 0.4rem !important;
+}
+
+a.droptickets-flag-off svg {
+  opacity: 0.2;
+}
+
+a.droptickets-flag-off:hover svg {
+  opacity: 0.6;
+}
+
+a.droptickets-flag-on svg,
+.droptickets-flag-on svg {
+  color: #e65100;
+  opacity: 1;
+}
+
+.droptickets-flag-rank {
+  font-size: 0.8em;
+  color: #999;
+  width: 1.5rem;
+  text-align: center;
+}
+
+.droptickets-flagged-list td.droptickets-col-title a.droptickets-flag-on {
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+/* Collapsible ticket body */
+.droptickets-body-inner {
+  max-height: 400px;
+  overflow-y: auto;
+  position: relative;
+  transition: max-height 0.3s ease;
+}
+
+.droptickets-body--collapsible.is-expanded .droptickets-body-inner {
+  max-height: none;
+}
+
+.droptickets-body-fade {
+  display: none;
+}
+
+.droptickets-body-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.4rem;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  color: #555;
+  text-align: center;
+}
+
+.droptickets-body-toggle:hover {
+  background: #f5f5f5;
+}
+
+/* ---------------------------------------------------------------------------
+   Emoji reactions
+   --------------------------------------------------------------------------- */
+
+.droptickets-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.4rem 0 0;
+  margin-top: 0.4rem;
+}
+
+.react-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #ddd;
+  border-radius: 1rem;
+  background: #f8f8f8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  user-select: none;
+}
+
+/* Empty picker buttons (no reactions yet) hidden until comment is hovered.
+   Buttons with a count, or ones the current user has reacted to, always show. */
+.react-btn--empty:not(.is-active) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.droptickets-comment:hover .react-btn--empty:not(.is-active) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.react-btn:hover {
+  background: #eef4ff;
+  border-color: #b0c8f0;
+}
+
+.react-btn.is-active {
+  background: #d0e8ff !important;
+  border-color: #4a90d9 !important;
+  color: #1a5a99 !important;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #4a90d9;
+}
+
+.react-btn.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Kanban board
+   --------------------------------------------------------------------------- */
+
+
+.droptickets-kanban {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 1.5rem;
+  min-height: 200px;
+}
+
+.droptickets-kanban-col {
+  flex: 0 0 240px;
+  min-width: 0;
+}
+
+.droptickets-kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  gap: 0.5rem;
+}
+
+.droptickets-kanban-status-label {
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+
+.droptickets-kanban-col-count {
+  background: #e0e0e0;
+  color: #555;
+  border-radius: 1rem;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.droptickets-kanban-col-count--over {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.droptickets-kanban-limit-warning {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.droptickets-kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.droptickets-kanban-card {
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #ccc;
+  padding: 0.6rem 0.7rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.droptickets-kanban-card.drop-priority-critical { border-left-color: #b71c1c !important; }
+.droptickets-kanban-card.drop-priority-high     { border-left-color: #e53935 !important; }
+.droptickets-kanban-card.drop-priority-normal   { border-left-color: #fb8c00 !important; }
+.droptickets-kanban-card.drop-priority-low      { border-left-color: #43a047 !important; }
+.droptickets-kanban-card.drop-priority-none     { border-left-color: #bdbdbd !important; }
+
+/* ---------------------------------------------------------------------------
+   Priority dot — ticket list
+   --------------------------------------------------------------------------- */
+
+.droptickets-col-priority {
+  width: 28px;
+  text-align: center;
+}
+
+.droptickets-priority-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.droptickets-priority-dot.drop-priority-critical { background: #b71c1c; }
+.droptickets-priority-dot.drop-priority-high     { background: #e53935; }
+.droptickets-priority-dot.drop-priority-normal   { background: #fb8c00; }
+.droptickets-priority-dot.drop-priority-low      { background: #43a047; }
+.droptickets-priority-dot.drop-priority-none     { background: #bdbdbd; }
+
+.droptickets-kanban-card-id {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  color: #888;
+}
+
+.droptickets-kanban-card-title {
+  font-size: 0.88rem;
+  line-height: 1.35;
+  margin-bottom: 0.4rem;
+}
+
+.droptickets-kanban-card-title a {
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+.droptickets-kanban-card-title a:hover {
+  color: #1a73e8;
+}
+
+.droptickets-kanban-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+}
+
+.droptickets-kanban-assignee {
+  color: #666;
+}
+
+.droptickets-kanban-flag {
+  color: #e53935;
+  display: inline-flex;
+  align-items: center;
+}
+
+.droptickets-kanban-empty {
+  color: #bbb;
+  font-size: 0.82rem;
+  font-style: italic;
+  padding: 0.4rem 0;
+  text-align: center;
+}
+
+/* Drag-and-drop states */
+.droptickets-kanban-card[draggable="true"] {
+  cursor: grab;
+}
+.droptickets-kanban-card.dt-kanban-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.droptickets-kanban-col.dt-kanban-over .droptickets-kanban-cards {
+  background: #e3f2fd;
+  border-radius: 4px;
+  outline: 2px dashed #1976d2;
+  outline-offset: -2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Ticket list action bar (Kanban shortcut + flagged indicator)
+   --------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+   Search (within the combined filter row)
+   --------------------------------------------------------------------------- */
+
+.droptickets-search-input {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--drop-border, #ccc);
+  border-radius: 4px;
+  font-size: 0.875em;
+  width: 200px;
+  color: var(--drop-text, #333);
+}
+
+.droptickets-search-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.droptickets-search-btn:hover {
+  background: #1557b0;
+}
+
+/* Resize/download link below image attachments */
+.droptickets-attachment-resize {
+  margin-top: 0.4em;
+  font-size: 0.8em;
+}
+
+/* ---------------------------------------------------------------------------
+   Review / triage
+   --------------------------------------------------------------------------- */
+
+.droptickets-review-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #666);
+}
+
+.droptickets-review-table {
+  width: 100%;
+}
+
+.droptickets-review-col-btn {
+  width: 2.2rem;
+  text-align: center;
+  padding-right: 0;
+}
+
+.droptickets-review-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.15rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* Show circle (off), hide checkmark (on) by default */
+.droptickets-review-icon-off {
+  display: inline-flex;
+  color: #bbb;
+}
+.droptickets-review-icon-on {
+  display: none;
+  color: var(--drop-success, #2e7d32);
+}
+
+.droptickets-review-btn:hover .droptickets-review-icon-off {
+  color: var(--drop-primary, #1565c0);
+}
+
+/* When reviewed: hide circle, show green checkmark */
+.droptickets-review-btn--done .droptickets-review-icon-off {
+  display: none;
+}
+.droptickets-review-btn--done .droptickets-review-icon-on {
+  display: inline-flex;
+}
+
+.droptickets-review-btn--done:hover .droptickets-review-icon-on {
+  color: #c62828;
+}
+
+/* Reviewed rows — clearly de-emphasised */
+tr.droptickets-review-row--done td {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+
+tr.droptickets-review-row--done .droptickets-review-btn {
+  text-decoration: none;
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Review Mode — Enter/Exit button on review page
+   --------------------------------------------------------------------------- */
+
+.droptickets-project-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-left: auto;
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.3em 0.85em;
+  border-radius: 999px;
+  border: 1px solid var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.droptickets-project-mode-btn:hover {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  text-decoration: none;
+}
+
+.droptickets-project-mode-btn--active {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  cursor: default;
+}
+
+.droptickets-project-mode-btn--active:hover {
+  background: #c62828;
+  border-color: #c62828;
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   Project Mode — "Back to [Report]" bar on ticket view pages
+   --------------------------------------------------------------------------- */
+
+.droptickets-project-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.85rem;
+  margin-bottom: 1rem;
+  background: #e8eaf6;
+  border: 1px solid #9fa8da;
+  border-radius: 5px;
+  font-size: 0.88em;
+}
+
+.droptickets-project-mode-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-weight: 600;
+  color: var(--drop-primary, #1565c0);
+  text-decoration: none;
+}
+
+.droptickets-project-mode-back-link:hover {
+  text-decoration: underline;
+}
+
+.droptickets-project-mode-label {
+  font-weight: 700;
+  color: #3949ab;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.85em;
+}
+
+.droptickets-project-mode-exit {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #888);
+  text-decoration: none;
+}
+
+.droptickets-project-mode-exit:hover {
+  color: #c62828;
+}
+
+/* ---------------------------------------------------------------------------
+   Kanban — Board switcher
+   --------------------------------------------------------------------------- */
+
+.droptickets-board-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.droptickets-board-switcher-label {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--drop-text-secondary, #666);
+  margin-right: 0.15rem;
+}
+
+.droptickets-board-pill {
+  display: inline-block;
+  padding: 0.25em 0.85em;
+  border: 1px solid var(--drop-border, #ccc);
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--drop-text, #333);
+  text-decoration: none;
+  white-space: nowrap;
+  background: #fff;
+}
+
+.droptickets-board-pill:hover {
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+  text-decoration: none;
+}
+
+.droptickets-board-pill--active {
+  background: var(--drop-highlight, #e3f2fd);
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+  font-weight: 700;
+}
+
+.droptickets-board-pill--active:hover {
+  background: #bbdefb;
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+}
+
+/* ---------------------------------------------------------------------------
+   Sub-tickets (progress bar, child list, add link)
+   --------------------------------------------------------------------------- */
+
+
+.droptickets-children-progress {
+  font-size: 0.82em;
+  font-weight: 400;
+  color: var(--drop-text-secondary, #888);
+  margin-left: 0.5em;
+}
+
+.droptickets-children-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--drop-border, #e0e0e0);
+  margin: 0 0 0.75rem;
+  overflow: hidden;
+}
+
+.droptickets-children-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--drop-success, #2e7d32);
+  transition: width 0.3s;
+}
+
+.droptickets-children-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+
+.droptickets-child-item {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--drop-border, #eee);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.droptickets-child-item:last-child {
+  border-bottom: none;
+}
+
+.droptickets-child-item .droptickets-ticket-id {
+  flex-shrink: 0;
+}
+
+.droptickets-child-item--done a,
+.droptickets-child-item--closed a {
+  text-decoration: line-through;
+  color: var(--drop-text-secondary, #888);
+}
+
+.droptickets-child-add {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------------------
+   Parent ticket indicator on list rows and Kanban cards
+   --------------------------------------------------------------------------- */
+
+.droptickets-child-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #5c6bc0;
+  background: #ede7f6;
+  border-radius: 10px;
+  padding: 1px 6px;
+  margin-left: 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.droptickets-show-children-label {
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #666);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+
+.droptickets-parent-indicator {
+  font-size: 0.75em;
+  color: var(--drop-text-secondary, #888);
+  display: block;
+  margin-top: 0.15em;
+}
+
+.droptickets-parent-indicator a {
+  color: inherit;
+}
+
+.droptickets-parent-indicator a:hover {
+  color: var(--drop-primary, #1565c0);
+}
+
+.droptickets-kanban-parent {
+  font-size: 0.72em;
+  color: var(--drop-text-secondary, #999);
+  margin-top: 0.15em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.droptickets-kanban-parent a {
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+   Kanban top-level toggle
+   --------------------------------------------------------------------------- */
+
+.droptickets-kanban-toplevel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #666);
+  cursor: pointer;
+  user-select: none;
+}
+
+.droptickets-kanban-toplevel-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Image lightbox
+   --------------------------------------------------------------------------- */
+
+/* Make images in ticket bodies and comments look clickable */
+.droptickets-body-inner img,
+.droptickets-comment-body img {
+  cursor: zoom-in;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Lightbox overlay */
+.droptickets-lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.88);
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.droptickets-lightbox.is-open {
+  display: flex;
+}
+
+/* Toolbar */
+.droptickets-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+.droptickets-lightbox-toolbar button {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.25rem 0.6rem;
+}
+
+.droptickets-lightbox-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.droptickets-lightbox-zoom-level {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+  min-width: 3.5rem;
+  text-align: center;
+}
+
+/* Push close button to the far right */
+.droptickets-lightbox-close {
+  margin-left: auto;
+  font-size: 1.4rem;
+  padding: 0.2rem 0.55rem;
+}
+
+/* Stage — scrollable area that holds the image */
+.droptickets-lightbox-stage {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+.droptickets-lightbox-stage img {
+  max-width: 92vw;
+  max-height: calc(92vh - 3rem);
+  object-fit: contain;
+  border-radius: 3px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  transform-origin: center center;
+  transition: transform 0.15s ease;
+  cursor: default;
+}

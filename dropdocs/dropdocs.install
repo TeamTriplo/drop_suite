@@ -1,0 +1,198 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall hooks for DropDocs.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Creates the doc_tags vocabulary, doc content type, and its fields.
+ */
+function dropdocs_install() {
+  // Create doc_tags vocabulary.
+  $vocabulary = new TaxonomyVocabulary(array(
+    'name'         => t('Doc Tags'),
+    'machine_name' => 'doc_tags',
+    'description'  => t('Tags for DropDocs documentation pages.'),
+  ));
+  taxonomy_vocabulary_save($vocabulary);
+
+  // Create doc content type.
+  $type = node_type_set_defaults(array(
+    'type'        => 'doc',
+    'name'        => t('Doc'),
+    'base'        => 'node_content',
+    'description' => t('An internal documentation or wiki page.'),
+    'custom'      => 1,
+    'modified'    => 1,
+    'locked'      => 0,
+    'settings'    => array(
+      'promote_enabled'  => FALSE,
+      'promote_default'  => FALSE,
+      'sticky_enabled'   => FALSE,
+      'sticky_default'   => FALSE,
+      'revision_enabled' => TRUE,
+      'revision_default' => TRUE,
+      'node_preview'     => 1,
+      'status_default'   => TRUE,
+    ),
+  ));
+  node_type_save($type);
+  node_add_body_field($type, t('Content'));
+
+  // Field: field_doc_parent — entity reference to another doc node.
+  if (!field_info_field('field_doc_parent')) {
+    field_create_field(array(
+      'field_name'  => 'field_doc_parent',
+      'type'        => 'entityreference',
+      'cardinality' => 1,
+      'settings'    => array(
+        'target_type'     => 'node',
+        'handler'         => 'base',
+        'handler_settings' => array(
+          'target_bundles' => array('doc' => 'doc'),
+          'sort'           => array(
+            'type'      => 'property',
+            'property'  => 'title',
+            'direction' => 'ASC',
+          ),
+        ),
+      ),
+    ));
+  }
+  field_create_instance(array(
+    'field_name'  => 'field_doc_parent',
+    'entity_type' => 'node',
+    'bundle'      => 'doc',
+    'label'       => t('Parent page'),
+    'description' => t('Optionally nest this page under a parent doc.'),
+    'required'    => FALSE,
+    'widget'      => array(
+      'type'     => 'entityreference_autocomplete',
+      'settings' => array(
+        'match_operator' => 'CONTAINS',
+        'size'           => 40,
+      ),
+    ),
+    'display' => array(
+      'default' => array('type' => 'hidden'),
+      'full'    => array('type' => 'hidden'),
+    ),
+  ));
+
+  // Field: field_doc_tags — taxonomy term reference to doc_tags.
+  if (!field_info_field('field_doc_tags')) {
+    field_create_field(array(
+      'field_name'  => 'field_doc_tags',
+      'type'        => 'taxonomy_term_reference',
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'doc_tags', 'parent' => 0),
+        ),
+      ),
+    ));
+  }
+  field_create_instance(array(
+    'field_name'  => 'field_doc_tags',
+    'entity_type' => 'node',
+    'bundle'      => 'doc',
+    'label'       => t('Tags'),
+    'required'    => FALSE,
+    'widget'      => array(
+      'type' => 'taxonomy_autocomplete',
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'type'  => 'taxonomy_term_reference_link',
+      ),
+    ),
+  ));
+
+  // Grant administer dropdocs to the default admin role.
+  $admin_role = config_get('system.core', 'user_admin_role');
+  if ($admin_role) {
+    $perms = user_role_permissions(array($admin_role => $admin_role));
+    $perms[$admin_role]['access dropdocs']      = TRUE;
+    $perms[$admin_role]['administer dropdocs']  = TRUE;
+    user_role_change_permissions($admin_role, $perms[$admin_role]);
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function dropdocs_schema() {
+  return array(
+    'dropdocs_weight' => array(
+      'description' => 'Per-sibling display weight for doc nodes.',
+      'fields' => array(
+        'nid'    => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE),
+        'weight' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('nid'),
+    ),
+  );
+}
+
+/**
+ * Create the dropdocs_weight table for existing installs.
+ */
+function dropdocs_update_1001() {
+  if (!db_table_exists('dropdocs_weight')) {
+    db_create_table('dropdocs_weight', array(
+      'description' => 'Per-sibling display weight for doc nodes.',
+      'fields' => array(
+        'nid'    => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE),
+        'weight' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('nid'),
+    ));
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dropdocs_uninstall() {
+  // Remove field instances on the doc bundle.
+  foreach (array('field_doc_parent', 'field_doc_tags', 'body') as $field_name) {
+    $instance = field_info_instance('node', $field_name, 'doc');
+    if ($instance) {
+      field_delete_instance($instance);
+    }
+  }
+
+  // Delete fields if no other bundles use them.
+  foreach (array('field_doc_parent', 'field_doc_tags') as $field_name) {
+    $field = field_info_field($field_name);
+    if ($field) {
+      $remaining = array_filter($field['bundles'], function($bundles) {
+        return !empty($bundles);
+      });
+      // Remove 'doc' bundle reference before checking.
+      unset($remaining['node']['doc']);
+      $has_others = FALSE;
+      foreach ($remaining as $entity_type => $bundles) {
+        if (!empty($bundles)) {
+          $has_others = TRUE;
+          break;
+        }
+      }
+      if (!$has_others) {
+        field_delete_field($field_name);
+      }
+    }
+  }
+
+  // Delete the doc content type.
+  node_type_delete('doc');
+
+  // Delete the vocabulary.
+  $vocabulary = taxonomy_vocabulary_load('doc_tags');
+  if ($vocabulary) {
+    taxonomy_vocabulary_delete($vocabulary->machine_name);
+  }
+}

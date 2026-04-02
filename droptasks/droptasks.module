@@ -1,0 +1,394 @@
+<?php
+/**
+ * @file
+ * DropTasks — Personal task management for Backdrop CMS.
+ */
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function droptasks_autoload_info() {
+  return array(
+    'DroptTask'           => 'droptasks.entity.inc',
+    'DroptTaskController' => 'droptasks.entity.inc',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entity info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_info().
+ */
+function droptasks_entity_info() {
+  return array(
+    'drop_task' => array(
+      'label'            => t('Task'),
+      'plural label'     => t('Tasks'),
+      'description'      => t('A personal task or to-do item.'),
+      'entity class'     => 'DroptTask',
+      'controller class' => 'DroptTaskController',
+      'base table'       => 'drop_task',
+      'fieldable'        => TRUE,
+      'entity keys'      => array(
+        'id'    => 'tid',
+        'label' => 'title',
+      ),
+      'view modes' => array(
+        'full' => array('label' => t('Full'), 'custom settings' => FALSE),
+      ),
+      'uri callback'    => 'entity_class_uri',
+      'access callback' => 'droptasks_task_access',
+      'module'          => 'droptasks',
+      'bundles'         => array(
+        'drop_task' => array(
+          'label' => t('Task'),
+          'admin' => array(
+            'path'             => 'drop/tasks/configure/manage/drop_task',
+            'access arguments' => array('administer tasks'),
+          ),
+        ),
+      ),
+      'admin ui'        => array(
+        'path'             => 'drop/tasks/configure',
+        'file'             => 'droptasks.admin.inc',
+        'controller class' => 'EntityDefaultUIController',
+        'menu wildcard'    => '%drop_task',
+      ),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function droptasks_permission() {
+  return array(
+    'administer tasks' => array(
+      'title'       => t('Administer tasks'),
+      'description' => t('Full access to all tasks regardless of ownership.'),
+    ),
+    'access tasks' => array(
+      'title'       => t('Access tasks'),
+      'description' => t('View own tasks.'),
+    ),
+    'manage tasks' => array(
+      'title'       => t('Manage tasks'),
+      'description' => t('Create, edit, and delete own tasks.'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Access
+// ---------------------------------------------------------------------------
+
+/**
+ * Access callback for drop_task entities.
+ *
+ * @param string $op
+ *   One of 'view', 'create', 'update', 'delete'.
+ * @param DroptTask|null $task
+ *   The task entity, or NULL for create checks.
+ * @param object|null $account
+ *   The user account, or NULL for the current user.
+ *
+ * @return bool
+ */
+function droptasks_task_access($op, $task = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+
+  if (user_access('administer tasks', $account)) {
+    return TRUE;
+  }
+
+  switch ($op) {
+    case 'view':
+      if (!user_access('access tasks', $account)) {
+        return FALSE;
+      }
+      if (!$task || $task->uid == $account->uid) {
+        return TRUE;
+      }
+      // Assignees can also view.
+      return (bool) db_select('drop_task_assignee', 'a')
+        ->fields('a', array('tid'))
+        ->condition('a.tid', $task->tid)
+        ->condition('a.uid', $account->uid)
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+
+    case 'create':
+      return user_access('manage tasks', $account);
+
+    case 'update':
+    case 'delete':
+      return user_access('manage tasks', $account)
+        && $task && $task->uid == $account->uid;
+
+    case 'complete':
+      // Owner or any assignee can mark a task complete.
+      if (!$task || !user_access('access tasks', $account)) {
+        return FALSE;
+      }
+      if ($task->uid == $account->uid) {
+        return TRUE;
+      }
+      return (bool) db_select('drop_task_assignee', 'a')
+        ->fields('a', array('tid'))
+        ->condition('a.tid', $task->tid)
+        ->condition('a.uid', $account->uid)
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+  }
+
+  return FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Menu loader
+// ---------------------------------------------------------------------------
+
+/**
+ * Menu loader: load a task by tid.
+ *
+ * @param int $tid
+ *   The task ID.
+ *
+ * @return DroptTask|false
+ */
+function drop_task_load($tid) {
+  $tasks = entity_load('drop_task', array($tid));
+  return $tasks ? reset($tasks) : FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function droptasks_menu() {
+  $items = array();
+
+  // Task list (default: active tasks).
+  $items['drop/tasks'] = array(
+    'title'            => 'Tasks',
+    'page callback'    => 'droptasks_task_list',
+    'page arguments'   => array('active'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access tasks'),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  // Filter tabs.
+  $items['drop/tasks/active'] = array(
+    'title'            => 'Active',
+    'page callback'    => 'droptasks_task_list',
+    'page arguments'   => array('active'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access tasks'),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_DEFAULT_LOCAL_TASK,
+    'weight'           => 0,
+  );
+  $items['drop/tasks/today'] = array(
+    'title'            => 'Due Today',
+    'page callback'    => 'droptasks_task_list',
+    'page arguments'   => array('today'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access tasks'),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 1,
+  );
+  $items['drop/tasks/upcoming'] = array(
+    'title'            => 'Upcoming',
+    'page callback'    => 'droptasks_task_list',
+    'page arguments'   => array('upcoming'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access tasks'),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 2,
+  );
+  $items['drop/tasks/completed'] = array(
+    'title'            => 'Completed',
+    'page callback'    => 'droptasks_task_list',
+    'page arguments'   => array('completed'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access tasks'),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 3,
+  );
+
+  // Add task.
+  $items['drop/tasks/add'] = array(
+    'title'            => 'Add task',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptasks_task_form', NULL),
+    'access callback'  => 'droptasks_task_access',
+    'access arguments' => array('create'),
+    'file'             => 'droptasks.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+
+  // View task.
+  $items['drop/tasks/%drop_task'] = array(
+    'title callback'   => 'entity_label',
+    'title arguments'  => array('drop_task', 2),
+    'page callback'    => 'droptasks_task_view',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptasks_task_access',
+    'access arguments' => array('view', 2),
+    'file'             => 'droptasks.pages.inc',
+  );
+  $items['drop/tasks/%drop_task/view'] = array(
+    'title'  => 'View',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 0,
+  );
+
+  // Edit task.
+  $items['drop/tasks/%drop_task/edit'] = array(
+    'title'            => 'Edit',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptasks_task_form', 2),
+    'access callback'  => 'droptasks_task_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptasks.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 1,
+  );
+
+  // Delete task.
+  $items['drop/tasks/%drop_task/delete'] = array(
+    'title'            => 'Delete',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptasks_task_delete_form', 2),
+    'access callback'  => 'droptasks_task_access',
+    'access arguments' => array('delete', 2),
+    'file'             => 'droptasks.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 2,
+  );
+
+  // Toggle complete (quick action, no form).
+  $items['drop/tasks/%drop_task/complete'] = array(
+    'title'            => 'Toggle complete',
+    'page callback'    => 'droptasks_task_toggle_complete',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptasks_task_access',
+    'access arguments' => array('complete', 2),
+    'file'             => 'droptasks.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_theme().
+ */
+function droptasks_theme() {
+  return array(
+    'droptasks_task_list' => array(
+      'variables' => array('tasks' => array(), 'filter' => 'active', 'tag_filter' => ''),
+      'file'      => 'droptasks.pages.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function droptasks_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Tasks'),
+      'path'       => 'drop/tasks',
+      'permission' => 'access tasks',
+      'weight'     => 20,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * On the main Tasks page, strips all local tasks except admin-only ones.
+ * Operational navigation lives in the Drop Section Navigation block.
+ */
+function droptasks_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/tasks') {
+    return;
+  }
+  $admin_paths = array('drop/tasks/configure');
+  if (!empty($data['tabs'][0]['output'])) {
+    foreach ($data['tabs'][0]['output'] as $key => $tab) {
+      $href = isset($tab['#link']['href']) ? $tab['#link']['href'] : '';
+      if (!in_array($href, $admin_paths)) {
+        unset($data['tabs'][0]['output'][$key]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function droptasks_drop_section_links($section) {
+  if ($section !== 'tasks') {
+    return array();
+  }
+
+  $links = array();
+
+  $links['active'] = array(
+    'title'        => t('Active'),
+    'href'         => 'drop/tasks',
+    'weight'       => -10,
+    'active_paths' => array('drop/tasks', 'drop/tasks/active'),
+  );
+
+  $links['today'] = array(
+    'title'  => t('Today'),
+    'href'   => 'drop/tasks/today',
+    'weight' => 0,
+  );
+
+  $links['upcoming'] = array(
+    'title'  => t('Upcoming'),
+    'href'   => 'drop/tasks/upcoming',
+    'weight' => 10,
+  );
+
+  $links['completed'] = array(
+    'title'  => t('Completed'),
+    'href'   => 'drop/tasks/completed',
+    'weight' => 20,
+  );
+
+  return $links;
+}

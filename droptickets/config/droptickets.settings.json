@@ -1,0 +1,10 @@
+{
+  "_config_name": "droptickets.settings",
+  "notification_lifetime": 90,
+  "stale_days": 20,
+  "jira_base_url": "",
+  "flag_soft_limit": 10,
+  "default_watchers": null,
+  "reactions_enabled": true,
+  "slack_webhook_url": ""
+}

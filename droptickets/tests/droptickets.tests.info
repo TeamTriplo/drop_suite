@@ -1,0 +1,53 @@
+[DropTicketsCRUDTest]
+name = DropTickets CRUD
+description = Create, view, edit, and delete tickets via the UI.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsAccessTest]
+name = DropTickets Access Control
+description = Verifies that permissions gate ticket view, edit, and delete.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsCommentsTest]
+name = DropTickets Comments
+description = Comment creation, display, editing, ordering, and per-author access.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsWorkflowTest]
+name = DropTickets Workflow
+description = Status transitions, close route, Kanban column rules, and cron auto-close.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsListFilterTest]
+name = DropTickets List Filters
+description = Status tabs, project filter, and text search on the ticket list.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsDisplayTest]
+name = DropTickets Display
+description = Comment count badges, ticket label formatting, and priority ordering.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsReactionsTest]
+name = DropTickets Emoji Reactions
+description = Emoji reactions can be added and removed via the correct AJAX endpoint.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsDiscussionTest]
+name = DropTickets Discussion Type
+description = Discussion tickets: no project required, default status, status labels.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsNotificationsTest]
+name = DropTickets Notifications
+description = Notification count reflects distinct tickets; last-used project persists.
+group = DropTickets
+file = droptickets.test

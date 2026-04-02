@@ -1,0 +1,31 @@
+{
+  "_config_name": "dropcrm.settings",
+  "activity_types": {
+    "call": {
+      "label": "Call",
+      "has_direction": true
+    },
+    "email": {
+      "label": "Email",
+      "has_direction": true
+    },
+    "meeting": {
+      "label": "Meeting",
+      "has_direction": false
+    },
+    "note": {
+      "label": "Note",
+      "has_direction": false
+    },
+    "task": {
+      "label": "Task",
+      "has_direction": false
+    }
+  },
+  "contact_method_labels": {
+    "email": ["Work", "Personal", "Other"],
+    "telephone": ["Work", "Mobile", "Home", "Fax", "Other"],
+    "address": ["Work", "Home", "Billing", "Shipping", "Other"],
+    "url": ["LinkedIn", "Twitter", "GitHub", "Facebook", "Instagram", "Website", "Other"]
+  }
+}

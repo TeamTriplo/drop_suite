@@ -1,0 +1,23 @@
+[DropTimeCRUDTest]
+name = DropTime CRUD
+description = Create, view, edit, and delete time entries via entity API and UI.
+group = DropTime
+file = droptime.test
+
+[DropTimeAccessTest]
+name = DropTime Access Control
+description = Verifies that permissions and ownership gate time entry operations.
+group = DropTime
+file = droptime.test
+
+[DropTimeFormatDurationTest]
+name = DropTime Format Duration
+description = Verifies that droptime_format_duration() formats minutes correctly.
+group = DropTime
+file = droptime.test
+
+[DropTimeReassignTest]
+name = DropTime Reassign Entries
+description = Verifies that the reassign tool moves entries between users correctly.
+group = DropTime
+file = droptime.test

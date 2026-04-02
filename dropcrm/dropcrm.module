@@ -1,0 +1,1863 @@
+<?php
+/**
+ * @file
+ * DropCRM — A lightweight CRM for Backdrop CMS.
+ *
+ * Provides three entity types:
+ *  - crm_contact: persons, organizations, and households
+ *  - crm_contact_method: email, telephone, and address records
+ *  - crm_activity: logged interactions and planned tasks
+ */
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function dropcrm_autoload_info() {
+  return array(
+    'CrmContact'                    => 'dropcrm.entity.inc',
+    'CrmContactController'          => 'dropcrm.entity.inc',
+    'CrmContactUIController'        => 'dropcrm.entity.inc',
+    'CrmContactMethod'              => 'dropcrm.entity.inc',
+    'CrmContactMethodController'    => 'dropcrm.entity.inc',
+    'CrmContactMethodUIController'  => 'dropcrm.entity.inc',
+    'CrmActivity'                   => 'dropcrm.entity.inc',
+    'CrmActivityController'         => 'dropcrm.entity.inc',
+    'CrmActivityUIController'       => 'dropcrm.entity.inc',
+    'CrmContactInlineEntityFormController'                   => 'dropcrm.inline_entity_form.inc',
+    'EntityReferenceSelectionHandlerGeneric_crm_contact'     => 'dropcrm.entity.inc',
+    'DropProject'           => 'dropcrm.entity.inc',
+    'DropProjectController' => 'dropcrm.entity.inc',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entity info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_info().
+ */
+function dropcrm_entity_info() {
+  $info = array();
+
+  // --- crm_contact ---
+  $info['crm_contact'] = array(
+    'label'         => t('CRM Contact'),
+    'plural label'  => t('CRM Contacts'),
+    'description'   => t('A person, organization, or household tracked by the CRM.'),
+    'entity class'  => 'CrmContact',
+    'controller class' => 'CrmContactController',
+    'base table'    => 'crm_contact',
+    'fieldable'     => TRUE,
+    'entity keys'   => array(
+      'id'     => 'cid',
+      'bundle' => 'type',
+      'label'  => 'name',
+    ),
+    'bundle keys'   => array('bundle' => 'type'),
+    'bundles'       => array(
+      'crm_person' => array(
+        'label' => t('Person'),
+        'admin' => array(
+          'path'             => 'drop/crm/contacts/manage/crm_person',
+          'access arguments' => array('administer crm'),
+        ),
+      ),
+      'crm_organization' => array(
+        'label' => t('Organization'),
+        'admin' => array(
+          'path'             => 'drop/crm/contacts/manage/crm_organization',
+          'access arguments' => array('administer crm'),
+        ),
+      ),
+      'crm_household' => array(
+        'label' => t('Household'),
+        'admin' => array(
+          'path'             => 'drop/crm/contacts/manage/crm_household',
+          'access arguments' => array('administer crm'),
+        ),
+      ),
+    ),
+    'view modes'    => array(
+      'full'   => array('label' => t('Full'),   'custom settings' => FALSE),
+      'teaser' => array('label' => t('Teaser'), 'custom settings' => TRUE),
+    ),
+    'uri callback'  => 'entity_class_uri',
+    'access callback' => 'dropcrm_contact_access',
+    'inline entity form' => array(
+      'controller' => 'CrmContactInlineEntityFormController',
+    ),
+    'module'        => 'dropcrm',
+    'admin ui'      => array(
+      'path'             => 'drop/crm/contacts',
+      'file'             => 'dropcrm.admin.inc',
+      'controller class' => 'CrmContactUIController',
+      'menu wildcard'    => '%crm_contact',
+    ),
+  );
+
+  // --- crm_contact_method ---
+  $info['crm_contact_method'] = array(
+    'label'         => t('Contact Details'),
+    'plural label'  => t('Contact Details'),
+    'description'   => t('An email address, telephone number, postal address, or website/social URL for a contact.'),
+    'entity class'  => 'CrmContactMethod',
+    'controller class' => 'CrmContactMethodController',
+    'base table'    => 'crm_contact_method',
+    'fieldable'     => TRUE,
+    'entity keys'   => array(
+      'id'     => 'cmid',
+      'bundle' => 'type',
+      'label'  => 'value',
+    ),
+    'bundle keys'   => array('bundle' => 'type'),
+    'bundles'       => array(
+      'email'     => array('label' => t('Email')),
+      'telephone' => array('label' => t('Telephone')),
+      'address'   => array('label' => t('Address')),
+      'url'       => array('label' => t('Website / Social')),
+    ),
+    'uri callback'  => 'entity_class_uri',
+    'access callback' => 'dropcrm_contact_method_access',
+    'module'        => 'dropcrm',
+    'admin ui'      => array(
+      'path'             => 'drop/crm/contact-methods',
+      'file'             => 'dropcrm.admin.inc',
+      'controller class' => 'CrmContactMethodUIController',
+      'menu wildcard'    => '%crm_contact_method',
+    ),
+  );
+
+  // --- crm_activity ---
+  // Single implicit bundle (same name as entity type). Activity type is a
+  // base-table field, not a bundle, so all activities share the same fields.
+  $info['crm_activity'] = array(
+    'label'         => t('CRM Activity'),
+    'plural label'  => t('CRM Activities'),
+    'description'   => t('A logged interaction or planned task associated with one or more contacts.'),
+    'entity class'  => 'CrmActivity',
+    'controller class' => 'CrmActivityController',
+    'base table'    => 'crm_activity',
+    'fieldable'     => TRUE,
+    'entity keys'   => array(
+      'id'    => 'aid',
+      'label' => 'subject',
+    ),
+    'view modes'    => array(
+      'full' => array('label' => t('Full'), 'custom settings' => FALSE),
+    ),
+    'uri callback'  => 'entity_class_uri',
+    'access callback' => 'dropcrm_activity_access',
+    'module'        => 'dropcrm',
+    'admin ui'      => array(
+      'path'             => 'drop/crm/activities',
+      'file'             => 'dropcrm.admin.inc',
+      'controller class' => 'CrmActivityUIController',
+      'menu wildcard'    => '%crm_activity',
+    ),
+  );
+
+  // --- drop_project ---
+  $info['drop_project'] = array(
+    'label'            => t('Project'),
+    'plural label'     => t('Projects'),
+    'description'      => t('A project that can be linked to contacts and used for time tracking.'),
+    'entity class'     => 'DropProject',
+    'controller class' => 'DropProjectController',
+    'base table'       => 'drop_project',
+    'fieldable'        => TRUE,
+    'entity keys'      => array(
+      'id'    => 'pid',
+      'label' => 'name',
+    ),
+    'uri callback'    => 'entity_class_uri',
+    'access callback' => 'dropcrm_project_access',
+    'module'          => 'dropcrm',
+    'bundles'         => array(
+      'drop_project' => array(
+        'label' => t('Project'),
+        'admin' => array(
+          'path'             => 'drop/crm/projects/manage',
+          'access arguments' => array('administer crm'),
+        ),
+      ),
+    ),
+  );
+
+  return $info;
+}
+
+// ---------------------------------------------------------------------------
+// Entity property info (drives Views, metadata wrappers, tokens)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function dropcrm_entity_property_info() {
+  $info = array();
+
+  // --- crm_contact properties ---
+  $contact = &$info['crm_contact']['properties'];
+
+  $contact['cid'] = array(
+    'label'          => t('Contact ID'),
+    'type'           => 'integer',
+    'description'    => t('The unique contact ID.'),
+    'schema field'   => 'cid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $contact['type'] = array(
+    'label'           => t('Bundle'),
+    'type'            => 'token',
+    'description'     => t('The contact bundle: crm_person, crm_organization, or crm_household.'),
+    'schema field'    => 'type',
+    'options list'    => '_dropcrm_contact_bundle_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $contact['name'] = array(
+    'label'           => t('Display Name'),
+    'type'            => 'text',
+    'description'     => t('The contact display name.'),
+    'schema field'    => 'name',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $contact['status'] = array(
+    'label'           => t('Active'),
+    'type'            => 'boolean',
+    'description'     => t('Whether the contact is active.'),
+    'schema field'    => 'status',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $contact['uid'] = array(
+    'label'           => t('Created by'),
+    'type'            => 'user',
+    'description'     => t('The user who created this contact.'),
+    'schema field'    => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $contact['created'] = array(
+    'label'           => t('Date Created'),
+    'type'            => 'date',
+    'description'     => t('When the contact was created.'),
+    'schema field'    => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $contact['changed'] = array(
+    'label'           => t('Date Modified'),
+    'type'            => 'date',
+    'description'     => t('When the contact was last modified.'),
+    'schema field'    => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+
+  // --- crm_contact_method properties ---
+  $method = &$info['crm_contact_method']['properties'];
+
+  $method['cmid'] = array(
+    'label'          => t('Contact Method ID'),
+    'type'           => 'integer',
+    'schema field'   => 'cmid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $method['type'] = array(
+    'label'           => t('Method Type'),
+    'type'            => 'token',
+    'description'     => t('The method bundle: email, telephone, or address.'),
+    'schema field'    => 'type',
+    'options list'    => '_dropcrm_contact_method_bundle_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $method['cid'] = array(
+    'label'           => t('Contact'),
+    'type'            => 'crm_contact',
+    'description'     => t('The contact this method belongs to.'),
+    'schema field'    => 'cid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $method['label'] = array(
+    'label'           => t('Label'),
+    'type'            => 'text',
+    'description'     => t('The label for this method, e.g. Work or Home.'),
+    'schema field'    => 'label',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $method['value'] = array(
+    'label'           => t('Value'),
+    'type'            => 'text',
+    'description'     => t('The contact method value.'),
+    'schema field'    => 'value',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $method['is_primary'] = array(
+    'label'           => t('Primary'),
+    'type'            => 'boolean',
+    'description'     => t('Whether this is the primary method of this type for the contact.'),
+    'schema field'    => 'is_primary',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $method['created'] = array(
+    'label'           => t('Date Created'),
+    'type'            => 'date',
+    'schema field'    => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $method['changed'] = array(
+    'label'           => t('Date Modified'),
+    'type'            => 'date',
+    'schema field'    => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+
+  // --- crm_activity properties ---
+  $activity = &$info['crm_activity']['properties'];
+
+  $activity['aid'] = array(
+    'label'          => t('Activity ID'),
+    'type'           => 'integer',
+    'schema field'   => 'aid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $activity['type'] = array(
+    'label'           => t('Activity Type'),
+    'type'            => 'token',
+    'description'     => t('The activity type: call, email, meeting, note, or task.'),
+    'schema field'    => 'type',
+    'options list'    => '_dropcrm_activity_type_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['subject'] = array(
+    'label'           => t('Subject'),
+    'type'            => 'text',
+    'description'     => t('The activity subject.'),
+    'schema field'    => 'subject',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['status'] = array(
+    'label'           => t('Status'),
+    'type'            => 'token',
+    'description'     => t('Activity status: completed or planned.'),
+    'schema field'    => 'status',
+    'options list'    => '_dropcrm_activity_status_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['priority'] = array(
+    'label'           => t('Priority'),
+    'type'            => 'integer',
+    'description'     => t('Activity priority: 0 = low, 1 = normal, 2 = high.'),
+    'schema field'    => 'priority',
+    'options list'    => '_dropcrm_activity_priority_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['direction'] = array(
+    'label'           => t('Direction'),
+    'type'            => 'token',
+    'description'     => t('Inbound or outbound, for calls and emails.'),
+    'schema field'    => 'direction',
+    'options list'    => '_dropcrm_activity_direction_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['activity_date'] = array(
+    'label'           => t('Activity Date'),
+    'type'            => 'date',
+    'description'     => t('Date the activity occurred.'),
+    'schema field'    => 'activity_date',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['due_date'] = array(
+    'label'           => t('Date Due'),
+    'type'            => 'date',
+    'description'     => t('Optional due date for planned activities.'),
+    'schema field'    => 'due_date',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['is_outreach'] = array(
+    'label'           => t('Counts as Outreach'),
+    'type'            => 'boolean',
+    'description'     => t('Whether this activity counts toward the outreach goal.'),
+    'schema field'    => 'is_outreach',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['uid'] = array(
+    'label'           => t('Created by'),
+    'type'            => 'user',
+    'schema field'    => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $activity['created'] = array(
+    'label'           => t('Date Created'),
+    'type'            => 'date',
+    'schema field'    => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $activity['changed'] = array(
+    'label'           => t('Date Modified'),
+    'type'            => 'date',
+    'schema field'    => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+
+  return $info;
+}
+
+// ---------------------------------------------------------------------------
+// Permissions and access
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function dropcrm_permission() {
+  return array(
+    'administer crm' => array(
+      'title'       => t('Administer CRM'),
+      'description' => t('Manage CRM settings, field configuration, and all records.'),
+      'restrict access' => TRUE,
+    ),
+    'access crm' => array(
+      'title'       => t('Access CRM'),
+      'description' => t('View contacts, activities, and contact methods.'),
+    ),
+    'access crm projects' => array(
+      'title'       => t('Access CRM Projects'),
+      'description' => t('View the project list and individual project pages (without full CRM access). Useful for team members who only need to see which tickets belong to a project.'),
+    ),
+    'create crm contacts' => array(
+      'title'       => t('Create CRM contacts'),
+    ),
+    'edit crm contacts' => array(
+      'title'       => t('Edit CRM contacts'),
+    ),
+    'delete crm contacts' => array(
+      'title'       => t('Delete CRM contacts'),
+    ),
+    'create crm activities' => array(
+      'title'       => t('Create CRM activities'),
+    ),
+    'edit crm activities' => array(
+      'title'       => t('Edit CRM activities'),
+    ),
+    'delete crm activities' => array(
+      'title'       => t('Delete CRM activities'),
+    ),
+    'import crm contacts' => array(
+      'title'       => t('Import CRM contacts'),
+      'description' => t('Upload a CSV file to bulk import contacts.'),
+    ),
+    'export crm contacts' => array(
+      'title'       => t('Export CRM contacts'),
+      'description' => t('Download contacts as a CSV file.'),
+    ),
+  );
+}
+
+/**
+ * Access callback for crm_contact entities.
+ *
+ * @param string $op
+ *   One of: 'view', 'create', 'update', 'delete'.
+ * @param object|null $entity
+ *   The entity, or NULL for 'create'.
+ * @param object|null $account
+ *   The user account. Defaults to current user.
+ *
+ * @return bool
+ */
+function dropcrm_contact_access($op, $entity = NULL, $account = NULL) {
+  if (user_access('administer crm', $account)) {
+    return TRUE;
+  }
+  switch ($op) {
+    case 'view':
+      return user_access('access crm', $account);
+    case 'create':
+      return user_access('create crm contacts', $account);
+    case 'update':
+      return user_access('edit crm contacts', $account);
+    case 'delete':
+      return user_access('delete crm contacts', $account);
+  }
+  return FALSE;
+}
+
+/**
+ * Access callback for crm_contact_method entities.
+ */
+function dropcrm_contact_method_access($op, $entity = NULL, $account = NULL) {
+  if (user_access('administer crm', $account)) {
+    return TRUE;
+  }
+  switch ($op) {
+    case 'view':
+      return user_access('access crm', $account);
+    case 'create':
+    case 'update':
+      return user_access('edit crm contacts', $account);
+    case 'delete':
+      return user_access('delete crm contacts', $account);
+  }
+  return FALSE;
+}
+
+/**
+ * Access callback for crm_activity entities.
+ */
+function dropcrm_activity_access($op, $entity = NULL, $account = NULL) {
+  if (user_access('administer crm', $account)) {
+    return TRUE;
+  }
+  switch ($op) {
+    case 'view':
+      return user_access('access crm', $account);
+    case 'create':
+      return user_access('create crm activities', $account);
+    case 'update':
+      return user_access('edit crm activities', $account);
+    case 'delete':
+      return user_access('delete crm activities', $account);
+  }
+  return FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Entity load helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Loads a single CRM contact by ID.
+ *
+ * @param int $cid
+ *   Contact ID.
+ *
+ * @return CrmContact|FALSE
+ */
+function crm_contact_load($cid) {
+  $contacts = crm_contact_load_multiple(array($cid));
+  return $contacts ? reset($contacts) : FALSE;
+}
+
+/**
+ * Loads multiple CRM contacts.
+ *
+ * @param array $cids
+ *   Array of contact IDs, or empty to load all.
+ * @param array $conditions
+ *   Additional conditions for EntityFieldQuery.
+ * @param bool $reset
+ *   Whether to reset the entity cache.
+ *
+ * @return array
+ */
+function crm_contact_load_multiple($cids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('crm_contact', $cids, $conditions, $reset);
+}
+
+/**
+ * Loads a single CRM contact method by ID.
+ *
+ * @param int $cmid
+ *   Contact method ID.
+ *
+ * @return CrmContactMethod|FALSE
+ */
+function crm_contact_method_load($cmid) {
+  $methods = crm_contact_method_load_multiple(array($cmid));
+  return $methods ? reset($methods) : FALSE;
+}
+
+/**
+ * Loads multiple CRM contact methods.
+ */
+function crm_contact_method_load_multiple($cmids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('crm_contact_method', $cmids, $conditions, $reset);
+}
+
+/**
+ * Loads a single CRM activity by ID.
+ *
+ * @param int $aid
+ *   Activity ID.
+ *
+ * @return CrmActivity|FALSE
+ */
+function crm_activity_load($aid) {
+  $activities = crm_activity_load_multiple(array($aid));
+  return $activities ? reset($activities) : FALSE;
+}
+
+/**
+ * Loads multiple CRM activities.
+ */
+function crm_activity_load_multiple($aids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('crm_activity', $aids, $conditions, $reset);
+}
+
+/**
+ * Loads a single CRM relationship by ID.
+ *
+ * @param int $rid
+ *   Relationship ID.
+ *
+ * @return stdClass|FALSE
+ *   The relationship object, or FALSE if not found.
+ */
+function crm_relationship_load($rid) {
+  return db_select('crm_relationship', 'r')
+    ->fields('r')
+    ->condition('rid', (int) $rid)
+    ->execute()
+    ->fetchObject();
+}
+
+/**
+ * Menu loader: load a project by pid.
+ */
+function drop_project_load($pid) {
+  $projects = entity_load('drop_project', array((int) $pid));
+  return $projects ? reset($projects) : FALSE;
+}
+
+/**
+ * Access callback: view/list project pages.
+ *
+ * Grants access to users with either 'access crm' or 'access crm projects'.
+ */
+function dropcrm_project_view_access() {
+  return user_access('administer crm')
+    || user_access('access crm')
+    || user_access('access crm projects');
+}
+
+/**
+ * Access callback for drop_project entities.
+ */
+function dropcrm_project_access($op, $project = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (user_access('administer crm', $account)) {
+    return TRUE;
+  }
+  // View access: either full CRM access or the lighter projects-only permission.
+  if ($op === 'view') {
+    return user_access('access crm', $account)
+      || user_access('access crm projects', $account);
+  }
+  if (!user_access('access crm', $account)) {
+    return FALSE;
+  }
+  if ($op === 'create') {
+    return TRUE;
+  }
+  return $project && $project->uid == $account->uid;
+}
+
+/**
+ * Returns the available project color options.
+ *
+ * @return array
+ *   Hex code => label.
+ */
+function dropcrm_color_options() {
+  return array(
+    '#1565c0' => t('Blue'),
+    '#2e7d32' => t('Green'),
+    '#e65100' => t('Orange'),
+    '#7b1fa2' => t('Purple'),
+    '#c62828' => t('Red'),
+    '#00838f' => t('Teal'),
+    '#f57c00' => t('Amber'),
+    '#37474f' => t('Slate'),
+    '#558b2f' => t('Olive'),
+    '#ad1457' => t('Pink'),
+  );
+}
+
+/**
+ * Returns active projects as pid => name options array.
+ *
+ * @param int $uid
+ *   Optional user ID to filter by owner. Pass 0 for all projects.
+ *
+ * @return array
+ */
+function dropcrm_project_options($uid = 0) {
+  $query = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name'))
+    ->condition('p.active', 1)
+    ->orderBy('p.name', 'ASC');
+  if ($uid) {
+    $query->condition('p.uid', $uid);
+  }
+  return $query->execute()->fetchAllKeyed();
+}
+
+// ---------------------------------------------------------------------------
+// Entity presave hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_crm_contact_presave().
+ *
+ * Sets timestamps and uid, then computes the display name for Person contacts
+ * from first + last name field API fields.
+ */
+function dropcrm_crm_contact_presave($contact) {
+  if (empty($contact->created)) {
+    $contact->created = REQUEST_TIME;
+  }
+  $contact->changed = REQUEST_TIME;
+  if (!isset($contact->uid)) {
+    $contact->uid = $GLOBALS['user']->uid;
+  }
+  if (!isset($contact->status)) {
+    $contact->status = 1;
+  }
+
+  if ($contact->type !== 'crm_person') {
+    return;
+  }
+  try {
+    $wrapper = entity_metadata_wrapper('crm_contact', $contact);
+    $first  = $wrapper->field_crm_first_name->value();
+    $last   = $wrapper->field_crm_last_name->value();
+    $name   = trim($first . ' ' . $last);
+    $contact->name = $name !== '' ? $name : t('(No name)');
+  }
+  catch (EntityMetadataWrapperException $e) {
+    // Fields not yet available (e.g. during install).
+  }
+}
+
+/**
+ * Implements hook_crm_contact_method_presave().
+ *
+ * Sets timestamps and builds the formatted address value for address records.
+ */
+function dropcrm_crm_contact_method_presave($method) {
+  if (empty($method->created)) {
+    $method->created = REQUEST_TIME;
+  }
+  $method->changed = REQUEST_TIME;
+
+  if ($method->type === 'address') {
+    $method->value = _dropcrm_format_address($method);
+  }
+}
+
+/**
+ * Implements hook_crm_activity_presave().
+ *
+ * Sets timestamps, uid, and default activity_date.
+ */
+/**
+ * Page callback: extend an activity's due date by a fixed period.
+ *
+ * @param CrmActivity $activity
+ *   The activity to update.
+ * @param string $period
+ *   One of: 'day', 'week', 'month'.
+ */
+function dropcrm_activity_extend(CrmActivity $activity, $period) {
+  $allowed = array('day' => '+1 day', 'week' => '+1 week', 'month' => '+1 month');
+  if (!isset($allowed[$period])) {
+    return MENU_NOT_FOUND;
+  }
+  $base = !empty($activity->due_date) ? $activity->due_date : REQUEST_TIME;
+  $activity->due_date = strtotime($allowed[$period], $base);
+  $activity->save();
+  backdrop_set_message(t('Due date extended by 1 @period.', array('@period' => $period)));
+  backdrop_goto('drop/crm/activity/' . $activity->aid);
+}
+
+
+function dropcrm_crm_activity_presave($activity) {
+  if (empty($activity->created)) {
+    $activity->created = REQUEST_TIME;
+  }
+  $activity->changed = REQUEST_TIME;
+  if (!isset($activity->uid)) {
+    $activity->uid = $GLOBALS['user']->uid;
+  }
+  if (empty($activity->activity_date)) {
+    $activity->activity_date = REQUEST_TIME;
+  }
+  if (empty($activity->subject)) {
+    $activity->subject = _dropcrm_generate_activity_subject($activity);
+  }
+}
+
+/**
+ * Generates an activity subject from type, linked contacts, and date.
+ *
+ * Used when the subject field is left blank on the activity form.
+ *
+ * @param CrmActivity $activity
+ *   The activity entity (field values must already be populated).
+ *
+ * @return string
+ *   A generated subject string.
+ */
+function _dropcrm_generate_activity_subject(CrmActivity $activity) {
+  $type_options = _dropcrm_activity_type_options();
+  $type_label = isset($type_options[$activity->type])
+    ? $type_options[$activity->type]
+    : ucfirst($activity->type);
+
+  $ts = !empty($activity->activity_date) ? $activity->activity_date : REQUEST_TIME;
+  $date_label = format_date($ts, 'custom', 'M j, Y');
+
+  // Read contact names from field values directly (entity may not be saved yet).
+  $contact_names = array();
+  $lang = LANGUAGE_NONE;
+  if (!empty($activity->field_crm_contacts[$lang])) {
+    foreach ($activity->field_crm_contacts[$lang] as $item) {
+      if (!empty($item['target_id'])) {
+        $contact = crm_contact_load((int) $item['target_id']);
+        if ($contact) {
+          $contact_names[] = entity_label('crm_contact', $contact);
+        }
+      }
+    }
+  }
+
+  if ($contact_names) {
+    return $type_label . ' with ' . implode(', ', $contact_names) . ' — ' . $date_label;
+  }
+  return $type_label . ' — ' . $date_label;
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function dropcrm_menu() {
+  $items = array();
+
+  // CRM overview — parent page for all tabs.
+  $items['drop/crm'] = array(
+    'title'            => 'CRM',
+    'description'      => 'Manage contacts, activities, and CRM settings.',
+    'page callback'    => 'dropcrm_admin_overview',
+    'page arguments'   => array(),
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+  );
+
+  // "Overview" default tab — keeps the dashboard accessible as a tab when
+  // the user navigates to a sibling tab (contacts, activities, settings).
+  $items['drop/crm/overview'] = array(
+    'title'            => 'Overview',
+    'type'             => MENU_DEFAULT_LOCAL_TASK,
+    'weight'           => -10,
+  );
+
+  // Contact view pages.
+  $items['drop/crm/contact/%crm_contact'] = array(
+    'title callback'   => 'entity_label',
+    'title arguments'  => array('crm_contact', 3),
+    'page callback'    => 'dropcrm_contact_view',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_contact_access',
+    'access arguments' => array('view', 3),
+    'file'             => 'dropcrm.pages.inc',
+  );
+
+  // Activity view pages.
+  $items['drop/crm/activity/%crm_activity'] = array(
+    'title callback'   => 'entity_label',
+    'title arguments'  => array('crm_activity', 3),
+    'page callback'    => 'dropcrm_activity_view',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_activity_access',
+    'access arguments' => array('view', 3),
+    'file'             => 'dropcrm.pages.inc',
+  );
+
+  // Activity due-date extend shortcuts.
+  $items['drop/crm/activity/%crm_activity/extend/%'] = array(
+    'page callback'    => 'dropcrm_activity_extend',
+    'page arguments'   => array(3, 4),
+    'access callback'  => 'dropcrm_activity_access',
+    'access arguments' => array('edit', 3),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Contact method pages.
+  $items['drop/crm/contact-method/%crm_contact_method'] = array(
+    'title callback'   => 'entity_label',
+    'title arguments'  => array('crm_contact_method', 3),
+    'page callback'    => 'dropcrm_contact_method_view',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_contact_method_access',
+    'access arguments' => array('view', 3),
+    'file'             => 'dropcrm.pages.inc',
+  );
+
+  // Admin hub card — contact methods list under admin/drop.
+  $items['admin/drop/crm'] = array(
+    'title'            => 'DropCRM: Contact Details',
+    'description'      => t('Browse and manage all contact method records (email, phone, address, website) across people and organisations.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/crm/contact-methods'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 5,
+  );
+
+  $items['admin/drop/crm/email-audit'] = array(
+    'title'            => 'DropCRM: Email & Newsletter Audit',
+    'description'      => t('Review all contacts for missing email addresses and newsletter subscriptions.'),
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_email_audit_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'type'             => MENU_NORMAL_ITEM,
+    'file'             => 'dropcrm.admin.inc',
+    'weight'           => 6,
+  );
+
+  $items['admin/drop/crm/email-audit/add-email'] = array(
+    'title'          => 'Add contact email',
+    'page callback'  => 'dropcrm_email_audit_add_email',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'type'           => MENU_CALLBACK,
+    'file'           => 'dropcrm.admin.inc',
+  );
+
+  $items['admin/drop/crm/email-audit/toggle-newsletter'] = array(
+    'title'          => 'Toggle newsletter subscription',
+    'page callback'  => 'dropcrm_email_audit_toggle_newsletter',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'type'           => MENU_CALLBACK,
+    'file'           => 'dropcrm.admin.inc',
+  );
+
+  // Contact name autocomplete.
+  $items['drop/crm/autocomplete/contacts'] = array(
+    'title'          => 'Contact autocomplete',
+    'page callback'  => 'dropcrm_contact_autocomplete',
+    'access arguments' => array('access crm'),
+    'type'           => MENU_CALLBACK,
+  );
+
+  // Organization-only autocomplete (returns entityreference-compatible format).
+  // Entityreference appends /{field_name}/{entity_type}/{bundle}/{entity_id}
+  // to the configured path before storing it as #autocomplete_path (7 segments
+  // total). backdrop_valid_path() checks that 7-segment path, so our route must
+  // match it exactly. When the autocomplete JS fires, it appends the typed
+  // string as the 8th segment — Backdrop's ancestor matching finds our 7-segment
+  // route and passes the extra segment as the first function argument.
+  $items['crm/autocomplete/organizations/%/%/%/%'] = array(
+    'title'             => 'Organization autocomplete',
+    'page callback'     => 'dropcrm_org_autocomplete',
+    'access arguments'  => array('access crm'),
+    'type'              => MENU_CALLBACK,
+    'delivery callback' => 'backdrop_json_deliver',
+  );
+
+  // All-contacts autocomplete (returns entityreference-compatible format).
+  // Used by field_crm_contacts on activities so people AND orgs are found.
+  $items['crm/autocomplete/contacts/%/%/%/%'] = array(
+    'title'             => 'All contacts autocomplete',
+    'page callback'     => 'dropcrm_all_contacts_autocomplete',
+    'access arguments'  => array('access crm'),
+    'type'              => MENU_CALLBACK,
+    'delivery callback' => 'backdrop_json_deliver',
+  );
+
+  // To Do list — planned activities, sorted soonest first.
+  $items['drop/crm/todo'] = array(
+    'title'            => 'To Do',
+    'page callback'    => 'dropcrm_todo_page',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Mark a single activity as done (one-click action from the To Do list).
+  $items['drop/crm/activities/%crm_activity/done'] = array(
+    'page callback'    => 'dropcrm_activity_mark_done',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_activity_access',
+    'access arguments' => array('edit', 3),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'dropcrm.admin.inc',
+  );
+
+  // Reports section.
+  $items['drop/crm/reports'] = array(
+    'title'            => 'Reports',
+    'page callback'    => 'dropcrm_reports_page',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/reports/last-contact'] = array(
+    'title'            => 'People by Last Contact',
+    'page callback'    => 'dropcrm_report_last_contact',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/reports/outreach-goal'] = array(
+    'title'            => 'Outreach Goal',
+    'page callback'    => 'dropcrm_report_outreach_goal',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/reports/clients'] = array(
+    'title'            => 'Clients',
+    'page callback'    => 'dropcrm_report_clients',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/reports/tag-filter'] = array(
+    'title'            => 'Tag Filter',
+    'page callback'    => 'dropcrm_report_tag_filter',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Per-bundle contact tabs.
+  $items['drop/crm/people'] = array(
+    'title'            => 'People',
+    'page callback'    => 'dropcrm_contact_list_page',
+    'page arguments'   => array('crm_person'),
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/organizations'] = array(
+    'title'            => 'Organizations',
+    'page callback'    => 'dropcrm_contact_list_page',
+    'page arguments'   => array('crm_organization'),
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  if (config_get('dropcrm.settings', 'enable_households')) {
+    $items['drop/crm/households'] = array(
+      'title'            => 'Households',
+      'page callback'    => 'dropcrm_contact_list_page',
+      'page arguments'   => array('crm_household'),
+      'access arguments' => array('access crm'),
+      'file'             => 'dropcrm.admin.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
+
+  // Relationship CRUD routes.
+  $items['drop/crm/relationships/add'] = array(
+    'title'            => 'Add Relationship',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_relationship_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('edit crm contacts'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/crm/relationships/%/edit'] = array(
+    'title'            => 'Edit Relationship',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_relationship_form', 3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('edit crm contacts'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/crm/relationships/%/delete'] = array(
+    'title'            => 'Delete Relationship',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_relationship_delete_confirm', 3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('edit crm contacts'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Settings tab.
+  $items['drop/crm/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_settings_form'),
+    'access arguments' => array('administer crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 20,
+  );
+
+  // ---- Projects ----
+  $items['drop/crm/projects'] = array(
+    'title'            => 'Projects',
+    'page callback'    => 'dropcrm_project_list',
+    'access callback'  => 'dropcrm_project_view_access',
+    'access arguments' => array(),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // Field UI parent path for drop_project bundle admin.
+  $items['drop/crm/projects/manage'] = array(
+    'title'            => 'Manage project fields',
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/crm/projects/manage/fields'),
+    'access arguments' => array('administer crm'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/crm/projects/add'] = array(
+    'title'            => 'Add project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_project_form', NULL),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+  $items['drop/crm/projects/%drop_project/edit'] = array(
+    'title'            => 'Edit project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_project_form', 3),
+    'access callback'  => 'dropcrm_project_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/projects/%drop_project/delete'] = array(
+    'title'            => 'Delete project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_project_delete_form', 3),
+    'access callback'  => 'dropcrm_project_access',
+    'access arguments' => array('delete', 3),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Project view — ticket list for a single project.
+  $items['drop/crm/projects/%drop_project'] = array(
+    'title'            => 'Project',
+    'page callback'    => 'dropcrm_project_view',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_project_view_access',
+    'access arguments' => array(),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * The entity_ui admin paths for contacts and activities are registered as
+ * normal menu items. Promote them to local tasks so they appear as tabs on
+ * the drop/crm parent page.
+ */
+function dropcrm_menu_alter(&$items) {
+  // drop/crm/contacts is registered by entity_ui for CRUD (add/edit/delete).
+  // Keep it accessible but remove it from tabs — per-bundle tabs replace it.
+  if (isset($items['drop/crm/contacts'])) {
+    $items['drop/crm/contacts']['type'] = MENU_NORMAL_ITEM;
+  }
+  if (isset($items['drop/crm/activities'])) {
+    $items['drop/crm/activities']['type']            = MENU_CALLBACK;
+    $items['drop/crm/activities']['title']           = 'Activities';
+    $items['drop/crm/activities']['page callback']   = 'dropcrm_activity_list_page';
+    $items['drop/crm/activities']['page arguments']  = array();
+    $items['drop/crm/activities']['file']            = 'dropcrm.admin.inc';
+    $items['drop/crm/activities']['file path']       = backdrop_get_path('module', 'dropcrm');
+  }
+  if (isset($items['drop/crm/contact-methods'])) {
+    $items['drop/crm/contact-methods']['type']   = MENU_NORMAL_ITEM;
+    $items['drop/crm/contact-methods']['title']  = 'Contact Details';
+  }
+  // Redirect the entity_ui view path (contacts/N) to our custom view (contact/N).
+  // This ensures the "View" tab on the edit form never lands on the wrong page.
+  if (isset($items['drop/crm/contacts/%crm_contact'])) {
+    $items['drop/crm/contacts/%crm_contact']['page callback']  = 'dropcrm_contact_view_redirect';
+    $items['drop/crm/contacts/%crm_contact']['page arguments'] = array(3);
+    $items['drop/crm/contacts/%crm_contact']['file']           = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Views integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_alter().
+ *
+ * When arriving at the add-activity form via an "Add activity" link on a
+ * contact page, the URL carries ?contact=CID. Pre-populate the
+ * field_crm_contacts tags widget with that contact so the person doesn't
+ * have to search for it manually.
+ */
+function dropcrm_form_alter(&$form, &$form_state, $form_id) {
+  // Set breadcrumbs on CRM entity edit/add forms.
+  // entity_ui generates form IDs like crm_contact_edit_{bundle}_form.
+  if (strpos($form_id, 'crm_contact_edit_') === 0 || strpos($form_id, 'crm_contact_add_') === 0) {
+    $entity = isset($form_state['entity']) ? $form_state['entity'] : NULL;
+    $crumb = array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('CRM'), 'drop/crm'),
+      l(t('Contacts'), 'drop/crm/contacts'),
+    );
+    if ($entity && !empty($entity->cid)) {
+      $crumb[] = l(entity_label('crm_contact', $entity), 'drop/crm/contact/' . $entity->cid);
+    }
+    backdrop_set_breadcrumb($crumb);
+
+    // If a destination was passed in the URL, embed it as a hidden field so it
+    // survives the POST and is available in the submit handler.
+    if (!empty($_GET['destination'])) {
+      $dest = $_GET['destination'];
+      if (strpos($dest, '://') === FALSE && strpos($dest, '//') !== 0) {
+        $form['crm_destination'] = array(
+          '#type'  => 'hidden',
+          '#value' => $dest,
+        );
+      }
+    }
+  }
+  elseif (strpos($form_id, 'crm_activity_edit_') === 0 || strpos($form_id, 'crm_activity_add_') === 0 || $form_id === 'crm_activity_form') {
+    $entity = isset($form_state['entity']) ? $form_state['entity'] : NULL;
+    $crumb = array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('CRM'), 'drop/crm'),
+      l(t('Activities'), 'drop/crm/activities'),
+    );
+    if ($entity && !empty($entity->aid)) {
+      $crumb[] = l(entity_label('crm_activity', $entity), 'drop/crm/activity/' . $entity->aid);
+    }
+    backdrop_set_breadcrumb($crumb);
+  }
+  elseif (strpos($form_id, 'crm_contact_method_edit_') === 0 || strpos($form_id, 'crm_contact_method_add_') === 0) {
+    $entity = isset($form_state['entity']) ? $form_state['entity'] : NULL;
+    $crumb = array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('CRM'), 'drop/crm'),
+    );
+    if ($entity && !empty($entity->cid)) {
+      $contact = crm_contact_load($entity->cid);
+      if ($contact) {
+        $crumb[] = l(t('Contacts'), 'drop/crm/contacts');
+        $crumb[] = l(entity_label('crm_contact', $contact), 'drop/crm/contact/' . $entity->cid);
+      }
+    }
+    backdrop_set_breadcrumb($crumb);
+  }
+
+  // Pre-populate Organization field when adding a person from an org page.
+  if ($form_id === 'crm_contact_form') {
+    $org_cid = isset($_GET['org']) ? (int) $_GET['org'] : 0;
+    if ($org_cid) {
+      $org = crm_contact_load($org_cid);
+      if ($org && $org->bundle() === 'crm_organization') {
+        $lang = LANGUAGE_NONE;
+        if (isset($form['field_crm_employer'][$lang][0]['target_id'])) {
+          $label = entity_label('crm_contact', $org);
+          $form['field_crm_employer'][$lang][0]['target_id']['#default_value'] = check_plain($label) . ' (' . $org_cid . ')';
+        }
+      }
+    }
+    return;
+  }
+
+  if ($form_id !== 'crm_activity_form') {
+    return;
+  }
+
+  // Pre-populate contact when arriving via "Add activity" link on a contact page.
+  $cid = isset($_GET['contact']) ? (int) $_GET['contact'] : 0;
+  if ($cid) {
+    $contact = crm_contact_load($cid);
+    if ($contact) {
+      $lang = LANGUAGE_NONE;
+      if (isset($form['field_crm_contacts'][$lang])) {
+        $label = entity_label('crm_contact', $contact);
+        $form['field_crm_contacts'][$lang]['#default_value'] = check_plain($label) . ' (' . $cid . ')';
+      }
+    }
+  }
+
+  // Pre-set status to "planned" when arriving via the To Do "Add task" link.
+  if (isset($_GET['status']) && $_GET['status'] === 'planned') {
+    $form['status']['#default_value'] = 'planned';
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function dropcrm_views_api() {
+  return array(
+    'api'  => 3,
+    'path' => backdrop_get_path('module', 'dropcrm'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns options list for activity types from config.
+ *
+ * @return array
+ */
+function _dropcrm_activity_type_options() {
+  $types = config_get('dropcrm.settings', 'activity_types');
+  $options = array();
+  if ($types) {
+    foreach ($types as $key => $info) {
+      $options[$key] = t($info['label']);
+    }
+  }
+  return $options;
+}
+
+/**
+ * Returns options list for activity statuses.
+ *
+ * @return array
+ */
+function _dropcrm_activity_status_options() {
+  return array(
+    'completed' => t('Completed'),
+    'planned'   => t('Planned'),
+  );
+}
+
+/**
+ * Returns options list for activity priorities.
+ *
+ * @return array
+ */
+/**
+ * Renders a 1–3 star rating as filled/empty star characters.
+ *
+ * @param int $value
+ *   The rating value (1, 2, or 3). 0 or empty returns ''.
+ * @param int $max
+ *   Maximum stars (default 3).
+ *
+ * @return string
+ *   HTML string of star characters, or empty string if unrated.
+ */
+function _dropcrm_render_stars($value, $max = 5) {
+  $value = (int) $value;
+  if ($value < 1 || $value > $max) {
+    return '';
+  }
+  $filled = str_repeat('★', $value);
+  $empty  = str_repeat('☆', $max - $value);
+  return '<span class="crm-stars" title="' . format_plural($value, '1 star', '@count stars') . '">'
+    . '<span class="crm-stars-filled">' . $filled . '</span>'
+    . '<span class="crm-stars-empty">' . $empty . '</span>'
+    . '</span>';
+}
+
+function _dropcrm_activity_priority_options() {
+  return array(
+    2 => t('High'),
+    1 => t('Normal'),
+    0 => t('Low'),
+  );
+}
+
+/**
+ * Returns options list for activity direction.
+ *
+ * @return array
+ */
+function _dropcrm_activity_direction_options() {
+  return array(
+    ''         => t('N/A'),
+    'inbound'  => t('Inbound'),
+    'outbound' => t('Outbound'),
+  );
+}
+
+/**
+ * Returns options list for contact bundles.
+ *
+ * @return array
+ */
+function _dropcrm_contact_bundle_options() {
+  return array(
+    'crm_person'       => t('Person'),
+    'crm_organization' => t('Organization'),
+    'crm_household'    => t('Household'),
+  );
+}
+
+/**
+ * Returns options list for contact method bundles.
+ *
+ * @return array
+ */
+function _dropcrm_contact_method_bundle_options() {
+  return array(
+    'email'     => t('Email'),
+    'telephone' => t('Telephone'),
+    'address'   => t('Address'),
+    'url'       => t('Website / Social'),
+  );
+}
+
+/**
+ * Returns label options for a given contact method type.
+ *
+ * @param string $type
+ *   One of: email, telephone, address.
+ *
+ * @return array
+ */
+function _dropcrm_contact_method_label_options($type) {
+  $labels = config_get('dropcrm.settings', 'contact_method_labels');
+  $options = array();
+  if (!empty($labels[$type])) {
+    foreach ($labels[$type] as $label) {
+      $options[$label] = t($label);
+    }
+  }
+  return $options;
+}
+
+/**
+ * Builds a formatted address string from a contact method address entity.
+ *
+ * @param object $method
+ *   A crm_contact_method entity with bundle 'address'.
+ *
+ * @return string
+ *   A single-line formatted address.
+ */
+function _dropcrm_format_address($method) {
+  try {
+    $wrapper = entity_metadata_wrapper('crm_contact_method', $method);
+    $parts = array_filter(array(
+      $wrapper->field_crm_street->value(),
+      $wrapper->field_crm_city->value(),
+      $wrapper->field_crm_state_province->value(),
+      $wrapper->field_crm_postal_code->value(),
+      $wrapper->field_crm_country->value(),
+    ));
+    return implode(', ', $parts);
+  }
+  catch (EntityMetadataWrapperException $e) {
+    return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Autocomplete callbacks
+// ---------------------------------------------------------------------------
+
+/**
+ * Autocomplete callback: search CRM contacts by name.
+ *
+ * Returns JSON suggestions in the format "Contact Name [cid:N]" which the
+ * contact method form submit handler parses to extract the CID.
+ *
+ * @param string $string
+ *   The partial string typed by the person.
+ */
+function dropcrm_contact_autocomplete($string = '') {
+  $matches = array();
+  if (strlen($string) >= 1) {
+    $needle = '%' . db_like($string) . '%';
+
+    // Search the computed name column (covers org/household names and the
+    // pre-computed "First Last" string for persons).
+    $query = db_select('crm_contact', 'c')
+      ->fields('c', array('cid', 'name'))
+      ->condition('name', $needle, 'LIKE')
+      ->orderBy('name')
+      ->range(0, 10);
+
+    $result = $query->execute();
+    foreach ($result as $row) {
+      $key = $row->name . ' [cid:' . $row->cid . ']';
+      $matches[$key] = check_plain($row->name);
+    }
+
+    // Also search first and last name fields separately so typing a last name
+    // (e.g. "Whitney") finds "Julia Whitney".
+    if (count($matches) < 10) {
+      $remaining = 10 - count($matches);
+      $found_cids = array_map(function($k) {
+        preg_match('/\[cid:(\d+)\]/', $k, $m);
+        return isset($m[1]) ? (int) $m[1] : 0;
+      }, array_keys($matches));
+
+      $subquery = db_select('field_data_field_crm_first_name', 'fn');
+      $subquery->join('crm_contact', 'c', 'c.cid = fn.entity_id');
+      $subquery->leftJoin('field_data_field_crm_last_name', 'ln', 'ln.entity_id = fn.entity_id');
+      $subquery->fields('c', array('cid', 'name'));
+      $or = db_or()
+        ->condition('fn.field_crm_first_name_value', $needle, 'LIKE')
+        ->condition('ln.field_crm_last_name_value', $needle, 'LIKE');
+      $subquery->condition($or);
+      if ($found_cids) {
+        $subquery->condition('c.cid', $found_cids, 'NOT IN');
+      }
+      $subquery->orderBy('c.name')->range(0, $remaining);
+
+      foreach ($subquery->execute() as $row) {
+        $key = $row->name . ' [cid:' . $row->cid . ']';
+        $matches[$key] = check_plain($row->name);
+      }
+    }
+  }
+  backdrop_json_output($matches);
+}
+
+/**
+ * Autocomplete callback: organizations only, entityreference-compatible format.
+ *
+ * Returns results as "Name (id)" so entityreference validation extracts the id
+ * correctly. No arbitrary 10-result cap — returns up to 50 matches so all
+ * organizations are reachable when typing a partial name.
+ *
+ * @param string $string
+ *   The partial string typed by the person.
+ */
+function dropcrm_org_autocomplete($string = '') {
+  $matches = array();
+  if (strlen($string) >= 1) {
+    $needle = '%' . db_like($string) . '%';
+    $result = db_select('crm_contact', 'c')
+      ->fields('c', array('cid', 'name'))
+      ->condition('type', 'crm_organization')
+      ->condition('name', $needle, 'LIKE')
+      ->orderBy('name')
+      ->range(0, 50)
+      ->execute();
+    foreach ($result as $row) {
+      // entityreference validates with /.+\((\d+)\)/ so format must be "Name (id)".
+      $key = check_plain($row->name) . ' (' . $row->cid . ')';
+      $matches[$key] = check_plain($row->name);
+    }
+  }
+  return $matches;
+}
+
+/**
+ * Page callback: entityreference-compatible autocomplete for ALL contact types.
+ *
+ * Used by the field_crm_contacts widget on activity forms so that people,
+ * organisations and households all appear in the suggestions list.
+ *
+ * Returns JSON with keys and values in "Name (id)" format, which is the
+ * format the entityreference_autocomplete_tags widget expects.
+ *
+ * @param string $string
+ *   The search string typed by the user.
+ *
+ * @return array
+ *   Associative array of "Name (id)" => "Name" suggestions.
+ */
+function dropcrm_all_contacts_autocomplete($string = '') {
+  $matches = array();
+  if (strlen($string) >= 1) {
+    $needle = '%' . db_like($string) . '%';
+
+    // Primary search: name column (covers org names and "First Last" for people).
+    $result = db_select('crm_contact', 'c')
+      ->fields('c', array('cid', 'name'))
+      ->condition('name', $needle, 'LIKE')
+      ->orderBy('name')
+      ->range(0, 50)
+      ->execute();
+    foreach ($result as $row) {
+      // entityreference validates with /.+\((\d+)\)/ — format must be "Name (id)".
+      $key = check_plain($row->name) . ' (' . $row->cid . ')';
+      $matches[$key] = check_plain($row->name);
+    }
+
+    // Also search first/last name fields separately so "Whitney" finds "Julia Whitney".
+    if (count($matches) < 50) {
+      $remaining = 50 - count($matches);
+      $found_cids = array();
+      foreach (array_keys($matches) as $k) {
+        if (preg_match('/\((\d+)\)$/', $k, $m)) {
+          $found_cids[] = (int) $m[1];
+        }
+      }
+      $subquery = db_select('field_data_field_crm_first_name', 'fn');
+      $subquery->join('crm_contact', 'c', 'c.cid = fn.entity_id');
+      $subquery->leftJoin('field_data_field_crm_last_name', 'ln', 'ln.entity_id = fn.entity_id');
+      $subquery->fields('c', array('cid', 'name'));
+      $or = db_or()
+        ->condition('fn.field_crm_first_name_value', $needle, 'LIKE')
+        ->condition('ln.field_crm_last_name_value', $needle, 'LIKE');
+      $subquery->condition($or);
+      if ($found_cids) {
+        $subquery->condition('c.cid', $found_cids, 'NOT IN');
+      }
+      $subquery->orderBy('c.name')->range(0, $remaining);
+      foreach ($subquery->execute() as $row) {
+        $key = check_plain($row->name) . ' (' . $row->cid . ')';
+        $matches[$key] = check_plain($row->name);
+      }
+    }
+  }
+  return $matches;
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * When a contact view page is loaded with a ?destination= parameter (e.g.
+ * from the Clients report), propagate that destination onto the Edit local
+ * task URL so that saving the edit form returns to the original report.
+ */
+function dropcrm_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  // On the main CRM page, strip all local tasks except admin-only ones.
+  // Operational navigation lives in the Drop Section Navigation block.
+  if ($root_path === 'drop/crm') {
+    $admin_paths = array('drop/crm/settings');
+    if (!empty($data['tabs'][0]['output'])) {
+      foreach ($data['tabs'][0]['output'] as $key => $tab) {
+        $href = isset($tab['#link']['href']) ? $tab['#link']['href'] : '';
+        if (!in_array($href, $admin_paths)) {
+          unset($data['tabs'][0]['output'][$key]);
+        }
+      }
+    }
+  }
+
+  // Propagate ?destination onto contact edit tabs so saving returns to the
+  // originating report.
+  if (empty($_GET['destination'])) {
+    return;
+  }
+  // Only apply on the contact view page.
+  if ($root_path !== 'drop/crm/contact/%') {
+    return;
+  }
+  $dest = $_GET['destination'];
+  // Guard against external URLs.
+  if (strpos($dest, '://') !== FALSE || strpos($dest, '//') === 0) {
+    return;
+  }
+  // Add the destination to every local task that contains '/edit'.
+  foreach ($data['tabs'] as &$tab_level) {
+    foreach ($tab_level['output'] as &$tab) {
+      if (!empty($tab['#link']['href']) && strpos($tab['#link']['href'], '/edit') !== FALSE) {
+        $tab['#link']['localized_options']['query']['destination'] = $dest;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_drop_reports().
+ */
+function dropcrm_drop_reports() {
+  return array(
+    'dropcrm_last_contact' => array(
+      'title'              => t('Last Contact'),
+      'path'               => 'drop/crm/reports/last-contact',
+      'root_path'          => 'drop/crm',
+      'module'             => 'dropcrm',
+      'default_pin'        => TRUE,
+      'is_default_subtask' => TRUE,
+    ),
+    'dropcrm_outreach_goal' => array(
+      'title'       => t('Outreach Goal'),
+      'path'        => 'drop/crm/reports/outreach-goal',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm',
+      'default_pin' => FALSE,
+    ),
+    'dropcrm_clients' => array(
+      'title'       => t('Clients'),
+      'path'        => 'drop/crm/reports/clients',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm',
+      'default_pin' => FALSE,
+    ),
+    'dropcrm_tag_filter' => array(
+      'title'       => t('Tag Filter'),
+      'path'        => 'drop/crm/reports/tag-filter',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm',
+      'default_pin' => FALSE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function dropcrm_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('CRM'),
+      'path'       => 'drop/crm',
+      'permission' => 'access crm',
+      'weight'     => 10,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function dropcrm_drop_section_links($section) {
+  if ($section !== 'crm') {
+    return array();
+  }
+
+  $links = array();
+
+  $links['people'] = array(
+    'title'        => t('People'),
+    'href'         => 'drop/crm/people',
+    'weight'       => -20,
+    'active_paths' => array('drop/crm/people', 'drop/crm/contact'),
+  );
+
+  $links['organizations'] = array(
+    'title'  => t('Organizations'),
+    'href'   => 'drop/crm/organizations',
+    'weight' => -15,
+  );
+
+  if (config_get('dropcrm.settings', 'enable_households')) {
+    $links['households'] = array(
+      'title'  => t('Households'),
+      'href'   => 'drop/crm/households',
+      'weight' => -10,
+    );
+  }
+
+  $links['todo'] = array(
+    'title'  => t('To Do'),
+    'href'   => 'drop/crm/todo',
+    'weight' => -5,
+  );
+
+  $links['activities'] = array(
+    'title'        => t('Activities'),
+    'href'         => 'drop/crm/activities',
+    'weight'       => 0,
+    'active_paths' => array('drop/crm/activities', 'drop/crm/activity'),
+  );
+
+  if (user_access('access crm') || user_access('access crm projects')) {
+    $links['projects'] = array(
+      'title'        => t('Projects'),
+      'href'         => 'drop/crm/projects',
+      'weight'       => 10,
+      'active_paths' => array('drop/crm/projects'),
+    );
+  }
+
+  // Reports — flat links rather than a navigating "Reports" parent.
+  $links['last_contact'] = array(
+    'title'  => t('Last Contact'),
+    'href'   => 'drop/crm/reports/last-contact',
+    'weight' => 20,
+  );
+
+  $links['outreach_goal'] = array(
+    'title'  => t('Outreach Goal'),
+    'href'   => 'drop/crm/reports/outreach-goal',
+    'weight' => 25,
+  );
+
+  $links['clients'] = array(
+    'title'  => t('Clients'),
+    'href'   => 'drop/crm/reports/clients',
+    'weight' => 30,
+  );
+
+  $links['tag_filter'] = array(
+    'title'  => t('Tag Filter'),
+    'href'   => 'drop/crm/reports/tag-filter',
+    'weight' => 35,
+  );
+
+  return $links;
+}
+
+/**
+ * Page callback: redirects entity_ui's contacts/N path to our contact/N view.
+ */
+function dropcrm_contact_view_redirect($contact) {
+  backdrop_goto('drop/crm/contact/' . $contact->cid);
+}
+
+// ---------------------------------------------------------------------------
+// Contact view accordion helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the opening HTML for an accordion section on the contact view page.
+ *
+ * @param string $title
+ *   Section title (plain text, will be escaped).
+ * @param string $extra_html
+ *   Optional HTML to append inside the <summary> (e.g. add-links).
+ * @param bool $open
+ *   Whether the section should be expanded by default.
+ *
+ * @return string
+ */
+function dropcrm_accordion_prefix($title, $extra_html = '', $open = FALSE) {
+  $open_attr = $open ? ' open' : '';
+  return '<details class="crm-section-accordion"' . $open_attr . '>'
+    . '<summary class="crm-section-summary">'
+    . '<span class="crm-section-title">' . check_plain($title) . '</span>'
+    . ($extra_html ? $extra_html : '')
+    . '</summary>'
+    . '<div class="crm-section-body">';
+}
+
+/**
+ * Returns the closing HTML for an accordion section on the contact view page.
+ */
+function dropcrm_accordion_suffix() {
+  return '</div></details>';
+}

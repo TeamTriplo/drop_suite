@@ -1,0 +1,23 @@
+[DropTasksCRUDTest]
+name = DropTasks CRUD
+description = Create, view, edit, delete, and complete tasks via entity API and UI.
+group = DropTasks
+file = droptasks.test
+
+[DropTasksAccessTest]
+name = DropTasks Access Control
+description = Verifies that permissions gate task view, edit, delete, and complete.
+group = DropTasks
+file = droptasks.test
+
+[DropTasksListFilterTest]
+name = DropTasks List Filters
+description = Active, Today, Upcoming, and Completed tabs filter tasks correctly.
+group = DropTasks
+file = droptasks.test
+
+[DropTasksRecurrenceTest]
+name = DropTasks Recurrence
+description = Verifies next-occurrence helpers and that completing a recurring task advances its due date.
+group = DropTasks
+file = droptasks.test

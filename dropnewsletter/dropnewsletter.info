@@ -1,0 +1,8 @@
+name = Drop Newsletter
+description = Integrates DropCRM contacts with SimpleNews newsletter subscriptions.
+package = Drop Suite
+type = module
+backdrop = 1.x
+
+dependencies[] = dropcrm
+dependencies[] = simplenews

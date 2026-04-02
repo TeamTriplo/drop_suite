@@ -1,0 +1,163 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for DropGoals.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropgoals_schema() {
+  $schema['drop_goal'] = array(
+    'description' => 'Stores DropGoals goal definitions.',
+    'fields' => array(
+      'gid' => array(
+        'description' => 'Primary key: goal ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The goal label (e.g. "8,000 steps").',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'description' => array(
+        'description' => 'Optional description or notes about the goal.',
+        'type'        => 'text',
+        'size'        => 'medium',
+        'not null'    => FALSE,
+      ),
+      'active' => array(
+        'description' => 'Whether the goal appears on the daily dashboard.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 1,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that owns this goal.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the goal was created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'frequency' => array(
+        'description' => 'How often the goal repeats: daily, every_other_day, weekly, monthly, specific_days.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => 'daily',
+      ),
+      'days_of_week' => array(
+        'description' => 'Comma-separated ISO day numbers (1=Mon…7=Sun) for specific_days frequency.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when the goal was last updated.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('gid'),
+    'indexes' => array(
+      'uid'    => array('uid'),
+      'active' => array('active'),
+    ),
+  );
+
+  $schema['drop_goal_log'] = array(
+    'description' => 'Daily completion log for DropGoals goals.',
+    'fields' => array(
+      'lid' => array(
+        'description' => 'Primary key: log entry ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'gid' => array(
+        'description' => 'The {drop_goal}.gid this entry belongs to.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'log_date' => array(
+        'description' => 'The date of this log entry (YYYY-MM-DD).',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'completed' => array(
+        'description' => '1 if the goal was met on this date, 0 if not.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that logged this entry.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when this log entry was created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('lid'),
+    'unique keys' => array(
+      'gid_date' => array('gid', 'log_date'),
+    ),
+    'indexes' => array(
+      'gid'      => array('gid'),
+      'log_date' => array('log_date'),
+      'uid'      => array('uid'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Add frequency column to drop_goal table.
+ */
+function dropgoals_update_1001() {
+  db_add_field('drop_goal', 'frequency', array(
+    'description' => 'How often the goal repeats: daily, every_other_day, weekly, monthly, specific_days.',
+    'type'        => 'varchar',
+    'length'      => 20,
+    'not null'    => TRUE,
+    'default'     => 'daily',
+  ));
+}
+
+/**
+ * Add days_of_week column to drop_goal table.
+ */
+function dropgoals_update_1002() {
+  db_add_field('drop_goal', 'days_of_week', array(
+    'description' => 'Comma-separated ISO day numbers (1=Mon…7=Sun) for specific_days frequency.',
+    'type'        => 'varchar',
+    'length'      => 20,
+    'not null'    => TRUE,
+    'default'     => '',
+  ));
+}

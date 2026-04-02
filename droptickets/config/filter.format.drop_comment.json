@@ -1,0 +1,36 @@
+{
+    "_config_name": "filter.format.drop_comment",
+    "format": "drop_comment",
+    "name": "Comment",
+    "weight": 5,
+    "editor": "",
+    "editor_settings": {},
+    "filters": {
+        "filter_mentions": {
+            "weight": -10,
+            "status": 1,
+            "module": "mentions",
+            "settings": []
+        },
+        "filter_url": {
+            "weight": 0,
+            "status": 1,
+            "module": "filter",
+            "settings": []
+        },
+        "filter_autop": {
+            "weight": 2,
+            "status": 1,
+            "module": "filter",
+            "settings": []
+        },
+        "filter_htmlcorrector": {
+            "weight": 10,
+            "status": 1,
+            "module": "filter",
+            "settings": []
+        }
+    },
+    "cache": true,
+    "status": 1
+}

@@ -1,0 +1,7 @@
+name = DropTasks
+description = Personal task management for Backdrop CMS.
+type = module
+backdrop = 1.x
+dependencies[] = drop_base
+version = 1.x-1.0-dev
+package = Drop Suite

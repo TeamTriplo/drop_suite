@@ -1,0 +1,7 @@
+name = Drop Email
+description = Outgoing email for CRM contacts and support tickets, with activity logging.
+package = Drop Suite
+type = module
+backdrop = 1.x
+
+dependencies[] = dropcrm

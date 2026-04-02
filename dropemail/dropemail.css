@@ -1,0 +1,179 @@
+/**
+ * @file
+ * Styles for Drop Email compose forms and correspondence log.
+ */
+
+/* Compose form: constrain width via form ID (body class won't match ticket path) */
+#dropemail-contact-form,
+#dropemail-ticket-form {
+  max-width: 640px;
+}
+
+/* "To" display — styled as a label+value, not an input */
+.dropemail-to-display {
+  margin-bottom: 1rem;
+}
+
+.dropemail-to-display label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.dropemail-to-value {
+  display: inline-block;
+  font-size: 1em;
+  color: #333;
+}
+
+/* Unassociated contact warning */
+.dropemail-warning {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 3px;
+  color: #5f4800;
+}
+
+/* Recipient list — compact flex rows */
+#dropemail-recipients-wrapper .form-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0.2rem 0;
+}
+
+#dropemail-recipients-wrapper .form-item label {
+  flex-shrink: 0;
+  width: 68px;
+  font-weight: 600;
+  font-size: 0.9em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#dropemail-recipients-wrapper .form-item .form-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+#dropemail-recipients-wrapper .form-item .field-suffix {
+  flex-shrink: 0;
+  font-size: 0.82em;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropemail-recipient-email {
+  color: #0891b2;
+  font-weight: 500;
+}
+
+.dropemail-recipient-no-email {
+  color: #c62828;
+}
+
+.dropemail-recipient-hint {
+  color: #aaa;
+  font-style: italic;
+}
+
+/* Add / Remove last buttons */
+.dropemail-recipient-actions {
+  margin: 0.3rem 0 0.6rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.dropemail-recipient-actions .form-submit {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: #0891b2;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.dropemail-recipient-actions .form-submit:hover {
+  color: #0e7490;
+}
+
+
+/* Tighten overall form spacing */
+#dropemail-contact-form .form-item,
+#dropemail-ticket-form .form-item {
+  margin-top: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Context line above ticket form */
+.dropemail-context {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 0.75rem;
+}
+
+/* "Send email" button in the contact hero */
+.crm-hero-actions a.dropemail-send-link {
+  background: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+.crm-hero-actions a.dropemail-send-link:hover {
+  background: #bbdefb;
+  border-color: #64b5f6;
+}
+
+/* "Send email to client" bar on ticket view */
+.dropemail-ticket-action {
+  margin-bottom: 0.5rem;
+}
+
+.dropemail-ticket-action a.dropemail-send-btn {
+  display: inline-block;
+  padding: 0.3em 0.8em;
+  font-size: 0.85em;
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 3px;
+  color: #1565c0;
+  text-decoration: none;
+}
+
+.dropemail-ticket-action a.dropemail-send-btn:hover {
+  background: #bbdefb;
+  text-decoration: none;
+}
+
+/* Status badges in correspondence table */
+.dropemail-status {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  font-size: 0.8em;
+  font-weight: 600;
+  border-radius: 2em;
+}
+
+.dropemail-status--sent {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.dropemail-status--failed {
+  background: #fdecea;
+  color: #c62828;
+  border: 1px solid #f5c6c6;
+}
+
+/* Correspondence section wrapper */
+.dropemail-correspondence {
+  margin-top: 1rem;
+}

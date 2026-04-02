@@ -1,0 +1,2100 @@
+<?php
+/**
+ * @file
+ * DropTickets — lightweight ticket tracking for small teams.
+ */
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function droptickets_autoload_info() {
+  return array(
+    'DropTicket'                  => 'droptickets.entity.inc',
+    'DropTicketController'        => 'droptickets.entity.inc',
+    'DropTicketComment'           => 'droptickets.entity.inc',
+    'DropTicketCommentController' => 'droptickets.entity.inc',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entity info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_info().
+ */
+function droptickets_entity_info() {
+  return array(
+    'drop_ticket' => array(
+      'label'            => t('Ticket'),
+      'plural label'     => t('Tickets'),
+      'description'      => t('A project ticket or issue.'),
+      'entity class'     => 'DropTicket',
+      'controller class' => 'DropTicketController',
+      'base table'       => 'drop_ticket',
+      'fieldable'        => TRUE,
+      'entity keys'      => array(
+        'id'    => 'tid',
+        'label' => 'title',
+      ),
+      'bundles'         => array(
+        'drop_ticket' => array(
+          'label' => t('Ticket'),
+          'admin' => array(
+            'path'             => 'drop/tickets/manage',
+            'access arguments' => array('administer droptickets'),
+          ),
+        ),
+      ),
+      'uri callback'    => 'entity_class_uri',
+      'access callback' => 'droptickets_ticket_access',
+      'module'          => 'droptickets',
+    ),
+    'drop_ticket_comment' => array(
+      'label'            => t('Ticket comment'),
+      'plural label'     => t('Ticket comments'),
+      'description'      => t('A comment on a ticket.'),
+      'entity class'     => 'DropTicketComment',
+      'controller class' => 'DropTicketCommentController',
+      'base table'       => 'drop_ticket_comment',
+      'fieldable'        => FALSE,
+      'entity keys'      => array('id' => 'tcid'),
+      'uri callback'     => 'entity_class_uri',
+      'access callback'  => 'droptickets_comment_access',
+      'module'           => 'droptickets',
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function droptickets_permission() {
+  return array(
+    'administer droptickets' => array(
+      'title'       => t('Administer DropTickets'),
+      'description' => t('Full access to all tickets and projects.'),
+    ),
+    'access droptickets' => array(
+      'title'       => t('Access DropTickets'),
+      'description' => t('View and create tickets.'),
+    ),
+    'flag droptickets' => array(
+      'title'       => t('Flag DropTickets'),
+      'description' => t('Flag and unflag tickets as priority (Project Manager action).'),
+    ),
+    'done droptickets' => array(
+      'title'       => t('Mark DropTickets as Done'),
+      'description' => t('Set a ticket status to Done, indicating work is complete. Can be granted to all team members.'),
+    ),
+    'close droptickets' => array(
+      'title'       => t('Close DropTickets'),
+      'description' => t('Permanently close tickets (final PM step after Done). Intended for Project Managers only.'),
+    ),
+    'delete droptickets' => array(
+      'title'       => t('Delete DropTickets'),
+      'description' => t('Permanently delete tickets. Intended for Project Managers only.'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Access callbacks
+// ---------------------------------------------------------------------------
+
+/**
+ * Access callback for drop_ticket entities.
+ */
+function droptickets_ticket_access($op, $ticket = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (user_access('administer droptickets', $account)) {
+    return TRUE;
+  }
+  if (!user_access('access droptickets', $account)) {
+    return FALSE;
+  }
+  if (in_array($op, array('view', 'create'))) {
+    return TRUE;
+  }
+  // delete requires explicit permission.
+  if ($op === 'delete') {
+    return user_access('delete droptickets', $account);
+  }
+  // update: any authenticated team member with access.
+  if ($op === 'update') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Access callback for closing (marking done) a ticket.
+ */
+function droptickets_done_access($ticket = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  // Close permission implies done permission.
+  return user_access('administer droptickets', $account)
+    || user_access('done droptickets', $account)
+    || user_access('close droptickets', $account);
+}
+
+function droptickets_close_access($ticket = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  return user_access('administer droptickets', $account) || user_access('close droptickets', $account);
+}
+
+/**
+ * Access callback for drop_ticket_comment entities.
+ */
+function droptickets_comment_access($op, $comment = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (user_access('administer droptickets', $account)) {
+    return TRUE;
+  }
+  if (!user_access('access droptickets', $account)) {
+    return FALSE;
+  }
+  if (in_array($op, array('view', 'create'))) {
+    return TRUE;
+  }
+  return $comment && $comment->uid == $account->uid;
+}
+
+// ---------------------------------------------------------------------------
+// Menu loaders
+// ---------------------------------------------------------------------------
+
+/**
+ * Menu loader: load a ticket by tid.
+ */
+function drop_ticket_load($tid) {
+  $tickets = entity_load('drop_ticket', array($tid));
+  return $tickets ? reset($tickets) : FALSE;
+}
+
+/**
+ * Menu loader: load a ticket comment by tcid.
+ */
+function drop_ticket_comment_load($tcid) {
+  $comments = entity_load('drop_ticket_comment', array($tcid));
+  return $comments ? reset($comments) : FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function droptickets_menu() {
+  $items = array();
+
+  $items['drop/tickets'] = array(
+    'title'            => 'Tickets',
+    'page callback'    => 'droptickets_list_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+  $items['drop/tickets/all'] = array(
+    'title'  => 'All tickets',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 0,
+  );
+
+  // Add ticket.
+  $items['drop/tickets/add'] = array(
+    'title'            => 'Add ticket',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_ticket_form', NULL),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // View ticket.
+  $items['drop/tickets/%drop_ticket'] = array(
+    'title'            => 'View ticket',
+    'page callback'    => 'droptickets_ticket_view',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('view', 2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Edit ticket.
+  $items['drop/tickets/%drop_ticket/edit'] = array(
+    'title callback'   => 'droptickets_edit_title',
+    'title arguments'  => array(2),
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_ticket_form', 2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Delete ticket.
+  $items['drop/tickets/%drop_ticket/delete'] = array(
+    'title'            => 'Delete ticket',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_ticket_delete_form', 2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('delete', 2),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Ticket autocomplete.
+  $items['drop/tickets/autocomplete'] = array(
+    'page callback'    => 'droptickets_ticket_autocomplete',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Add relation.
+  $items['drop/tickets/%drop_ticket/relate'] = array(
+    'title'            => 'Add relation',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_relate_form', 2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Remove relation (confirm page).
+  $items['drop/tickets/%drop_ticket/unrelate/%'] = array(
+    'title'            => 'Remove relation',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_unrelate_confirm_form', 2, 4),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Flagged tickets page.
+  $items['drop/tickets/flagged'] = array(
+    'title'            => 'Flagged',
+    'page callback'    => 'droptickets_flagged_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Review / triage page.
+  $items['drop/tickets/review'] = array(
+    'title'            => 'Review',
+    'page callback'    => 'droptickets_review_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // AJAX toggle — marks/unmarks a ticket as reviewed for the current user.
+  // Path: drop/tickets/review/toggle/{tid}
+  // Indices:  0     1    2       3      4       5
+  $items['drop/tickets/review/toggle/%'] = array(
+    'page callback'    => 'droptickets_review_toggle',
+    'page arguments'   => array(4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // Clear all review flags for the current user.
+  $items['drop/tickets/review/clear'] = array(
+    'page callback'    => 'droptickets_review_clear',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Reports landing page — delegates to stale report.
+  $items['drop/tickets/reports'] = array(
+    'title'            => 'Reports',
+    'page callback'    => 'droptickets_reports_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // Stale tickets report.
+  $items['drop/tickets/reports/stale'] = array(
+    'title'            => 'Stale',
+    'page callback'    => 'droptickets_stale_report_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // Recent tickets report.
+  $items['drop/tickets/reports/recent'] = array(
+    'title'            => 'Recent',
+    'page callback'    => 'droptickets_recent_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // Notification log — admin only. Keep old path as callback for any saved links.
+  $items['drop/tickets/reports/notification-log'] = array(
+    'title'            => 'Notification log',
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/tickets/notification-log'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'type'             => MENU_CALLBACK,
+  );
+  // Notification log as an admin local task, alongside Settings.
+  $items['drop/tickets/notification-log'] = array(
+    'title'            => 'Notification log',
+    'page callback'    => 'droptickets_notification_log_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 85,
+  );
+
+  // Projects page — links to the CRM projects list.
+  $items['drop/tickets/projects'] = array(
+    'title'            => 'Projects (CRM)',
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/crm/projects'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Toggle flag on a ticket.
+  $items['drop/tickets/%drop_ticket/watch'] = array(
+    'page callback'    => 'droptickets_watch_toggle',
+    'page arguments'   => array(2),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/tickets/%drop_ticket/flag'] = array(
+    'page callback'    => 'droptickets_ticket_flag_toggle',
+    'page arguments'   => array(2),
+    'access callback'  => 'user_access',
+    'access arguments' => array('flag droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Clear all flags.
+  $items['drop/tickets/flags/clear'] = array(
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_flags_clear_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('flag droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Activate an imported ticket (clears import_id).
+  $items['drop/tickets/%drop_ticket/activate'] = array(
+    'page callback'    => 'droptickets_ticket_activate',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Close a ticket (move to closed status).
+  $items['drop/tickets/%drop_ticket/close'] = array(
+    'page callback'    => 'droptickets_ticket_close',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_close_access',
+    'access arguments' => array(2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Mark ticket done (for DropBridge).
+  $items['drop/tickets/%drop_ticket/done'] = array(
+    'page callback'    => 'droptickets_ticket_mark_done',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_close_access',
+    'access arguments' => array(2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Add comment.
+  $items['drop/tickets/%drop_ticket/comment'] = array(
+    'title'            => 'Add comment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_comment_form', 2, NULL),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Edit comment.
+  $items['drop/tickets/%drop_ticket/comment/%drop_ticket_comment/edit'] = array(
+    'title'            => 'Edit comment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_comment_form', 2, 4),
+    'access callback'  => 'droptickets_comment_access',
+    'access arguments' => array('update', 4),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Delete comment.
+  $items['drop/tickets/%drop_ticket/comment/%drop_ticket_comment/delete'] = array(
+    'title'            => 'Delete comment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_comment_delete_form', 4),
+    'access callback'  => 'droptickets_comment_access',
+    'access arguments' => array('delete', 4),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Notifications page.
+  $items['drop/notifications'] = array(
+    'title'            => 'Notifications',
+    'page callback'    => 'droptickets_notifications_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/notifications/mark-all-read'] = array(
+    'title'            => 'Mark all notifications read',
+    'page callback'    => 'droptickets_mark_all_read',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Delete an import batch.
+  $items['drop/tickets/import/%/delete'] = array(
+    'title'            => 'Delete import',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_import_delete_form', 3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Inline image upload for comment textarea paste (AJAX).
+  $items['drop/tickets/upload-image'] = array(
+    'page callback'    => 'droptickets_comment_image_upload',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Emoji reaction toggle (AJAX).
+  $items['drop/tickets/react/%/%'] = array(
+    'page callback'    => 'droptickets_react_ajax',
+    'page arguments'   => array(3, 4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Kanban board.
+  $items['drop/tickets/kanban'] = array(
+    'title'            => 'Kanban',
+    'page callback'    => 'droptickets_kanban_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // AJAX endpoint: inline assignee update from the ticket view page.
+  $items['drop/tickets/%drop_ticket/inline-assignee'] = array(
+    'page callback'    => 'droptickets_inline_set_assignee',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // AJAX endpoint: inline status update from the ticket view page.
+  $items['drop/tickets/%drop_ticket/inline-status'] = array(
+    'page callback'    => 'droptickets_inline_set_status',
+    'page arguments'   => array(2),
+    'access callback'  => 'droptickets_ticket_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // AJAX endpoint: update ticket status from Kanban drag-and-drop.
+  $items['drop/tickets/%drop_ticket/set-status'] = array(
+    'page callback'    => 'droptickets_kanban_set_status',
+    'page arguments'   => array(2),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Per-member ticket page (linked from team directory).
+  $items['drop/tickets/member/%user'] = array(
+    'title'            => 'Member tickets',
+    'page callback'    => 'droptickets_member_page',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // JIRA CSV import.
+  $items['drop/tickets/import'] = array(
+    'title'            => 'Import from JIRA',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_import_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Admin hub card — settings entry under admin/drop.
+  $items['admin/drop/tickets'] = array(
+    'title'            => 'DropTickets settings',
+    'description'      => t('Configure stale-ticket thresholds, Slack notifications, and JIRA import options.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/tickets/settings'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 10,
+  );
+
+  // Settings.
+  $items['drop/tickets/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 80,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * Pushes Field UI tabs (Manage fields, Manage displays) after the operational
+ * tabs by increasing their weight.
+ */
+function droptickets_menu_alter(&$items) {
+  // Hide the intermediate 'manage' stub that Field UI auto-generates as a tab.
+  // It has no title so it renders as '...' for admins. 'Manage fields' and
+  // 'Manage display' are still accessible via their own tabs.
+  if (isset($items['drop/tickets/manage'])) {
+    $items['drop/tickets/manage']['type'] = MENU_CALLBACK;
+  }
+  // Push developer/admin tabs to the end so PM tabs stay visible.
+  if (isset($items['drop/tickets/manage/fields'])) {
+    $items['drop/tickets/manage/fields']['weight'] = 70;
+  }
+  if (isset($items['drop/tickets/manage/display'])) {
+    $items['drop/tickets/manage/display']['weight'] = 71;
+  }
+}
+
+/**
+ * Implements hook_drop_reports().
+ */
+function droptickets_drop_reports() {
+  return array(
+    'droptickets_stale' => array(
+      'title'              => t('Stale Tickets'),
+      'path'               => 'drop/tickets/reports/stale',
+      'root_path'          => 'drop/tickets',
+      'module'             => 'droptickets',
+      'default_pin'        => TRUE,
+      'is_default_subtask' => TRUE,
+    ),
+    'droptickets_recent' => array(
+      'title'     => t('Recent Tickets'),
+      'path'      => 'drop/tickets/reports/recent',
+      'root_path' => 'drop/tickets',
+      'module'    => 'droptickets',
+      'default_pin' => FALSE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Hides the "All tickets" default task from the Local Tasks block — it belongs
+ * in the Drop Section Navigation instead. Leaves the admin-only tabs (Settings,
+ * Manage fields, Manage display) visible and de-emphasised.
+ */
+function droptickets_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/tickets') {
+    return;
+  }
+  if (empty($data['tabs'][0]['output'])) {
+    return;
+  }
+
+  // Only admin tabs belong in the Local Tasks block. Everything else lives in
+  // the Drop Section Navigation block. Use a whitelist so any injected tabs
+  // (e.g. pinned reports) are also stripped.
+  $admin_paths = array(
+    'drop/tickets/settings',
+    'drop/tickets/notification-log',
+    'drop/tickets/manage/fields',
+    'drop/tickets/manage/display',
+  );
+
+  foreach ($data['tabs'][0]['output'] as $key => &$tab) {
+    $href = isset($tab['#link']['href']) ? $tab['#link']['href'] : '';
+    if (!in_array($href, $admin_paths)) {
+      unset($data['tabs'][0]['output'][$key]);
+    }
+    else {
+      $tab['#link']['localized_options']['attributes']['class'][] = 'droptickets-tab-admin';
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Assignee display helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the display label for a ticket's assignee.
+ *
+ * Handles the three assignee modes: a specific user, on_hold, or team.
+ *
+ * @param object $ticket
+ *   The ticket object.
+ * @param array $accounts
+ *   Preloaded user accounts keyed by uid (optional).
+ *
+ * @return string
+ *   A plain-text or simple HTML label.
+ */
+function droptickets_assignee_label($ticket, $accounts = array()) {
+  $mode = isset($ticket->assignee_mode) ? $ticket->assignee_mode : 'user';
+  if ($mode === 'team') {
+    return '<span class="droptickets-assignee-mode droptickets-assignee-mode--team">' . t('The Team') . '</span>';
+  }
+  if ($mode === 'on_hold') {
+    return '<span class="droptickets-assignee-mode droptickets-assignee-mode--on-hold">' . t('On Hold') . '</span>';
+  }
+  if (!empty($ticket->assignee_uid)) {
+    if (isset($accounts[$ticket->assignee_uid])) {
+      return check_plain($accounts[$ticket->assignee_uid]->name);
+    }
+    $account = user_load($ticket->assignee_uid);
+    return $account ? check_plain($account->name) : '—';
+  }
+  return '—';
+}
+
+// ---------------------------------------------------------------------------
+// Cron
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_cron().
+ *
+ * Purges old notifications based on the configured lifetime.
+ */
+function droptickets_cron() {
+  // Purge old notifications.
+  $days = (int) config_get('droptickets.settings', 'notification_lifetime');
+  if ($days > 0) {
+    $cutoff = REQUEST_TIME - ($days * 86400);
+    db_delete('drop_notification')
+      ->condition('created', $cutoff, '<')
+      ->execute();
+  }
+
+  // Auto-close Done tickets after the configured number of days.
+  $auto_close_days = (int) config_get('droptickets.settings', 'auto_close_days');
+  if ($auto_close_days > 0) {
+    $cutoff = REQUEST_TIME - ($auto_close_days * 86400);
+    $tids = db_select('drop_ticket', 't')
+      ->fields('t', array('tid'))
+      ->condition('t.status', 'done')
+      ->condition('t.changed', $cutoff, '<')
+      ->execute()
+      ->fetchCol();
+    if ($tids) {
+      db_update('drop_ticket')
+        ->fields(array('status' => 'closed', 'changed' => REQUEST_TIME))
+        ->condition('tid', $tids, 'IN')
+        ->execute();
+      watchdog('droptickets', 'Auto-closed @count Done tickets older than @days days.', array(
+        '@count' => count($tids),
+        '@days'  => $auto_close_days,
+      ), WATCHDOG_INFO);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Watchers and notifications
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns an array of UIDs watching a ticket.
+ */
+function droptickets_watchers_get($tid) {
+  return db_select('drop_ticket_watcher', 'w')
+    ->fields('w', array('uid'))
+    ->condition('w.tid', $tid)
+    ->execute()
+    ->fetchCol();
+}
+
+/**
+ * Adds a user as a watcher on a ticket (idempotent).
+ */
+function droptickets_watcher_add($tid, $uid) {
+  db_merge('drop_ticket_watcher')
+    ->key(array('tid' => $tid, 'uid' => $uid))
+    ->fields(array('tid' => $tid, 'uid' => $uid))
+    ->execute();
+}
+
+/**
+ * Removes a user as a watcher on a ticket.
+ */
+function droptickets_watcher_remove($tid, $uid) {
+  db_delete('drop_ticket_watcher')
+    ->condition('tid', $tid)
+    ->condition('uid', $uid)
+    ->execute();
+}
+
+/**
+ * Creates a single notification record.
+ *
+ * Deduplicates: if an unread notification already exists for the same user
+ * and ticket within the last 3 minutes, the new one is skipped.
+ */
+function droptickets_notify_create($uid, $tid, $tcid, $type, $actor_uid) {
+  $window = 180; // 3 minutes in seconds.
+  $recent = db_select('drop_notification', 'n')
+    ->condition('n.uid', $uid)
+    ->condition('n.tid', $tid)
+    ->condition('n.is_read', 0)
+    ->condition('n.created', REQUEST_TIME - $window, '>=')
+    ->countQuery()
+    ->execute()
+    ->fetchField();
+
+  if ($recent) {
+    return;
+  }
+
+  db_insert('drop_notification')
+    ->fields(array(
+      'uid'       => $uid,
+      'tid'       => $tid,
+      'tcid'      => $tcid,
+      'actor_uid' => $actor_uid,
+      'type'      => $type,
+      'is_read'   => 0,
+      'created'   => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Notifies all watchers of a ticket, skipping the actor.
+ */
+function droptickets_notify_watchers($tid, $type, $actor_uid, $tcid = NULL) {
+  $watchers = droptickets_watchers_get($tid);
+  foreach ($watchers as $uid) {
+    if ($uid != $actor_uid) {
+      droptickets_notify_create($uid, $tid, $tcid, $type, $actor_uid);
+    }
+  }
+}
+
+/**
+ * Returns the allowed reactions as code => emoji character.
+ *
+ * Codes are stored in the DB (ASCII-safe); characters are for display only.
+ */
+function droptickets_reaction_emojis() {
+  return array(
+    'thumbsup' => '👍',
+    'heart'    => '❤️',
+    'tada'     => '🎉',
+    'eyes'     => '👀',
+  );
+}
+
+/**
+ * Returns reactions for a ticket or comment, keyed by reaction code then uid.
+ *
+ * @param int $tid
+ *   Ticket ID.
+ * @param int $tcid
+ *   Comment ID (0 = ticket-level reactions).
+ * @return array
+ *   Array keyed by reaction code, each value an array of uids.
+ */
+function droptickets_reactions_get($tid, $tcid = 0) {
+  $rows = db_select('drop_ticket_reaction', 'r')
+    ->fields('r', array('uid', 'emoji'))
+    ->condition('r.tid', $tid)
+    ->condition('r.tcid', $tcid)
+    ->execute()
+    ->fetchAll();
+
+  $by_code = array();
+  foreach (array_keys(droptickets_reaction_emojis()) as $code) {
+    $by_code[$code] = array();
+  }
+  foreach ($rows as $row) {
+    if (isset($by_code[$row->emoji])) {
+      $by_code[$row->emoji][] = (int) $row->uid;
+    }
+  }
+  return $by_code;
+}
+
+/**
+ * Returns the number of distinct tickets with unread notifications for a user.
+ */
+function droptickets_unread_count($uid) {
+  return (int) db_query(
+    'SELECT COUNT(DISTINCT tid) FROM {drop_notification} WHERE uid = :uid AND is_read = 0',
+    array(':uid' => $uid)
+  )->fetchField();
+}
+
+// ---------------------------------------------------------------------------
+// Review / triage helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the set of tids the current user has marked as reviewed.
+ *
+ * @param int $uid
+ *
+ * @return array
+ *   Flat array of integer ticket IDs.
+ */
+function droptickets_review_get($uid) {
+  $all = state_get('droptickets.reviewed', array());
+  return isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+}
+
+/**
+ * Toggles the reviewed state of a ticket for a user.
+ *
+ * @param int $uid
+ * @param int $tid
+ *
+ * @return bool
+ *   TRUE if the ticket is now reviewed, FALSE if it was unmarked.
+ */
+function droptickets_review_toggle_state($uid, $tid) {
+  $all  = state_get('droptickets.reviewed', array());
+  $pins = isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+  if (in_array($tid, $pins)) {
+    $pins = array_values(array_diff($pins, array($tid)));
+    $reviewed = FALSE;
+  }
+  else {
+    $pins[]   = $tid;
+    $reviewed = TRUE;
+  }
+  $all[$uid] = $pins;
+  state_set('droptickets.reviewed', $all);
+  return $reviewed;
+}
+
+/**
+ * Clears all reviewed flags for a user.
+ *
+ * @param int $uid
+ */
+function droptickets_review_clear_all($uid) {
+  $all = state_get('droptickets.reviewed', array());
+  unset($all[$uid]);
+  state_set('droptickets.reviewed', $all);
+}
+
+/**
+ * Returns the project mode state for a user, or FALSE if not active.
+ *
+ * @param int $uid
+ * @return array|false  Array with keys 'active', 'report', 'label', 'path',
+ *   'filters', or FALSE if project mode is not active.
+ */
+function droptickets_project_mode_get($uid) {
+  $state = state_get('droptickets.project_mode.' . $uid, array());
+  if (empty($state['active'])) {
+    return FALSE;
+  }
+  return $state;
+}
+
+/**
+ * Activates project mode for a user on a given report.
+ *
+ * @param int    $uid     User ID.
+ * @param string $report  Machine name of the report (e.g. 'review', 'all').
+ * @param string $label   Human-readable report label shown in the back bar.
+ * @param string $path    Backdrop path for the back link (e.g. 'drop/tickets').
+ * @param array  $filters Associative array of frozen filter values.
+ */
+function droptickets_project_mode_set($uid, $report, $label, $path, array $filters = array()) {
+  state_set('droptickets.project_mode.' . $uid, array(
+    'active'  => TRUE,
+    'report'  => $report,
+    'label'   => $label,
+    'path'    => $path,
+    'filters' => $filters,
+  ));
+}
+
+/**
+ * Deactivates project mode for a user.
+ *
+ * @param int $uid
+ */
+function droptickets_project_mode_clear($uid) {
+  state_del('droptickets.project_mode.' . $uid);
+}
+
+// ---------------------------------------------------------------------------
+// Legacy review_mode wrappers — kept for any external callers.
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use droptickets_project_mode_get(). */
+function droptickets_review_mode_get($uid) {
+  return droptickets_project_mode_get($uid);
+}
+
+/** @deprecated Use droptickets_project_mode_set(). */
+function droptickets_review_mode_set($uid, $pid = 0, $tag = 0, $status = '') {
+  droptickets_project_mode_set($uid, 'review', t('Review'), 'drop/tickets/review', array(
+    'pid'    => (int) $pid,
+    'tag'    => (int) $tag,
+    'status' => (string) $status,
+  ));
+}
+
+/** @deprecated Use droptickets_project_mode_clear(). */
+function droptickets_review_mode_clear($uid) {
+  droptickets_project_mode_clear($uid);
+}
+
+/**
+ * Page callback: marks all of the current user's notifications as read.
+ */
+// ---------------------------------------------------------------------------
+// Activity log
+// ---------------------------------------------------------------------------
+
+/**
+ * Writes a single event record to the ticket activity log.
+ *
+ * @param int $tid
+ * @param int $uid
+ *   The user who triggered the event.
+ * @param string $message
+ *   Pre-formatted action string, e.g. "changed status from Open to Closed".
+ */
+function droptickets_event_write($tid, $uid, $message) {
+  if (!db_table_exists('drop_ticket_event')) {
+    return;
+  }
+  db_insert('drop_ticket_event')->fields(array(
+    'tid'     => (int) $tid,
+    'uid'     => (int) $uid,
+    'message' => $message,
+    'created' => REQUEST_TIME,
+  ))->execute();
+}
+
+/**
+ * Loads all events for a ticket, ordered by creation time.
+ *
+ * @param int $tid
+ * @return array
+ */
+function droptickets_events_load($tid) {
+  if (!db_table_exists('drop_ticket_event')) {
+    return array();
+  }
+  return db_select('drop_ticket_event', 'e')
+    ->fields('e')
+    ->condition('e.tid', $tid)
+    ->orderBy('e.created', 'ASC')
+    ->execute()->fetchAll();
+}
+
+function droptickets_mark_all_read() {
+  global $user;
+  if (!backdrop_valid_token($_GET['token'], 'mark-all-read')) {
+    return MENU_ACCESS_DENIED;
+  }
+  db_update('drop_notification')
+    ->fields(array('is_read' => 1))
+    ->condition('uid', $user->uid)
+    ->condition('is_read', 0)
+    ->execute();
+  backdrop_set_message(t('All notifications marked as read.'));
+  backdrop_goto('drop/notifications');
+}
+
+/**
+ * Marks all unread notifications for a ticket+user as read.
+ */
+function droptickets_mark_read_for_ticket($tid, $uid) {
+  db_update('drop_notification')
+    ->fields(array('is_read' => 1))
+    ->condition('tid', $tid)
+    ->condition('uid', $uid)
+    ->condition('is_read', 0)
+    ->execute();
+}
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * Auto-adds the assignee as a watcher on ticket creation.
+ */
+function droptickets_entity_insert($entity, $type) {
+  global $user;
+  if ($type === 'drop_ticket_comment') {
+    droptickets_track_comment_inline_images($entity);
+    return;
+  }
+  if ($type !== 'drop_ticket') {
+    return;
+  }
+  if (!empty($entity->assignee_uid)) {
+    droptickets_watcher_add($entity->tid, $entity->assignee_uid);
+  }
+  droptickets_track_inline_images($entity);
+  droptickets_slack_notify_new_ticket($entity);
+  if (!empty($entity->inbound_email)) {
+    $sender = check_plain($entity->inbound_email);
+    droptickets_event_write($entity->tid, 0, t('@sender submitted this ticket by email', array('@sender' => $sender)));
+  }
+  else {
+    droptickets_event_write($entity->tid, $entity->uid, t('created this ticket'));
+  }
+}
+
+/**
+ * Implements hook_file_presave().
+ *
+ * Renames clipboard-pasted inline images with a timestamp suffix so that
+ * repeated pastes of "image.png" never collide and overwrite each other.
+ */
+function droptickets_file_presave($file) {
+  // Only act on brand-new files landing in inline-images.
+  if (!empty($file->fid) || strpos($file->uri, 'public://inline-images/') !== 0) {
+    return;
+  }
+  $info = pathinfo($file->filename);
+  $base = $info['filename'];
+  $ext  = isset($info['extension']) ? '.' . $info['extension'] : '';
+  $new_filename = $base . '-' . REQUEST_TIME . $ext;
+  $new_uri = 'public://inline-images/' . $new_filename;
+  if (file_unmanaged_move($file->uri, $new_uri)) {
+    $file->uri      = $new_uri;
+    $file->filename = $new_filename;
+  }
+}
+
+/**
+ * Implements hook_entity_delete().
+ *
+ * Removes file usage records when a ticket is deleted.
+ */
+function droptickets_entity_delete($entity, $type) {
+  if ($type === 'drop_ticket_comment') {
+    droptickets_untrack_comment_inline_images($entity->tcid);
+    return;
+  }
+  if ($type !== 'drop_ticket') {
+    return;
+  }
+  droptickets_untrack_inline_images($entity->tid);
+}
+
+/**
+ * Registers file usage for all inline images embedded in a ticket body.
+ *
+ * Converts absolute public file URLs to stream wrapper URIs, looks up the
+ * corresponding fids, marks each file permanent, and adds a usage record so
+ * cron will not delete them.
+ *
+ * @param object $entity
+ *   The drop_ticket entity (must have a valid tid).
+ */
+function droptickets_track_inline_images($entity) {
+  if (empty($entity->body) || empty($entity->tid)) {
+    return;
+  }
+
+  // Build both the absolute URL and root-relative path prefixes.
+  // CKEditor writes root-relative paths (e.g. /files/inline-images/...)
+  // so we must handle both forms.
+  $public_url = rtrim(file_create_url('public://'), '/') . '/';
+  $wrapper = file_stream_wrapper_get_instance_by_scheme('public');
+  $public_path = '/' . rtrim($wrapper->getDirectoryPath(), '/') . '/';
+
+  // Extract all img src values from the body HTML.
+  preg_match_all('/<img[^>]+src="([^"]+)"/i', $entity->body, $matches);
+  $src_list = !empty($matches[1]) ? $matches[1] : array();
+
+  $uris = array();
+  foreach ($src_list as $src) {
+    if (strpos($src, $public_url) === 0) {
+      $uris[] = 'public://' . substr($src, strlen($public_url));
+    }
+    elseif (strpos($src, $public_path) === 0) {
+      $uris[] = 'public://' . substr($src, strlen($public_path));
+    }
+  }
+
+  if (empty($uris)) {
+    return;
+  }
+
+  $fids = db_select('file_managed', 'f')
+    ->fields('f', array('fid'))
+    ->condition('f.uri', $uris, 'IN')
+    ->execute()
+    ->fetchCol();
+
+  foreach ($fids as $fid) {
+    $file = file_load($fid);
+    if (!$file) {
+      continue;
+    }
+    // Ensure the file is permanent so cron won't garbage-collect it.
+    if ($file->status != FILE_STATUS_PERMANENT) {
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+    }
+    file_usage_add($file, 'droptickets', 'drop_ticket', $entity->tid);
+  }
+}
+
+/**
+ * Removes all inline-image file usage records for the given ticket.
+ *
+ * Called before re-tracking on update, and on delete. Decrementing usage via
+ * file_usage_delete() allows Backdrop's cron to clean up unreferenced files.
+ *
+ * @param int $tid
+ *   The drop_ticket entity ID.
+ */
+function droptickets_untrack_inline_images($tid) {
+  $fids = db_select('file_usage', 'fu')
+    ->fields('fu', array('fid'))
+    ->condition('fu.module', 'droptickets')
+    ->condition('fu.type', 'drop_ticket')
+    ->condition('fu.id', $tid)
+    ->execute()
+    ->fetchCol();
+
+  foreach ($fids as $fid) {
+    $file = file_load($fid);
+    if ($file) {
+      file_usage_delete($file, 'droptickets', 'drop_ticket', $tid);
+    }
+  }
+}
+
+/**
+ * Registers file usage for inline images embedded in a comment body.
+ *
+ * @param object $comment
+ *   The drop_ticket_comment entity (must have a valid tcid).
+ */
+function droptickets_track_comment_inline_images($comment) {
+  if (empty($comment->body) || empty($comment->tcid)) {
+    return;
+  }
+
+  $public_url  = rtrim(file_create_url('public://'), '/') . '/';
+  $wrapper     = file_stream_wrapper_get_instance_by_scheme('public');
+  $public_path = '/' . rtrim($wrapper->getDirectoryPath(), '/') . '/';
+
+  preg_match_all('/<img[^>]+src="([^"]+)"/i', $comment->body, $matches);
+  $src_list = !empty($matches[1]) ? $matches[1] : array();
+
+  $uris = array();
+  foreach ($src_list as $src) {
+    if (strpos($src, $public_url) === 0) {
+      $uris[] = 'public://' . substr($src, strlen($public_url));
+    }
+    elseif (strpos($src, $public_path) === 0) {
+      $uris[] = 'public://' . substr($src, strlen($public_path));
+    }
+  }
+
+  if (empty($uris)) {
+    return;
+  }
+
+  $fids = db_select('file_managed', 'f')
+    ->fields('f', array('fid'))
+    ->condition('f.uri', $uris, 'IN')
+    ->execute()
+    ->fetchCol();
+
+  foreach ($fids as $fid) {
+    $file = file_load($fid);
+    if (!$file) {
+      continue;
+    }
+    if ($file->status != FILE_STATUS_PERMANENT) {
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+    }
+    file_usage_add($file, 'droptickets', 'drop_ticket_comment', $comment->tcid);
+  }
+}
+
+/**
+ * Removes all inline-image file usage records for the given comment.
+ *
+ * @param int $tcid
+ *   The drop_ticket_comment entity ID.
+ */
+function droptickets_untrack_comment_inline_images($tcid) {
+  $fids = db_select('file_usage', 'fu')
+    ->fields('fu', array('fid'))
+    ->condition('fu.module', 'droptickets')
+    ->condition('fu.type', 'drop_ticket_comment')
+    ->condition('fu.id', $tcid)
+    ->execute()
+    ->fetchCol();
+
+  foreach ($fids as $fid) {
+    $file = file_load($fid);
+    if ($file) {
+      file_usage_delete($file, 'droptickets', 'drop_ticket_comment', $tcid);
+    }
+  }
+}
+
+/**
+ * Posts a Slack notification when a new ticket is created.
+ *
+ * @param object $ticket
+ *   The newly created drop_ticket entity.
+ */
+function droptickets_slack_notify_new_ticket($ticket) {
+  global $user;
+
+  $webhook_url = config_get('droptickets.settings', 'slack_webhook_url');
+  if (empty($webhook_url)) {
+    return;
+  }
+
+  $silence = &drupal_static('droptickets_silence_slack', FALSE);
+  if ($silence) {
+    return;
+  }
+
+  // Build the ticket label (e.g. "DRP-42").
+  $projects = entity_load('drop_project', array($ticket->pid));
+  $project  = $projects ? reset($projects) : NULL;
+  $label    = droptickets_ticket_label($ticket, $project);
+  $proj_name = $project ? $project->name : t('Unknown project');
+
+  $ticket_url = url('drop/tickets/' . $ticket->tid, array('absolute' => TRUE));
+  $creator    = check_plain($user->name);
+
+  // Resolve assignee label.
+  $mode = isset($ticket->assignee_mode) ? $ticket->assignee_mode : 'user';
+  if ($mode === 'team') {
+    $assignee_name = t('The Team');
+  }
+  elseif ($mode === 'on_hold') {
+    $assignee_name = t('On Hold');
+  }
+  elseif (!empty($ticket->assignee_uid)) {
+    $assignee_account = user_load($ticket->assignee_uid);
+    $assignee_name = $assignee_account ? check_plain($assignee_account->name) : NULL;
+  }
+  else {
+    $assignee_name = NULL;
+  }
+
+  $meta = 'Created by ' . $creator . ' · Project: ' . check_plain($proj_name);
+  if ($assignee_name) {
+    $meta .= ' · Assigned to ' . $assignee_name;
+  }
+
+  $text = '*New ticket <' . $ticket_url . '|' . check_plain($label) . '>* — ' . check_plain($ticket->title)
+    . "\n" . $meta;
+
+  $payload = backdrop_json_encode(array('text' => $text));
+
+  drupal_http_request($webhook_url, array(
+    'method'  => 'POST',
+    'data'    => $payload,
+    'headers' => array('Content-Type' => 'application/json'),
+    'timeout' => 5,
+  ));
+}
+
+/**
+ * Posts a Slack notification when a ticket is assigned or reassigned.
+ *
+ * @param object $ticket
+ *   The updated drop_ticket entity.
+ * @param object|null $original
+ *   The previous entity state, or NULL if this is a new ticket.
+ */
+function droptickets_slack_notify_assignment($ticket, $original) {
+  global $user;
+
+  $webhook_url = config_get('droptickets.settings', 'slack_webhook_url');
+  if (empty($webhook_url)) {
+    return;
+  }
+
+  $projects  = entity_load('drop_project', array($ticket->pid));
+  $project   = $projects ? reset($projects) : NULL;
+  $label     = droptickets_ticket_label($ticket, $project);
+  $ticket_url = url('drop/tickets/' . $ticket->tid, array('absolute' => TRUE));
+
+  // Resolve the new assignee label.
+  $mode = isset($ticket->assignee_mode) ? $ticket->assignee_mode : 'user';
+  if ($mode === 'team') {
+    $assignee_name = t('The Team');
+  }
+  elseif ($mode === 'on_hold') {
+    $assignee_name = t('On Hold');
+  }
+  elseif (!empty($ticket->assignee_uid)) {
+    $assignee_account = user_load($ticket->assignee_uid);
+    $assignee_name = $assignee_account ? check_plain($assignee_account->name) : t('someone');
+  }
+  else {
+    // Unassigned — not worth a Slack ping.
+    return;
+  }
+
+  $verb = $original ? t('reassigned') : t('assigned');
+  $text = '<' . $ticket_url . '|' . check_plain($label) . '> *' . $verb . '* to ' . $assignee_name
+    . ' — ' . check_plain($ticket->title)
+    . "\nBy " . check_plain($user->name);
+
+  drupal_http_request($webhook_url, array(
+    'method'  => 'POST',
+    'data'    => backdrop_json_encode(array('text' => $text)),
+    'headers' => array('Content-Type' => 'application/json'),
+    'timeout' => 5,
+  ));
+}
+
+/**
+ * Implements hook_entity_update().
+ *
+ * Triggers notifications on assignment change, status/priority change.
+ */
+function droptickets_entity_update($entity, $type) {
+  global $user;
+  if ($type === 'drop_ticket_comment') {
+    droptickets_untrack_comment_inline_images($entity->tcid);
+    droptickets_track_comment_inline_images($entity);
+    return;
+  }
+  if ($type !== 'drop_ticket') {
+    return;
+  }
+  // Refresh file usage tracking whenever the body is saved.
+  droptickets_untrack_inline_images($entity->tid);
+  droptickets_track_inline_images($entity);
+  $original = isset($entity->original) ? $entity->original : NULL;
+
+  // Assignee changed — auto-watch new assignee and notify them.
+  $assignee_changed = $original && (
+    $entity->assignee_uid != $original->assignee_uid ||
+    (isset($entity->assignee_mode) && isset($original->assignee_mode) && $entity->assignee_mode !== $original->assignee_mode)
+  );
+  if ($assignee_changed) {
+    if (!empty($entity->assignee_uid)) {
+      droptickets_watcher_add($entity->tid, $entity->assignee_uid);
+      if ($entity->assignee_uid != $user->uid) {
+        droptickets_notify_create($entity->assignee_uid, $entity->tid, NULL, 'assigned', $user->uid);
+      }
+    }
+    droptickets_slack_notify_assignment($entity, $original);
+  }
+
+  // Status or priority changed — notify all watchers.
+  $status_changed   = $original && $entity->status !== $original->status;
+  $priority_changed = $original && $entity->priority != $original->priority;
+  if ($status_changed || $priority_changed) {
+    droptickets_notify_watchers($entity->tid, 'updated', $user->uid);
+  }
+
+  // Record activity log events.
+  if ($status_changed) {
+    $status_opts = droptickets_status_options();
+    $old_label = isset($status_opts[$original->status]) ? $status_opts[$original->status] : $original->status;
+    $new_label = isset($status_opts[$entity->status])   ? $status_opts[$entity->status]   : $entity->status;
+    droptickets_event_write($entity->tid, $user->uid, t('changed status from @old to @new', array('@old' => $old_label, '@new' => $new_label)));
+  }
+  if ($assignee_changed) {
+    if (empty($entity->assignee_uid)) {
+      droptickets_event_write($entity->tid, $user->uid, t('removed the assignee'));
+    }
+    else {
+      $assignee = user_load($entity->assignee_uid);
+      $name = $assignee ? check_plain($assignee->name) : t('someone');
+      droptickets_event_write($entity->tid, $user->uid, t('assigned to @name', array('@name' => $name)));
+    }
+  }
+  if ($priority_changed) {
+    $priority_labels = drop_base_priority_labels();
+    $old_label = isset($priority_labels[$original->priority]) ? $priority_labels[$original->priority] : $original->priority;
+    $new_label = isset($priority_labels[$entity->priority])   ? $priority_labels[$entity->priority]   : $entity->priority;
+    droptickets_event_write($entity->tid, $user->uid, t('changed priority from @old to @new', array('@old' => $old_label, '@new' => $new_label)));
+  }
+}
+
+/**
+ * Implements hook_drop_nav_extras().
+ *
+ * Adds the notification bell to the Drop nav bar.
+ */
+function droptickets_drop_nav_extras() {
+  global $user;
+  if (!$user->uid || !user_access('access droptickets')) {
+    return array();
+  }
+  $count = droptickets_unread_count($user->uid);
+  $bell  = icon('bell', array('attributes' => array('width' => 18, 'height' => 18)));
+  $badge = $count > 0
+    ? ' <span class="drop-nav-bell-count">' . (int) $count . '</span>'
+    : '';
+  $class = 'drop-nav-bell' . ($count > 0 ? ' drop-nav-bell--active' : '');
+  return array(
+    '<a href="' . url('drop/notifications') . '" class="' . $class . '" title="' . t('Notifications') . '">' . $bell . $badge . '</a>',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Schema alter — add prefix and ticket_counter to drop_project
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_schema_alter().
+ */
+function droptickets_schema_alter(&$schema) {
+  if (isset($schema['drop_project'])) {
+    $schema['drop_project']['fields']['prefix'] = array(
+      'description' => 'Short ticket prefix, e.g. TRIP for TRIP-42.',
+      'type'        => 'varchar',
+      'length'      => 10,
+      'not null'    => FALSE,
+      'default'     => NULL,
+    );
+    $schema['drop_project']['fields']['ticket_counter'] = array(
+      'description' => 'Last ticket number issued for this project.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project form integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Adds prefix field to the DropCRM project form.
+ */
+function droptickets_form_dropcrm_project_form_alter(&$form, &$form_state) {
+  $project = isset($form_state['build_info']['args'][0]) ? $form_state['build_info']['args'][0] : NULL;
+
+  $default_prefix = '';
+  if ($project && !empty($project->prefix)) {
+    $default_prefix = $project->prefix;
+  }
+  elseif (!$project && !empty($form_state['values']['name'])) {
+    $default_prefix = droptickets_suggest_prefix($form_state['values']['name']);
+  }
+
+  $form['prefix'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Ticket prefix'),
+    '#default_value' => $default_prefix,
+    '#size'          => 8,
+    '#maxlength'     => 10,
+    '#description'   => t('Short uppercase identifier for ticket numbers, e.g. <em>TRIP</em> → TRIP-1, TRIP-2. Leave blank to auto-generate.'),
+    '#weight'        => 6,
+    '#attributes'    => array('style' => 'text-transform:uppercase;'),
+  );
+
+  if (empty($form['#submit'])) {
+    $form['#submit'] = array('dropcrm_project_form_submit');
+  }
+  array_unshift($form['#submit'], 'droptickets_project_form_pre_submit');
+}
+
+/**
+ * Pre-submit handler: cache the prefix for hook_drop_project_presave().
+ */
+function droptickets_project_form_pre_submit($form, &$form_state) {
+  $raw = strtoupper(trim($form_state['values']['prefix']));
+
+  // Auto-generate from project name if blank.
+  if (empty($raw) && !empty($form_state['values']['name'])) {
+    $raw = droptickets_suggest_prefix($form_state['values']['name']);
+  }
+
+  $pending = &backdrop_static('droptickets_pending_prefix', FALSE);
+  $pending = $raw ?: NULL;
+}
+
+/**
+ * Implements hook_drop_project_presave().
+ */
+function droptickets_drop_project_presave($project) {
+  $pending = &backdrop_static('droptickets_pending_prefix', FALSE);
+  if ($pending !== FALSE) {
+    $project->prefix = $pending;
+    $pending = FALSE;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project list integration
+// ---------------------------------------------------------------------------
+
+// Note: project list header/row alters are no longer needed — the Prefix
+// column is rendered directly in dropcrm_project_list() which now owns
+// the project admin UI.
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Suggests a project prefix from the project name.
+ *
+ * Takes the first letter of each word, uppercased, up to 4 characters.
+ * E.g. "Triplo Website" → "TW", "National Parks Traveler" → "NPT".
+ *
+ * @param string $name
+ * @return string
+ */
+function droptickets_suggest_prefix($name) {
+  $words = preg_split('/\s+/', trim($name));
+  $prefix = '';
+  foreach ($words as $word) {
+    if ($word !== '') {
+      $prefix .= strtoupper(substr($word, 0, 1));
+    }
+    if (strlen($prefix) >= 4) {
+      break;
+    }
+  }
+  return $prefix;
+}
+
+/**
+ * Returns the human-readable ticket label, e.g. "TRIP-42" or "#42".
+ *
+ * @param object $ticket
+ *   The ticket entity.
+ * @param object|null $project
+ *   The loaded drop_project entity, or NULL.
+ *
+ * @return string
+ */
+function droptickets_ticket_label($ticket, $project = NULL) {
+  if (!$project && !empty($ticket->pid)) {
+    $projects = entity_load('drop_project', array($ticket->pid));
+    $project  = $projects ? reset($projects) : NULL;
+  }
+  $prefix = ($project && !empty($project->prefix)) ? $project->prefix : '';
+  return $prefix ? $prefix . '-' . $ticket->ticket_number : '#' . $ticket->ticket_number;
+}
+
+/**
+ * Title callback for the ticket edit page.
+ *
+ * @param object $ticket
+ *   The loaded DropTicket entity.
+ *
+ * @return string
+ */
+function droptickets_edit_title(DropTicket $ticket) {
+  $label = droptickets_ticket_label($ticket);
+  return t('Edit: !label: !title', array('!label' => $label, '!title' => $ticket->title));
+}
+
+/**
+ * Returns relationship type options.
+ */
+function droptickets_relationship_type_options() {
+  return array(
+    'relates_to' => t('Relates to'),
+    'blocks'     => t('Blocks'),
+    'duplicates' => t('Duplicates'),
+  );
+}
+
+/**
+ * Returns related tickets for a given tid.
+ *
+ * Each result is a stdClass with: trid, related_tid, type, rel_label.
+ *
+ * @param int $tid
+ * @return array
+ */
+function droptickets_get_related($tid) {
+  $rows = db_select('drop_ticket_relationship', 'r')
+    ->fields('r')
+    ->condition(db_or()
+      ->condition('r.tid_a', $tid)
+      ->condition('r.tid_b', $tid)
+    )
+    ->execute()
+    ->fetchAll();
+
+  $type_options = droptickets_relationship_type_options();
+  $results = array();
+  foreach ($rows as $row) {
+    $is_a = ($row->tid_a == $tid);
+    $related_tid = $is_a ? $row->tid_b : $row->tid_a;
+
+    if ($row->type === 'blocks') {
+      $label = $is_a ? t('Blocks') : t('Blocked by');
+    }
+    else {
+      $label = isset($type_options[$row->type]) ? $type_options[$row->type] : $row->type;
+    }
+
+    $results[] = (object) array(
+      'trid'        => $row->trid,
+      'related_tid' => $related_tid,
+      'type'        => $row->type,
+      'rel_label'   => $label,
+    );
+  }
+  return $results;
+}
+
+/**
+ * Autocomplete callback: search tickets by label or title.
+ *
+ * Returns suggestions in the format "PREFIX-N: Title [tid]".
+ *
+ * @param string $string
+ */
+function droptickets_ticket_autocomplete($string) {
+  $matches = array();
+  if (strlen($string) < 1) {
+    backdrop_json_output($matches);
+    return;
+  }
+
+  // Load all projects for label building.
+  $projects = entity_load('drop_project', FALSE);
+  $prefix_map = array(); // pid => prefix
+  foreach ($projects as $pid => $project) {
+    $prefix_map[$pid] = !empty($project->prefix) ? $project->prefix : '';
+  }
+
+  $query = db_select('drop_ticket', 't')
+    ->fields('t', array('tid', 'pid', 'ticket_number', 'title'))
+    ->range(0, 10);
+
+  // Match on title, or on PREFIX-N format if the string looks like one.
+  if (preg_match('/^([A-Za-z]+)-?(\d*)$/', $string, $m)) {
+    $prefix = strtoupper($m[1]);
+    $num    = $m[2];
+    // Find pids with this prefix.
+    $pids_with_prefix = array();
+    foreach ($prefix_map as $pid => $p) {
+      if (strtoupper($p) === $prefix) {
+        $pids_with_prefix[] = $pid;
+      }
+    }
+    if ($pids_with_prefix) {
+      $or = db_or()->condition('t.title', '%' . db_like($string) . '%', 'LIKE');
+      $cond = db_and()->condition('t.pid', $pids_with_prefix, 'IN');
+      if ($num !== '') {
+        $cond->condition('t.ticket_number', (int) $num);
+      }
+      $or->condition($cond);
+      $query->condition($or);
+    }
+    else {
+      $query->condition('t.title', '%' . db_like($string) . '%', 'LIKE');
+    }
+  }
+  else {
+    $query->condition('t.title', '%' . db_like($string) . '%', 'LIKE');
+  }
+
+  $tickets = $query->execute()->fetchAll();
+
+  foreach ($tickets as $ticket) {
+    $prefix = isset($prefix_map[$ticket->pid]) ? $prefix_map[$ticket->pid] : '';
+    $label  = $prefix ? $prefix . '-' . $ticket->ticket_number : '#' . $ticket->ticket_number;
+    $display = $label . ': ' . $ticket->title . ' [' . $ticket->tid . ']';
+    $matches[$display] = $display;
+  }
+
+  backdrop_json_output($matches);
+}
+
+/**
+ * Returns ticket type options.
+ */
+function droptickets_type_options() {
+  return array(
+    'bug'         => t('Bug'),
+    'feature'     => t('Feature'),
+    'task'        => t('Task'),
+    'improvement' => t('Improvement'),
+    'discussion'  => t('Discussion'),
+  );
+}
+
+/**
+ * Returns status options for discussion-type tickets.
+ */
+function droptickets_discussion_status_options() {
+  return array(
+    'disc_open'      => t('Open'),
+    'disc_active'    => t('Active'),
+    'disc_concluded' => t('Concluded'),
+  );
+}
+
+/**
+ * Returns all status options across all ticket types (regular + discussion).
+ *
+ * Use this when resolving a status key to a human-readable label, where the
+ * ticket type is not known or the list may include discussion tickets.
+ */
+function droptickets_all_status_options() {
+  return array_merge(
+    droptickets_status_options(),
+    droptickets_discussion_status_options()
+  );
+}
+
+/**
+ * Returns ticket status options.
+ */
+function droptickets_status_options() {
+  return array(
+    'icebox'      => t('Icebox'),
+    'open'        => t('Open'),
+    'todo'        => t('To Do'),
+    'in_progress' => t('In Progress'),
+    'in_review'   => t('In Review'),
+    'blocked'     => t('Blocked'),
+    'done'        => t('Done'),
+    'closed'      => t('Closed'),
+  );
+}
+
+/**
+ * Returns statuses considered "active" — everything except Icebox and Closed.
+ */
+function droptickets_active_statuses() {
+  return array('open', 'todo', 'in_progress', 'in_review', 'blocked', 'done');
+}
+
+/**
+ * Builds the HTML <option> list for a standard status filter dropdown.
+ *
+ * Options produced:
+ *   ""            → "— All active —"  (default; queries active statuses only)
+ *   <status key>  → individual status label
+ *   "all_tickets" → "All tickets"     (no status filter applied)
+ *
+ * @param string $selected  The currently selected value.
+ * @return string  Raw HTML <option> elements, ready for a <select>.
+ */
+function _droptickets_status_select_html($selected) {
+  $html = '<option value=""' . ($selected === '' ? ' selected' : '') . '>' . t('— All active —') . '</option>';
+  $html .= '<optgroup label="' . t('By status') . '">';
+  foreach (droptickets_status_options() as $skey => $slabel) {
+    $html .= '<option value="' . check_plain($skey) . '"' . ($selected === $skey ? ' selected' : '') . '>'
+      . check_plain($slabel) . '</option>';
+  }
+  $html .= '</optgroup>';
+  $html .= '<option value="all_tickets"' . ($selected === 'all_tickets' ? ' selected' : '') . '>' . t('All tickets') . '</option>';
+  return $html;
+}
+
+/**
+ * Returns the statuses shown on the Kanban board (in column order).
+ */
+function droptickets_kanban_statuses() {
+  return array(
+    'todo'        => t('To Do'),
+    'in_progress' => t('In Progress'),
+    'in_review'   => t('In Review'),
+    'blocked'     => t('Blocked'),
+    'done'        => t('Done'),
+  );
+}
+
+/**
+ * Returns users eligible to be assigned tickets, as uid => display name.
+ */
+function droptickets_assignee_options() {
+  // Backdrop stores roles as machine-name strings in users_roles.role.
+  $role_names = array_keys(user_roles(TRUE, 'access droptickets'));
+  $admin_names = array_keys(user_roles(TRUE, 'administer droptickets'));
+  $roles = array_unique(array_merge($role_names, $admin_names));
+
+  if (empty($roles)) {
+    return array();
+  }
+
+  $uids = db_select('users_roles', 'ur')
+    ->fields('ur', array('uid'))
+    ->condition('ur.role', $roles, 'IN')
+    ->execute()
+    ->fetchCol();
+
+  // Include user 1 (superadmin).
+  $uids[] = 1;
+  $uids = array_unique($uids);
+
+  $accounts = user_load_multiple($uids);
+  $options  = array();
+  foreach ($accounts as $account) {
+    if ($account->status) {
+      $options[$account->uid] = check_plain($account->name);
+    }
+  }
+  asort($options);
+  return $options;
+}
+
+/**
+ * Implements hook_dropcrm_contact_view_alter().
+ *
+ * Adds a Tickets section to the CRM contact view page, showing open tickets
+ * on projects linked to this contact.
+ */
+function droptickets_dropcrm_contact_view_alter(&$output, $contact) {
+  if (!module_exists('droptime_crm')) {
+    return;
+  }
+
+  // Find project IDs linked to this contact.
+  $pids = db_select('drop_project', 'p')
+    ->fields('p', array('pid'))
+    ->condition('p.cid', $contact->cid)
+    ->execute()
+    ->fetchCol();
+
+  if (empty($pids)) {
+    $rows = array();
+  }
+  else {
+    $tickets = db_select('drop_ticket', 't')
+      ->fields('t')
+      ->condition('t.pid', $pids, 'IN')
+      ->condition('t.status', 'done', '<>')
+      ->orderBy('t.priority', 'DESC')
+      ->orderBy('t.created', 'ASC')
+      ->execute()
+      ->fetchAll();
+
+    $projects = entity_load('drop_project', $pids);
+    $status_options = droptickets_all_status_options();
+    $rows = array();
+    foreach ($tickets as $ticket) {
+      $project = isset($projects[$ticket->pid]) ? $projects[$ticket->pid] : NULL;
+      $label   = droptickets_ticket_label($ticket, $project);
+      $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
+      $rows[] = array(
+        array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
+        l(check_plain($ticket->title), 'drop/tickets/' . $ticket->tid),
+        $project ? check_plain($project->name) : '—',
+        '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>',
+      );
+    }
+  }
+
+  $output['tickets'] = array(
+    '#weight'   => 30,
+    '#prefix'   => dropcrm_accordion_prefix(
+      t('Open Tickets'),
+      l(t('+ Add ticket'), 'drop/tickets/add', array('attributes' => array('class' => array('drop-section-add'))))
+    ),
+    '#suffix'   => dropcrm_accordion_suffix(),
+    '#attached' => array(
+      'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
+    ),
+    'table'     => array(
+      '#theme'  => 'table',
+      '#header' => array(t('ID'), t('Title'), t('Project'), t('Status')),
+      '#rows'   => $rows,
+      '#empty'  => t('No open tickets on projects linked to this contact.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function droptickets_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Tickets'),
+      'path'       => 'drop/tickets',
+      'permission' => 'access droptickets',
+      'weight'     => 30,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_section_nav_extras().
+ */
+function droptickets_drop_section_nav_extras($section) {
+  if ($section !== 'tickets' || !user_access('access droptickets')) {
+    return array();
+  }
+  return array(
+    l(t('+ New Ticket'), 'drop/tickets/add', array(
+      'attributes' => array('class' => array('drop-snav__action-btn')),
+    )),
+  );
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function droptickets_drop_section_links($section) {
+  if ($section !== 'tickets') {
+    return array();
+  }
+
+  $links = array();
+
+  // All tickets — first; active on the main list and the explicit /all sub-path.
+  $links['all'] = array(
+    'title'        => t('All tickets'),
+    'href'         => 'drop/tickets',
+    'weight'       => -20,
+    'active_paths' => array('drop/tickets', 'drop/tickets/all'),
+  );
+
+  // Flagged — badge shows count of currently flagged tickets.
+  if (user_access('flag droptickets') || user_access('administer droptickets')) {
+    $flagged_count = db_query('SELECT COUNT(*) FROM {drop_ticket_flag}')->fetchField();
+    $links['flagged'] = array(
+      'title'        => t('Flagged'),
+      'href'         => 'drop/tickets/flagged',
+      'weight'       => -10,
+      'badge'        => $flagged_count ? (int) $flagged_count : NULL,
+      'active_paths' => array('drop/tickets/flagged'),
+    );
+  }
+
+  $disc_count = db_query(
+    "SELECT COUNT(*) FROM {drop_ticket} WHERE type = 'discussion' AND status = 'disc_active'"
+  )->fetchField();
+  $links['discussions'] = array(
+    'title'   => t('Discussions'),
+    'href'    => 'drop/tickets',
+    'options' => array('query' => array('status' => 'discussions')),
+    'weight'  => -5,
+    'badge'   => $disc_count ? (int) $disc_count : NULL,
+  );
+
+  $links['kanban'] = array(
+    'title'  => t('Kanban'),
+    'href'   => 'drop/tickets/kanban',
+    'weight' => 0,
+  );
+
+  $links['review'] = array(
+    'title'  => t('Review'),
+    'href'   => 'drop/tickets/review',
+    'weight' => 10,
+  );
+
+  $links['stale'] = array(
+    'title'  => t('Stale'),
+    'href'   => 'drop/tickets/reports/stale',
+    'weight' => 20,
+  );
+
+  $links['recent'] = array(
+    'title'  => t('Recent'),
+    'href'   => 'drop/tickets/reports/recent',
+    'weight' => 30,
+  );
+
+  return $links;
+}

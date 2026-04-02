@@ -1,0 +1,7 @@
+name = DropBridge
+description = Unified daily to-do list pulling from DropGoals, DropTasks, and DropCRM. Requires at least one of those modules to be useful.
+type = module
+backdrop = 1.x
+dependencies[] = drop_base
+version = 1.x-1.0-dev
+package = Drop Suite

@@ -1,0 +1,442 @@
+/**
+ * @file
+ * DropTime styles.
+ */
+
+/* ---------------------------------------------------------------------------
+   Time-log reminder banner
+   --------------------------------------------------------------------------- */
+
+.drop-time-reminder {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-left: 5px solid #e65100;
+  border-radius: 5px;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1.25rem;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.drop-time-reminder-icon {
+  flex-shrink: 0;
+  color: #e65100;
+  line-height: 1;
+}
+
+.drop-time-reminder-msg {
+  flex: 1 1 auto;
+  color: #bf360c;
+}
+
+.drop-time-reminder-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1em;
+  color: #999;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.drop-time-reminder-dismiss:hover {
+  color: #333;
+}
+
+/* ---------------------------------------------------------------------------
+   Date navigation
+   --------------------------------------------------------------------------- */
+
+.droptime-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--drop-border, #ddd);
+  flex-wrap: wrap;
+}
+
+.droptime-nav-label {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--drop-text, #222);
+}
+
+.droptime-nav-arrow {
+  font-size: 1.2em;
+  color: var(--drop-primary, #1565c0);
+  text-decoration: none;
+  line-height: 1;
+  padding: 0 0.1em;
+}
+
+.droptime-nav-arrow--disabled {
+  color: #ccc;
+  cursor: default;
+}
+
+.droptime-nav-today {
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #666);
+}
+
+.droptime-timer-start-link {
+  margin-left: auto;
+  font-size: 0.9em;
+  font-weight: 700;
+  color: #fff;
+  background: var(--drop-success, #2e7d32);
+  border-radius: 999px;
+  padding: 0.3em 0.9em;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.droptime-timer-start-link:hover {
+  background: #1b5e20;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Timer banner
+   --------------------------------------------------------------------------- */
+
+.droptime-timer-running {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.95em;
+}
+
+.droptime-elapsed {
+  color: var(--drop-text-secondary, #555);
+  font-variant-numeric: tabular-nums;
+}
+
+.droptime-timer-stop {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--drop-overdue, #c62828);
+}
+
+/* ---------------------------------------------------------------------------
+   Entry form
+   --------------------------------------------------------------------------- */
+
+.droptime-entry-form .form-item {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 0.75rem;
+  margin-bottom: 0;
+}
+
+.droptime-entry-form .form-item-pid {
+  min-width: 240px;
+}
+
+.droptime-entry-form .form-item-notes {
+  min-width: 320px;
+}
+
+/* Override Bootstrap's .form-text margin-top which pushes inputs down. */
+.droptime-entry-form input.form-text {
+  margin-top: 0 !important;
+}
+
+/* Match select height to text inputs. Browsers don't reliably honour height on
+   <select>, so we control it via padding instead. 13px top/bottom matches. */
+.droptime-entry-form select.form-select {
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
+}
+
+.droptime-entry-form .form-item-billable {
+  padding-top: 1.6em; /* align checkbox with other inputs */
+}
+
+.droptime-entry-form .form-actions {
+  display: block;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+.droptime-time-field {
+  width: 5em !important;
+  font-family: monospace;
+  font-size: 0.95em;
+}
+
+.droptime-entry-form .description {
+  font-size: 0.75em;
+  color: var(--drop-text-secondary, #888);
+}
+
+.droptime-notice {
+  color: var(--drop-text-secondary, #666);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+   Entry list
+   --------------------------------------------------------------------------- */
+
+.droptime-entries-heading {
+  font-size: 0.9em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--drop-text-secondary, #666);
+  margin: 1.5rem 0 0.5rem;
+  border-top: 1px solid var(--drop-border, #eee);
+  padding-top: 1rem;
+}
+
+.droptime-entry-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.droptime-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 5px;
+  margin-bottom: 0.35rem;
+  background: #fff;
+  flex-wrap: wrap;
+}
+
+.droptime-entry-time {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #555);
+  white-space: nowrap;
+  min-width: 9em;
+}
+
+.droptime-entry-project {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.droptime-entry-note {
+  flex: 1 1 auto;
+  color: var(--drop-text-secondary, #555);
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+.droptime-bill--yes {
+  font-weight: 700;
+  color: var(--drop-success, #2e7d32);
+  font-size: 0.85em;
+}
+
+.droptime-bill--no {
+  width: 1em; /* placeholder to keep alignment */
+  display: inline-block;
+}
+
+.droptime-entry-dur {
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 4em;
+  text-align: right;
+  margin-left: auto;
+}
+
+.droptime-entry-actions {
+  font-size: 0.8em;
+  color: var(--drop-text-secondary, #888);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Totals bar
+   --------------------------------------------------------------------------- */
+
+.droptime-totals {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.6rem 0.75rem;
+  background: #f5f5f5;
+  border-radius: 5px;
+  font-size: 0.9em;
+  flex-wrap: wrap;
+}
+
+.droptime-total-total {
+  font-weight: 700;
+}
+
+.droptime-total-bill {
+  color: var(--drop-success, #2e7d32);
+}
+
+.droptime-total-nonbill {
+  color: var(--drop-text-secondary, #666);
+}
+
+.droptime-no-entries {
+  color: var(--drop-text-secondary, #888);
+  font-style: italic;
+  margin: 1rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Reports
+   --------------------------------------------------------------------------- */
+
+.droptime-period-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.droptime-period-tabs a {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--drop-border, #ddd);
+  border-radius: 4px;
+  font-size: 0.9em;
+  text-decoration: none;
+  color: var(--drop-primary, #1565c0);
+}
+
+.droptime-period-tabs a.droptime-period-active,
+.droptime-period-tabs a:hover {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  border-color: var(--drop-primary, #1565c0);
+}
+
+.droptime-report-table {
+  width: 100%;
+  max-width: 600px;
+}
+
+.droptime-report-project {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared: color swatch
+   --------------------------------------------------------------------------- */
+
+.droptime-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Project table
+   --------------------------------------------------------------------------- */
+
+.droptime-project-table td,
+.droptime-project-table th {
+  padding: 0.4rem 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Team Reports — filter bar
+   --------------------------------------------------------------------------- */
+
+.droptime-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--drop-bg-subtle, #f5f5f5);
+  border: 1px solid var(--drop-border, #ddd);
+  border-radius: 4px;
+  flex-wrap: wrap;
+}
+
+.droptime-filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #555);
+}
+
+.droptime-filter-bar select {
+  font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------------------
+   Team Reports — group-by toggle spacing
+   --------------------------------------------------------------------------- */
+
+.droptime-group-toggle {
+  margin-top: 1.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Team Reports — per-group entry accordions
+   --------------------------------------------------------------------------- */
+
+.droptime-team-accordion {
+  border: 1px solid var(--drop-border, #ddd);
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.droptime-team-accordion-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+.droptime-team-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.droptime-team-accordion-count {
+  font-weight: normal;
+  color: var(--drop-text-secondary, #666);
+  font-size: 0.88em;
+  margin-left: auto;
+}
+
+.droptime-team-accordion[open] .droptime-team-accordion-summary {
+  border-bottom: 1px solid var(--drop-border, #ddd);
+}
+
+.droptime-team-entries-table {
+  margin: 0;
+  font-size: 0.88em;
+}
+
+.droptime-team-entries-table td,
+.droptime-team-entries-table th {
+  padding: 0.35rem 0.75rem;
+}

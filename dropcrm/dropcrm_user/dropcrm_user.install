@@ -1,0 +1,42 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the DropCRM User module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropcrm_user_schema() {
+  $schema = array();
+
+  $schema['crm_user_contact'] = array(
+    'description' => 'Maps Backdrop user accounts to CRM contacts (one-to-one).',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'The Backdrop user ID (primary key).',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'cid' => array(
+        'description' => 'The CRM contact ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the link was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('uid'),
+    'unique keys' => array(
+      'cid' => array('cid'),
+    ),
+  );
+
+  return $schema;
+}

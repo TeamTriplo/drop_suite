@@ -1,0 +1,6 @@
+name = Drop Base
+description = Shared utilities, CSS variables, and base styles for DropCRM and DropTasks.
+type = module
+backdrop = 1.x
+version = 1.x-1.0-dev
+package = Drop Suite

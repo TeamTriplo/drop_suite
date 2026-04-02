@@ -1,0 +1,1185 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for DropTickets.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function droptickets_schema() {
+  $schema['drop_ticket'] = array(
+    'description' => 'Tickets for project issue tracking.',
+    'fields' => array(
+      'tid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'pid' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'Project ID (drop_project.pid).',
+      ),
+      'ticket_number' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'Per-project sequential ticket number.',
+      ),
+      'title' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => '',
+      ),
+      'body' => array(
+        'type'     => 'text',
+        'size'     => 'big',
+        'not null' => TRUE,
+      ),
+      'body_format' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => 'filtered_html',
+      ),
+      'type' => array(
+        'type'     => 'varchar',
+        'length'   => 20,
+        'not null' => TRUE,
+        'default'  => 'task',
+        'description' => 'bug, feature, task, improvement.',
+      ),
+      'status' => array(
+        'type'     => 'varchar',
+        'length'   => 20,
+        'not null' => TRUE,
+        'default'  => 'open',
+        'description' => 'open, in_progress, in_review, blocked, done.',
+      ),
+      'priority' => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'not null' => TRUE,
+        'default'  => 1,
+        'description' => '0=Low, 1=Normal, 2=High.',
+      ),
+      // owner_uid: hidden from UI pending decision — see ticket #436 on simplo.
+      // Column retained intentionally; do not remove without reviewing that ticket.
+      'owner_uid' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+        'description' => 'UID of the person responsible for driving the ticket forward.',
+      ),
+      'assignee_uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default'  => NULL,
+        'description' => 'UID of the person whose attention is needed. NULL when mode is on_hold or team.',
+      ),
+      'assignee_mode' => array(
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => TRUE,
+        'default'     => 'user',
+        'description' => 'user, on_hold, or team.',
+      ),
+      'due_date' => array(
+        'type'     => 'int',
+        'not null' => FALSE,
+        'default'  => NULL,
+        'description' => 'Optional due date as a Unix timestamp.',
+      ),
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'UID of the reporter (creator).',
+      ),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'changed'  => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'import_id' => array(
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => FALSE,
+        'default'     => NULL,
+        'description' => 'Import batch ID if this ticket was created via CSV import.',
+      ),
+      'external_link' => array(
+        'type'        => 'varchar',
+        'length'      => 512,
+        'not null'    => FALSE,
+        'default'     => NULL,
+        'description' => 'Optional external URL, e.g. original JIRA issue link.',
+      ),
+      'parent_tid' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'Parent ticket ID, or 0 for top-level tickets.',
+      ),
+      'goal_id' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'Linked strategic goal ID (drop_strategic_goal.gid), or 0.',
+      ),
+      'inbound_email' => array(
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => FALSE,
+        'default'     => NULL,
+        'description' => 'Sender email address if ticket was created via inbound email.',
+      ),
+      'is_verified' => array(
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 1,
+        'description' => '1 = normal/verified ticket, 0 = created from unknown sender.',
+      ),
+    ),
+    'primary key' => array('tid'),
+    'unique keys' => array(
+      'pid_number' => array('pid', 'ticket_number'),
+    ),
+    'indexes' => array(
+      'pid'          => array('pid'),
+      'status'       => array('status'),
+      'owner_uid'    => array('owner_uid'),
+      'assignee_uid' => array('assignee_uid'),
+      'uid'          => array('uid'),
+      'parent_tid'   => array('parent_tid'),
+      'goal_id'      => array('goal_id'),
+    ),
+  );
+
+  $schema['drop_ticket_comment'] = array(
+    'description' => 'Comments on tickets.',
+    'fields' => array(
+      'tcid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'body' => array(
+        'type'     => 'text',
+        'size'     => 'big',
+        'not null' => TRUE,
+      ),
+      'body_format' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => 'filtered_html',
+      ),
+      'uid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'changed'  => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'source' => array(
+        'type'        => 'varchar',
+        'length'      => 16,
+        'not null'    => TRUE,
+        'default'     => 'comment',
+        'description' => 'Origin: comment, email_out, email_in.',
+      ),
+    ),
+    'primary key' => array('tcid'),
+    'indexes' => array(
+      'tid' => array('tid'),
+      'uid' => array('uid'),
+    ),
+  );
+
+  $schema['drop_ticket_relationship'] = array(
+    'description' => 'Relationships between tickets.',
+    'fields' => array(
+      'trid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tid_a' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'First ticket ID.',
+      ),
+      'tid_b' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Second ticket ID.',
+      ),
+      'type' => array(
+        'type'     => 'varchar',
+        'length'   => 20,
+        'not null' => TRUE,
+        'default'  => 'relates_to',
+        'description' => 'relates_to, blocks, duplicates.',
+      ),
+    ),
+    'primary key' => array('trid'),
+    'unique keys' => array(
+      'pair' => array('tid_a', 'tid_b'),
+    ),
+    'indexes' => array(
+      'tid_a' => array('tid_a'),
+      'tid_b' => array('tid_b'),
+    ),
+  );
+
+  $schema['drop_ticket_watcher'] = array(
+    'description' => 'Users watching a ticket for notifications.',
+    'fields' => array(
+      'tid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0,
+      ),
+      'uid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0,
+      ),
+    ),
+    'primary key' => array('tid', 'uid'),
+    'indexes' => array('uid' => array('uid')),
+  );
+
+  $schema['drop_notification'] = array(
+    'description' => 'Notifications for team members about ticket activity.',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE,
+      ),
+      'uid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0,
+        'description' => 'Recipient UID.',
+      ),
+      'tid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0,
+      ),
+      'tcid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => FALSE, 'default' => NULL,
+        'description' => 'Comment ID, if triggered by a comment.',
+      ),
+      'actor_uid' => array(
+        'type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0,
+        'description' => 'UID of who triggered the notification.',
+      ),
+      'type' => array(
+        'type' => 'varchar', 'length' => 20, 'not null' => TRUE, 'default' => '',
+        'description' => 'assigned, commented, updated.',
+      ),
+      'is_read' => array(
+        'type' => 'int', 'size' => 'tiny', 'not null' => TRUE, 'default' => 0,
+      ),
+      'created' => array(
+        'type' => 'int', 'not null' => TRUE, 'default' => 0,
+      ),
+    ),
+    'primary key' => array('nid'),
+    'indexes' => array(
+      'uid_read' => array('uid', 'is_read'),
+      'tid'      => array('tid'),
+    ),
+  );
+
+  $schema['drop_ticket_import'] = array(
+    'description' => 'Tracks batches of tickets imported from external sources (e.g. JIRA CSV).',
+    'fields' => array(
+      'import_id' => array(
+        'type'     => 'varchar',
+        'length'   => 64,
+        'not null' => TRUE,
+        'default'  => '',
+        'description' => 'Unique batch ID stored on each imported ticket.',
+      ),
+      'pid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'Project the tickets were imported into.',
+      ),
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'UID of the person who ran the import.',
+      ),
+      'ticket_count' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'created' => array(
+        'type'     => 'int',
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+    ),
+    'primary key' => array('import_id'),
+    'indexes' => array(
+      'pid' => array('pid'),
+    ),
+  );
+
+  $schema['drop_ticket_flag'] = array(
+    'description' => 'Tickets flagged as current team priorities.',
+    'fields' => array(
+      'tid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'created' => array(
+        'type'     => 'int',
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'When the ticket was flagged.',
+      ),
+    ),
+    'primary key' => array('tid'),
+  );
+
+  $schema['drop_ticket_reaction'] = array(
+    'description' => 'Emoji reactions on tickets and comments.',
+    'fields' => array(
+      'rid'     => array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+      'tid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+      'tcid'    => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+      'uid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+      'emoji'   => array('type' => 'varchar', 'length' => 16, 'not null' => TRUE, 'default' => ''),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+    ),
+    'primary key' => array('rid'),
+    'unique keys' => array(
+      'uid_entity_emoji' => array('uid', 'tid', 'tcid', 'emoji'),
+    ),
+    'indexes' => array(
+      'tid' => array('tid'),
+    ),
+  );
+
+  $schema['droptickets_comment_read'] = array(
+    'description' => 'Tracks when each user last read a ticket, for unread comment highlighting.',
+    'fields' => array(
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'tid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'last_read' => array(
+        'type'     => 'int',
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'Unix timestamp of the last time this user viewed this ticket.',
+      ),
+    ),
+    'primary key' => array('uid', 'tid'),
+    'indexes' => array(
+      'tid' => array('tid'),
+    ),
+  );
+
+  $schema['drop_ticket_event'] = array(
+    'description' => 'Activity log for ticket events (status changes, assignments, etc.).',
+    'fields' => array(
+      'eid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+        'description' => 'User who triggered the event.',
+      ),
+      'message' => array(
+        'type'     => 'varchar',
+        'length'   => 512,
+        'not null' => TRUE,
+        'default'  => '',
+        'description' => 'Pre-formatted action string, e.g. "changed status from Open to Closed".',
+      ),
+      'created' => array(
+        'type'     => 'int',
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+    ),
+    'primary key' => array('eid'),
+    'indexes' => array(
+      'tid' => array('tid'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Add drop_ticket_event table for activity log.
+ */
+function droptickets_update_1023() {
+  if (!db_table_exists('drop_ticket_event')) {
+    db_create_table('drop_ticket_event', array(
+      'description' => 'Activity log for ticket events (status changes, assignments, etc.).',
+      'fields' => array(
+        'eid' => array(
+          'type'     => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'tid' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default'  => 0,
+        ),
+        'uid' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default'  => 0,
+        ),
+        'message' => array(
+          'type'     => 'varchar',
+          'length'   => 512,
+          'not null' => TRUE,
+          'default'  => '',
+        ),
+        'created' => array(
+          'type'     => 'int',
+          'not null' => TRUE,
+          'default'  => 0,
+        ),
+      ),
+      'primary key' => array('eid'),
+      'indexes' => array(
+        'tid' => array('tid'),
+      ),
+    ));
+  }
+}
+
+/**
+ * Ensures the shared drop_tags vocabulary, field base, and drop_ticket
+ * field instance all exist. Safe to call on fresh installs and updates.
+ */
+function _droptickets_ensure_tags_field() {
+  // Vocabulary.
+  $vocab = taxonomy_vocabulary_machine_name_load('drop_tags');
+  if (!$vocab) {
+    $vocab = new TaxonomyVocabulary(array(
+      'name'         => 'Drop Tags',
+      'machine_name' => 'drop_tags',
+      'description'  => 'Shared tags used across Drop Suite entities.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  // Base field (shared with droptasks, dropcrm, etc.).
+  if (!field_info_field('field_drop_tags')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_tags',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_tags', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  // Instance on drop_ticket.
+  if (!field_info_instance('drop_ticket', 'field_drop_tags', 'drop_ticket')) {
+    field_create_instance(array(
+      'field_name'  => 'field_drop_tags',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => 'Tags',
+      'required'    => FALSE,
+      'description' => 'Optional tags. Separate multiple tags with commas.',
+      'widget'      => array(
+        'type'     => 'taxonomy_autocomplete',
+        'settings' => array('size' => 60),
+        'weight'   => 21,
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'above',
+          'type'   => 'taxonomy_term_reference_plain',
+          'weight' => 21,
+        ),
+      ),
+    ));
+  }
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Adds prefix and ticket_counter columns to drop_project, and creates the
+ * Team Member role.
+ */
+function droptickets_install() {
+  // Add prefix column to drop_project (may already exist if dropcrm installed).
+  if (!db_field_exists('drop_project', 'prefix')) {
+    db_add_field('drop_project', 'prefix', array(
+      'description' => 'Short prefix for ticket numbers, e.g. TRIP for TRIP-42.',
+      'type'        => 'varchar',
+      'length'      => 10,
+      'not null'    => FALSE,
+      'default'     => NULL,
+    ));
+  }
+
+  // Add ticket_counter column to drop_project.
+  if (!db_field_exists('drop_project', 'ticket_counter')) {
+    db_add_field('drop_project', 'ticket_counter', array(
+      'description' => 'Last ticket number issued for this project.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+    ));
+  }
+
+  // Ensure the shared drop_tags vocabulary and field_drop_tags field exist,
+  // then attach the field to drop_ticket entities.
+  _droptickets_ensure_tags_field();
+
+  // Create the Team Member role if it doesn't already exist.
+  $role = user_role_load_by_name('team_member');
+  if (!$role) {
+    $role = new stdClass();
+    $role->name   = 'team_member';
+    $role->label  = 'Team Member';
+    $role->weight = 3;
+    user_role_save($role);
+    $role = user_role_load_by_name('team_member');
+  }
+
+  // Grant permissions to the Team Member role.
+  if ($role) {
+    $permissions = array(
+      'access droptickets',
+      'access droptasks',
+      'access droptime',
+      'access dropbridge',
+    );
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Add drop_ticket_relationship table for related tickets.
+ */
+function droptickets_update_1002() {
+  if (!db_table_exists('drop_ticket_relationship')) {
+    $schema = array(
+      'description' => 'Relationships between tickets.',
+      'fields' => array(
+        'trid' => array(
+          'type'     => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'tid_a' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'tid_b' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'type' => array(
+          'type'     => 'varchar',
+          'length'   => 20,
+          'not null' => TRUE,
+          'default'  => 'relates_to',
+        ),
+      ),
+      'primary key' => array('trid'),
+      'unique keys' => array(
+        'pair' => array('tid_a', 'tid_b'),
+      ),
+      'indexes' => array(
+        'tid_a' => array('tid_a'),
+        'tid_b' => array('tid_b'),
+      ),
+    );
+    db_create_table('drop_ticket_relationship', $schema);
+  }
+}
+
+/**
+ * Add watcher and notification tables.
+ */
+function droptickets_update_1003() {
+  if (!db_table_exists('drop_ticket_watcher')) {
+    $schema = array(
+      'description' => 'Users watching a ticket for notifications.',
+      'fields' => array(
+        'tid' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'uid' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('tid', 'uid'),
+      'indexes' => array('uid' => array('uid')),
+    );
+    db_create_table('drop_ticket_watcher', $schema);
+  }
+  if (!db_table_exists('drop_notification')) {
+    $schema = array(
+      'description' => 'Notifications for team members about ticket activity.',
+      'fields' => array(
+        'nid'       => array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+        'uid'       => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'tid'       => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'tcid'      => array('type' => 'int', 'unsigned' => TRUE, 'not null' => FALSE, 'default' => NULL),
+        'actor_uid' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'type'      => array('type' => 'varchar', 'length' => 20, 'not null' => TRUE, 'default' => ''),
+        'is_read'   => array('type' => 'int', 'size' => 'tiny', 'not null' => TRUE, 'default' => 0),
+        'created'   => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('nid'),
+      'indexes' => array(
+        'uid_read' => array('uid', 'is_read'),
+        'tid'      => array('tid'),
+      ),
+    );
+    db_create_table('drop_notification', $schema);
+  }
+}
+
+/**
+ * Make drop_ticket entities fieldable (EntityPlus).
+ */
+function droptickets_update_1001() {
+  // No schema changes required — fieldability is declared in hook_entity_info().
+  // Flush caches so the updated entity info and Field UI paths are registered.
+  backdrop_flush_all_caches();
+}
+
+/**
+ * Add owner_uid and assignee_mode columns to drop_ticket.
+ */
+function droptickets_update_1004() {
+  if (!db_field_exists('drop_ticket', 'owner_uid')) {
+    db_add_field('drop_ticket', 'owner_uid', array(
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => FALSE,
+      'default'     => NULL,
+      'description' => 'UID of the person responsible for driving the ticket forward.',
+    ));
+    db_add_index('drop_ticket', 'owner_uid', array('owner_uid'));
+  }
+  if (!db_field_exists('drop_ticket', 'assignee_mode')) {
+    db_add_field('drop_ticket', 'assignee_mode', array(
+      'type'        => 'varchar',
+      'length'      => 10,
+      'not null'    => TRUE,
+      'default'     => 'user',
+      'description' => 'user, on_hold, or team.',
+    ));
+  }
+}
+
+/**
+ * Add drop_ticket_flag table for shared team priority flags.
+ */
+function droptickets_update_1007() {
+  if (!db_table_exists('drop_ticket_flag')) {
+    $schema = array(
+      'description' => 'Tickets flagged as current team priorities.',
+      'fields' => array(
+        'tid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('tid'),
+    );
+    db_create_table('drop_ticket_flag', $schema);
+  }
+}
+
+/**
+ * Add external_link column to drop_ticket.
+ */
+function droptickets_update_1006() {
+  if (!db_field_exists('drop_ticket', 'external_link')) {
+    db_add_field('drop_ticket', 'external_link', array(
+      'type'     => 'varchar',
+      'length'   => 512,
+      'not null' => FALSE,
+      'default'  => NULL,
+      'description' => 'Optional external URL, e.g. original JIRA issue link.',
+    ));
+  }
+}
+
+/**
+ * Add import_id column to drop_ticket and create drop_ticket_import table.
+ */
+function droptickets_update_1005() {
+  if (!db_field_exists('drop_ticket', 'import_id')) {
+    db_add_field('drop_ticket', 'import_id', array(
+      'type'     => 'varchar',
+      'length'   => 64,
+      'not null' => FALSE,
+      'default'  => NULL,
+      'description' => 'Import batch ID if this ticket was created via CSV import.',
+    ));
+    db_add_index('drop_ticket', 'import_id', array('import_id'));
+  }
+  if (!db_table_exists('drop_ticket_import')) {
+    $schema = array(
+      'description' => 'Tracks batches of tickets imported from external sources.',
+      'fields' => array(
+        'import_id'    => array('type' => 'varchar', 'length' => 64, 'not null' => TRUE, 'default' => ''),
+        'pid'          => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'uid'          => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'ticket_count' => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'created'      => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('import_id'),
+      'indexes'     => array('pid' => array('pid')),
+    );
+    db_create_table('drop_ticket_import', $schema);
+  }
+}
+
+/**
+ * Add field_ticket_files managed-file field to drop_ticket entities.
+ */
+function droptickets_update_1008() {
+  // Create the field if it doesn't exist.
+  if (!field_info_field('field_ticket_files')) {
+    $field = array(
+      'field_name'  => 'field_ticket_files',
+      'type'        => 'file',
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+      'settings'    => array(
+        'uri_scheme'        => 'private',
+        'display_field'     => FALSE,
+        'display_default'   => FALSE,
+      ),
+    );
+    field_create_field($field);
+  }
+
+  // Create the instance on drop_ticket if it doesn't exist.
+  if (!field_info_instance('drop_ticket', 'field_ticket_files', 'drop_ticket')) {
+    $instance = array(
+      'field_name'  => 'field_ticket_files',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => t('Attachments'),
+      'required'    => FALSE,
+      'settings'    => array(
+        'file_extensions'  => 'pdf doc docx xls xlsx csv txt png jpg jpeg gif zip',
+        'file_directory'   => 'tickets',
+        'max_filesize'     => '10 MB',
+        'description_field' => TRUE,
+      ),
+      'widget'      => array(
+        'type'     => 'file_generic',
+        'settings' => array(
+          'progress_indicator' => 'throbber',
+        ),
+        'weight'   => 20,
+      ),
+      'display'     => array(
+        'default' => array(
+          'label'  => 'above',
+          'type'   => 'file_default',
+          'weight' => 20,
+        ),
+      ),
+    );
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Switch field_drop_tags display to taxonomy_term_reference_plain on all entities.
+ *
+ * The _link formatter assumes $item['taxonomy_term'] is always populated, which
+ * fails when field_attach_prepare_view() hasn't been called first. The _plain
+ * formatter is used as a fallback; our custom views render tags manually anyway.
+ */
+/**
+ * Create the project_manager role and grant it flag droptickets permission.
+ */
+/**
+ * Migrate priority values from 3-level (0=low,1=normal,2=high) to
+ * 5-level (0=none,1=low,2=normal,3=high,4=critical) scale.
+ *
+ * Old 2 (High) → New 3 (High)
+ * Old 1 (Normal) → New 2 (Normal)
+ * Old 0 (Low) → New 1 (Low)
+ * Must update in descending order to avoid value collisions.
+ */
+/**
+ * Grant flag/close/delete droptickets permissions to the administrator role.
+ */
+/**
+ * Add parent_tid column to drop_ticket for one-level parent/child hierarchy.
+ */
+/**
+ * Add goal_id column to drop_ticket to link tickets to strategic goals.
+ */
+/**
+ * Create the droptickets_comment_read table for unread comment tracking.
+ */
+function droptickets_update_1022() {
+  if (!db_table_exists('droptickets_comment_read')) {
+    db_create_table('droptickets_comment_read', array(
+      'description' => 'Tracks when each user last read a ticket, for unread comment highlighting.',
+      'fields' => array(
+        'uid' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default'  => 0,
+        ),
+        'tid' => array(
+          'type'     => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default'  => 0,
+        ),
+        'last_read' => array(
+          'type'     => 'int',
+          'not null' => TRUE,
+          'default'  => 0,
+          'description' => 'Unix timestamp of the last time this user viewed this ticket.',
+        ),
+      ),
+      'primary key' => array('uid', 'tid'),
+      'indexes' => array(
+        'tid' => array('tid'),
+      ),
+    ));
+  }
+}
+
+function droptickets_update_1021() {
+  if (!db_field_exists('drop_ticket', 'goal_id')) {
+    db_add_field('drop_ticket', 'goal_id', array(
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+      'description' => 'Linked strategic goal ID, or 0.',
+    ));
+    db_add_index('drop_ticket', 'goal_id', array('goal_id'));
+  }
+}
+
+function droptickets_update_1020() {
+  if (!db_field_exists('drop_ticket', 'parent_tid')) {
+    db_add_field('drop_ticket', 'parent_tid', array(
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+      'description' => 'Parent ticket ID, or 0 for top-level tickets.',
+    ));
+    db_add_index('drop_ticket', 'parent_tid', array('parent_tid'));
+  }
+}
+
+/**
+ * Grant 'done droptickets' permission to authenticated users so team members
+ * can mark tickets Done independently of the Close (PM-only) action.
+ */
+function droptickets_update_1019() {
+  user_role_grant_permissions('authenticated', array('done droptickets'));
+  user_role_grant_permissions('administrator', array('done droptickets'));
+}
+
+function droptickets_update_1018() {
+  // Create the drop_boards vocabulary (Kanban board definitions).
+  if (!taxonomy_vocabulary_load('drop_boards')) {
+    $vocab = new TaxonomyVocabulary(array(
+      'machine_name' => 'drop_boards',
+      'name'         => 'Kanban Boards',
+      'description'  => 'Defines which Kanban board(s) a ticket appears on. Tickets with no board assigned appear on the General board automatically.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+
+    // Create the default "General" board term.
+    $term = new TaxonomyTerm(array(
+      'name'       => 'General',
+      'vocabulary' => 'drop_boards',
+    ));
+    taxonomy_term_save($term);
+  }
+
+  // Create the field_drop_board term-reference field.
+  if (!field_info_field('field_drop_board')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_board',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_boards', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  // Attach instance to drop_ticket.
+  if (!field_info_instance('drop_ticket', 'field_drop_board', 'drop_ticket')) {
+    field_create_instance(array(
+      'field_name'  => 'field_drop_board',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => 'Kanban Boards',
+      'required'    => FALSE,
+      'description' => 'Select which Kanban board(s) this ticket appears on. Leave empty to show on the General board by default.',
+      'widget'      => array(
+        'type'   => 'options_buttons',
+        'weight' => 22,
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'hidden',
+          'type'   => 'hidden',
+          'weight' => 22,
+        ),
+      ),
+    ));
+  }
+}
+
+function droptickets_update_1017() {
+  user_role_grant_permissions('administrator', array(
+    'flag droptickets',
+    'close droptickets',
+    'delete droptickets',
+  ));
+}
+
+function droptickets_update_1016() {
+  db_update('drop_ticket')->fields(array('priority' => 3))->condition('priority', 2)->execute();
+  db_update('drop_ticket')->fields(array('priority' => 2))->condition('priority', 1)->execute();
+  db_update('drop_ticket')->fields(array('priority' => 1))->condition('priority', 0)->execute();
+}
+
+function droptickets_update_1015() {
+  if (!user_role_load('project_manager')) {
+    $role        = new stdClass();
+    $role->name  = 'project_manager';
+    $role->label = 'Project Manager';
+    $role->weight = 3;
+    user_role_save($role);
+  }
+  user_role_grant_permissions('project_manager', array(
+    'access droptickets',
+    'flag droptickets',
+  ));
+}
+
+/**
+ * Revert reaction table to utf8mb3 — store ASCII codes, not emoji characters.
+ */
+function droptickets_update_1014() {
+  db_query('ALTER TABLE {drop_ticket_reaction} CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci');
+}
+
+/**
+ * Add inbound_email and is_verified columns to drop_ticket.
+ */
+function droptickets_update_1024() {
+  if (!db_field_exists('drop_ticket', 'inbound_email')) {
+    db_add_field('drop_ticket', 'inbound_email', array(
+      'type'     => 'varchar',
+      'length'   => 255,
+      'not null' => FALSE,
+      'default'  => NULL,
+      'description' => 'Sender email address if ticket was created via inbound email.',
+    ));
+  }
+  if (!db_field_exists('drop_ticket', 'is_verified')) {
+    db_add_field('drop_ticket', 'is_verified', array(
+      'type'     => 'int',
+      'size'     => 'tiny',
+      'not null' => TRUE,
+      'default'  => 1,
+      'description' => '1 = normal/verified ticket, 0 = created from unknown sender.',
+    ));
+    // All existing tickets are considered verified.
+    db_update('drop_ticket')->fields(array('is_verified' => 1))->execute();
+  }
+}
+
+/**
+ * Add source column to drop_ticket_comment for email thread integration.
+ */
+function droptickets_update_1025() {
+  if (!db_field_exists('drop_ticket_comment', 'source')) {
+    db_add_field('drop_ticket_comment', 'source', array(
+      'type'        => 'varchar',
+      'length'      => 16,
+      'not null'    => TRUE,
+      'default'     => 'comment',
+      'description' => 'Origin: comment, email_out, email_in.',
+    ));
+  }
+}
+
+/**
+ * Convert drop_ticket_reaction.emoji column to utf8mb4 for emoji support.
+ * (Superseded by 1014 which reverts to ASCII codes instead.)
+ */
+function droptickets_update_1013() {
+  db_query('ALTER TABLE {drop_ticket_reaction} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+}
+
+/**
+ * Add drop_ticket_reaction table and reactions_enabled config.
+ */
+function droptickets_update_1012() {
+  if (!db_table_exists('drop_ticket_reaction')) {
+    db_create_table('drop_ticket_reaction', array(
+      'description' => 'Emoji reactions on tickets and comments.',
+      'fields' => array(
+        'rid'     => array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+        'tid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'tcid'    => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'uid'     => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0),
+        'emoji'   => array('type' => 'varchar', 'length' => 16, 'not null' => TRUE, 'default' => ''),
+        'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      ),
+      'primary key' => array('rid'),
+      'unique keys' => array(
+        'uid_entity_emoji' => array('uid', 'tid', 'tcid', 'emoji'),
+      ),
+      'indexes' => array(
+        'tid' => array('tid'),
+      ),
+    ));
+  }
+  $config = config('droptickets.settings');
+  if ($config->get('reactions_enabled') === NULL) {
+    $config->set('reactions_enabled', TRUE);
+    $config->save();
+  }
+}
+
+function droptickets_update_1011() {
+  foreach (array('drop_ticket', 'drop_task') as $entity_type) {
+    $instance = field_info_instance($entity_type, 'field_drop_tags', $entity_type);
+    if ($instance) {
+      $instance['display']['default']['type'] = 'taxonomy_term_reference_plain';
+      field_update_instance($instance);
+    }
+  }
+}
+
+/**
+ * Add .md to the allowed file extensions for ticket attachments.
+ */
+function droptickets_update_1010() {
+  $instance = field_info_instance('drop_ticket', 'field_ticket_files', 'drop_ticket');
+  if ($instance) {
+    $exts = $instance['settings']['file_extensions'];
+    if (strpos($exts, 'md') === FALSE) {
+      $instance['settings']['file_extensions'] = $exts . ' md';
+      field_update_instance($instance);
+    }
+  }
+}
+
+/**
+ * Attach the shared field_drop_tags field to drop_ticket entities.
+ */
+function droptickets_update_1009() {
+  if (!field_info_instance('drop_ticket', 'field_drop_tags', 'drop_ticket')) {
+    field_create_instance(array(
+      'field_name'  => 'field_drop_tags',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => 'Tags',
+      'required'    => FALSE,
+      'description' => 'Optional tags. Separate multiple tags with commas.',
+      'widget'      => array(
+        'type'     => 'taxonomy_autocomplete',
+        'settings' => array('size' => 60),
+        'weight'   => 21,
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'above',
+          'type'   => 'taxonomy_term_reference_link',
+          'weight' => 21,
+        ),
+      ),
+    ));
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function droptickets_uninstall() {
+  if (db_field_exists('drop_project', 'prefix')) {
+    db_drop_field('drop_project', 'prefix');
+  }
+  if (db_field_exists('drop_project', 'ticket_counter')) {
+    db_drop_field('drop_project', 'ticket_counter');
+  }
+  if (db_table_exists('drop_ticket_relationship')) {
+    db_drop_table('drop_ticket_relationship');
+  }
+  if (db_table_exists('drop_ticket_watcher')) {
+    db_drop_table('drop_ticket_watcher');
+  }
+  if (db_table_exists('drop_notification')) {
+    db_drop_table('drop_notification');
+  }
+  if (db_table_exists('drop_ticket_import')) {
+    db_drop_table('drop_ticket_import');
+  }
+  if (db_table_exists('drop_ticket_flag')) {
+    db_drop_table('drop_ticket_flag');
+  }
+}

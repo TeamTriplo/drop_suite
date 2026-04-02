@@ -1,0 +1,297 @@
+/**
+ * @file
+ * DropGoals styles.
+ */
+
+/* ---------------------------------------------------------------------------
+   Dashboard
+   --------------------------------------------------------------------------- */
+
+.dropgoals-date {
+  font-size: 1.1em;
+  color: var(--drop-text-secondary, #666);
+  font-weight: normal;
+  margin: 0 0 1.25rem;
+  border-bottom: 1px solid var(--drop-border, #ddd);
+  padding-bottom: 0.5rem;
+}
+
+.dropgoals-dashboard-list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.dropgoals-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--drop-border, #ddd);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  transition: background 0.15s ease;
+}
+
+.dropgoals-item--done {
+  background: #f0faf0;
+  border-color: var(--drop-success, #4caf50);
+}
+
+.dropgoals-item-icon {
+  flex: 0 0 auto;
+  font-size: 1.4em;
+  line-height: 1;
+  width: 1.5em;
+  text-align: center;
+}
+
+.dropgoals-check--done {
+  color: var(--drop-success, #4caf50);
+}
+
+.dropgoals-check--empty {
+  color: var(--drop-border, #ccc);
+}
+
+.dropgoals-item-label {
+  flex: 1 1 auto;
+  font-size: 1.05em;
+  font-weight: 500;
+}
+
+.dropgoals-item--done .dropgoals-item-label {
+  color: var(--drop-text-secondary, #666);
+  text-decoration: line-through;
+}
+
+.dropgoals-item-actions {
+  flex: 0 0 auto;
+  font-size: 0.875em;
+  white-space: nowrap;
+}
+
+.dropgoals-item-freq {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--drop-text-secondary, #888);
+  margin-left: 0.4em;
+}
+
+.dropgoals-history-link {
+  color: var(--drop-text-secondary, #888);
+}
+
+.dropgoals-summary {
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #666);
+  margin: 0 0 0.5rem;
+}
+
+.dropgoals-manage-link {
+  font-size: 0.875em;
+}
+
+/* ---------------------------------------------------------------------------
+   History grid
+   --------------------------------------------------------------------------- */
+
+.dropgoals-stats {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1rem;
+  font-size: 0.95em;
+}
+
+.dropgoals-streak {
+  font-weight: 600;
+  color: var(--drop-primary, #1565c0);
+}
+
+.dropgoals-rate {
+  color: var(--drop-text-secondary, #555);
+}
+
+.dropgoals-history-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  gap: 4px;
+  margin: 0 0 1.5rem;
+}
+
+.dropgoals-history-header {
+  width: 36px;
+  height: 20px;
+  text-align: center;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--drop-text-secondary, #888);
+  line-height: 20px;
+}
+
+.dropgoals-history-day {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 5px;
+  background: #e8e8e8;
+  cursor: default;
+  position: relative;
+  transition: transform 0.1s ease;
+}
+
+a.dropgoals-history-day {
+  cursor: pointer;
+}
+
+a.dropgoals-history-day:hover {
+  transform: scale(1.15);
+  z-index: 1;
+  text-decoration: none;
+}
+
+.dropgoals-day-completed {
+  background: var(--drop-success, #4caf50);
+}
+
+.dropgoals-day-missed {
+  background: #e0e0e0;
+}
+
+.dropgoals-day-future {
+  background: transparent;
+  border: 1px dashed #d0d0d0;
+}
+
+.dropgoals-day-today {
+  outline: 2px solid var(--drop-primary, #1565c0);
+  outline-offset: 2px;
+}
+
+.dropgoals-day-na {
+  background: #f0f0f0;
+  opacity: 0.45;
+}
+
+/* ---------------------------------------------------------------------------
+   Week-based history grid (weekly goals)
+   --------------------------------------------------------------------------- */
+
+.dropgoals-week-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 1.5rem;
+}
+
+.dropgoals-week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  background: #e0e0e0;
+  padding-bottom: 6px;
+  cursor: default;
+  transition: transform 0.1s ease;
+}
+
+a.dropgoals-week-cell {
+  cursor: pointer;
+}
+
+a.dropgoals-week-cell:hover {
+  transform: scale(1.1);
+  z-index: 1;
+  text-decoration: none;
+}
+
+.dropgoals-week-label {
+  font-size: 0.65em;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1;
+}
+
+.dropgoals-week-completed {
+  background: var(--drop-success, #4caf50);
+}
+
+.dropgoals-week-completed .dropgoals-week-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dropgoals-week-missed {
+  background: #e0e0e0;
+}
+
+.dropgoals-week-partial {
+  background: repeating-linear-gradient(
+    45deg,
+    #e8e8e8,
+    #e8e8e8 4px,
+    #f5f5f5 4px,
+    #f5f5f5 8px
+  );
+}
+
+.dropgoals-week-current {
+  background: #e0e0e0;
+  outline: 2px solid var(--drop-primary, #1565c0);
+  outline-offset: 2px;
+}
+
+.dropgoals-week-current.dropgoals-week-completed {
+  background: var(--drop-success, #4caf50);
+}
+
+.dropgoals-week-upcoming {
+  background: transparent;
+  border: 1px dashed #c0c0c0;
+}
+
+.dropgoals-week-upcoming .dropgoals-week-label {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+/* ---------------------------------------------------------------------------
+   Goal form — days-of-week checkboxes
+   --------------------------------------------------------------------------- */
+
+/* Display the seven day checkboxes in a single horizontal row. */
+.dropgoals-days-wrapper .form-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.dropgoals-days-wrapper .form-type-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.dropgoals-days-wrapper .form-type-checkbox input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
+  position: relative;
+  top: 0;
+}
+
+.dropgoals-days-wrapper .form-type-checkbox label {
+  margin: 0;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Manage list / detail table
+   --------------------------------------------------------------------------- */
+
+.dropgoals-detail-table {
+  max-width: 600px;
+}

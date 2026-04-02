@@ -1,0 +1,233 @@
+/**
+ * DropDocs — documentation page styles.
+ */
+
+/* Prevent viewport-width jump when a scrollbar appears or disappears.
+   Without this, navigating between short and long doc pages briefly changes
+   the viewport width, which triggers Backdrop's responsive-tabs JS to
+   recalculate the tab bar — causing the visible flash/jump under the tabs. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* ---------------------------------------------------------------------------
+   Index page tree
+   --------------------------------------------------------------------------- */
+
+.dropdocs-index-tree {
+  max-width: 600px;
+}
+
+.dropdocs-index-tree > .dropdocs-tree {
+  font-size: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Doc view: two-column layout
+   --------------------------------------------------------------------------- */
+
+.dropdocs-view-layout {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+.dropdocs-sidebar {
+  flex: 0 0 220px;
+  min-width: 0;
+  position: sticky;
+  top: 1rem;
+}
+
+.dropdocs-sidebar-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gray-600, #757575);
+  margin: 0 0 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.dropdocs-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Tree navigation
+   --------------------------------------------------------------------------- */
+
+.dropdocs-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dropdocs-tree li {
+  margin: 0;
+  padding: 0;
+}
+
+.dropdocs-tree a {
+  display: block;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--color-gray-800, #424242);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.dropdocs-tree a:hover {
+  background: var(--drop-highlight, #e3f2fd);
+  color: var(--drop-primary, #1565c0);
+}
+
+/* Active (currently viewed) item. */
+.dropdocs-tree-active > a {
+  background: var(--drop-highlight, #e3f2fd);
+  color: var(--drop-primary, #1565c0);
+  font-weight: 600;
+}
+
+/* Nested children — indented with a subtle left border. */
+.dropdocs-tree .dropdocs-tree {
+  padding-left: 0.75rem;
+  margin-left: 0.5rem;
+  border-left: 2px solid var(--drop-border, #e0e0e0);
+  margin-top: 0.1rem;
+  margin-bottom: 0.1rem;
+}
+
+/* Nested trees are hidden by default — before JS runs, nothing is expanded.
+   This prevents the FOUC/jump caused by collapsing items after paint. */
+.dropdocs-tree .dropdocs-tree {
+  display: none;
+}
+
+/* JS marks expanded items with dropdocs-open; reveal their children. */
+.dropdocs-has-children.dropdocs-open > .dropdocs-tree {
+  display: block;
+}
+
+
+/* Row wrapper for items that have children (toggle + link side by side). */
+.dropdocs-tree-item {
+  display: flex;
+  align-items: center;
+}
+
+.dropdocs-tree-item > a {
+  flex: 1;
+}
+
+/* Toggle button — sits to the left of the link. */
+.dropdocs-toggle {
+  flex: 0 0 auto;
+  order: -1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.3rem 0.3rem 0.25rem;
+  color: var(--color-gray-500, #9e9e9e);
+  line-height: 1;
+}
+
+.dropdocs-toggle:hover {
+  color: var(--drop-primary, #1565c0);
+}
+
+/* Chevron arrow drawn in CSS. */
+.dropdocs-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+
+/* Rotate chevron when expanded. */
+.dropdocs-toggle[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+
+/* ---------------------------------------------------------------------------
+   Body content typography
+   --------------------------------------------------------------------------- */
+
+.dropdocs-body h2,
+.dropdocs-body h3,
+.dropdocs-body h4 {
+  margin-top: 1.5em;
+}
+
+.dropdocs-body pre,
+.dropdocs-body code {
+  background: #e0e0e0;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.dropdocs-body pre {
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0 0.75rem 1.5rem;
+  overflow-x: auto;
+  border-left: 3px solid #bdbdbd;
+}
+
+/* Reset code inside pre — avoids double background/padding */
+.dropdocs-body pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+.dropdocs-body code {
+  padding: 0.1em 0.35em;
+  font-size: 0.875em;
+}
+
+/* ---------------------------------------------------------------------------
+   Reorder page
+   --------------------------------------------------------------------------- */
+
+.dropdocs-reorder-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gray-600, #757575);
+  margin: 1.5rem 0 0.4rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--drop-border, #e0e0e0);
+}
+
+.dropdocs-reorder-label:first-child {
+  margin-top: 0;
+}
+
+/* Make the draggable rows look clean */
+#dropdocs-reorder-form table.tabledrag-processed tr.draggable td {
+  vertical-align: middle;
+  padding: 0.4rem 0.6rem;
+}
+
+/* Hide the weight column header and inputs — tabledrag manages them */
+#dropdocs-reorder-form .tabledrag-hide {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Empty state
+   --------------------------------------------------------------------------- */
+
+.dropdocs-empty {
+  color: var(--color-gray-600, #757575);
+  font-style: italic;
+}

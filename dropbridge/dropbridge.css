@@ -1,0 +1,402 @@
+/**
+ * @file
+ * DropBridge unified daily list styles.
+ */
+
+/* ---------------------------------------------------------------------------
+   Page header
+   --------------------------------------------------------------------------- */
+
+.dropbridge-date {
+  font-size: 1.1em;
+  color: var(--drop-text-secondary, #666);
+  font-weight: normal;
+  margin: 0 0 1.25rem;
+  border-bottom: 1px solid var(--drop-border, #ddd);
+  padding-bottom: 0.5rem;
+}
+
+.dropbridge-empty {
+  font-size: 1.05em;
+  color: var(--drop-success, #4caf50);
+  font-weight: 500;
+  margin: 2rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive action grid (Goals | Tasks | Activities)
+   --------------------------------------------------------------------------- */
+
+.dropbridge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Section cards
+   --------------------------------------------------------------------------- */
+
+.dropbridge-section {
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem; /* spacing when stacked at narrow widths */
+}
+
+/* Calendar section is always full-width — sits outside the grid */
+.dropbridge-section--event {
+  margin-bottom: 1rem;
+}
+
+.dropbridge-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  color: #fff;
+}
+
+.dropbridge-section--event    .dropbridge-section-header { background: #2e7d32; }
+.dropbridge-section--goal     .dropbridge-section-header { background: #7b1fa2; }
+.dropbridge-section--task     .dropbridge-section-header { background: #1565c0; }
+.dropbridge-section--activity .dropbridge-section-header { background: #e65100; }
+.dropbridge-section--ticket   .dropbridge-section-header { background: #00838f; }
+
+.dropbridge-section-title {
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dropbridge-section-count {
+  font-size: 0.78em;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+.dropbridge-section-add {
+  margin-left: auto;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dropbridge-section-add:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   Overdue alert bar
+   --------------------------------------------------------------------------- */
+
+.dropbridge-overdue-bar {
+  background: #fff3f3;
+  border-bottom: 1px solid #ffcdd2;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--drop-overdue, #c62828);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   Items within a section
+   --------------------------------------------------------------------------- */
+
+.dropbridge-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dropbridge-section-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--drop-border, #f0f0f0);
+  background: #fff;
+}
+
+.dropbridge-section-item:last-child {
+  border-bottom: none;
+}
+
+.dropbridge-section-item--overdue {
+  border-left: 3px solid var(--drop-overdue, #d32f2f);
+  padding-left: calc(0.85rem - 3px);
+  background: #fff9f9;
+}
+
+.dropbridge-section-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.dropbridge-section-item-body > a {
+  font-size: 0.95em;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* For calendar events (no view URL), plain text label */
+.dropbridge-section--event .dropbridge-section-item-body {
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Item meta (time / due date)
+   --------------------------------------------------------------------------- */
+
+.dropbridge-item-meta {
+  font-size: 0.8em;
+  color: var(--drop-text-secondary, #666);
+  white-space: nowrap;
+}
+
+.dropbridge-item-meta--time {
+  font-weight: 500;
+  color: var(--drop-text, #333);
+}
+
+.dropbridge-item-meta--overdue {
+  color: var(--drop-overdue, #c62828);
+  font-weight: 600;
+}
+
+.dropbridge-item-status {
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+   Calendar source chip
+   --------------------------------------------------------------------------- */
+
+.dropbridge-cal-chip {
+  display: inline-block;
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Done link
+   --------------------------------------------------------------------------- */
+
+.dropbridge-done-link {
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  font-weight: 500;
+  color: #666;
+  white-space: nowrap;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  padding: 1px 7px;
+  line-height: 1.6;
+}
+
+.dropbridge-done-link:hover {
+  color: var(--drop-success, #388e3c);
+  border-color: var(--drop-success, #388e3c);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Footer
+   --------------------------------------------------------------------------- */
+
+.dropbridge-count {
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #666);
+  margin: 0 0 0.5rem;
+}
+
+.dropbridge-module-links {
+  font-size: 0.875em;
+  color: var(--drop-text-secondary, #888);
+  margin-top: 1.5rem;
+}
+
+.dropbridge-settings-link {
+  font-size: 0.8em;
+  color: var(--drop-text-secondary, #aaa);
+  margin-top: 0.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Preview tomorrow
+   --------------------------------------------------------------------------- */
+
+.dropbridge-preview-link,
+.dropbridge-date-nav {
+  font-size: 0.85em;
+  margin: -0.75rem 0 1rem;
+  color: var(--drop-text-secondary, #888);
+}
+
+.dropbridge-date--past {
+  color: var(--drop-text-secondary, #777);
+}
+
+.dropbridge-preview-banner {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 5px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9em;
+  color: #5d4037;
+  margin-bottom: 0.75rem;
+}
+
+.dropbridge-date--preview {
+  color: var(--drop-text-secondary, #777);
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard notifications panel
+   --------------------------------------------------------------------------- */
+
+.dropbridge-notifications {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 5px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.dropbridge-notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+  cursor: pointer;
+  list-style: none;
+  margin: 0;
+}
+
+.dropbridge-notifications-header::-webkit-details-marker {
+  display: none;
+}
+
+.dropbridge-notifications[open] .dropbridge-notifications-header {
+  margin-bottom: 0.5rem;
+}
+
+.dropbridge-notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dropbridge-notif-item {
+  padding: 0.35rem 0;
+  border-top: 1px solid #ffe082;
+  font-size: 0.9em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dropbridge-notif-label {
+  font-family: monospace;
+  font-size: 0.85em;
+  color: var(--drop-text-secondary, #666);
+}
+
+.dropbridge-notif-meta {
+  color: var(--drop-text-secondary, #888);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard quick links
+   --------------------------------------------------------------------------- */
+
+.dropbridge-quicklinks {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.dropbridge-quicklink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: #1a73e8;
+  color: #fff !important;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  transition: background 0.15s;
+}
+
+.dropbridge-quicklink:hover {
+  background: #1557b0;
+}
+
+.dropbridge-quicklink .icon {
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Site announcement banner
+   --------------------------------------------------------------------------- */
+
+.dropbridge-announcement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #1565c0;
+  color: #fff;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.95em;
+  position: relative;
+}
+
+.dropbridge-announcement-text {
+  flex: 1;
+}
+
+.dropbridge-announcement-dismiss {
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.dropbridge-announcement-dismiss:hover {
+  opacity: 1;
+}

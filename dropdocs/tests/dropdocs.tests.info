@@ -1,0 +1,29 @@
+[DropDocsTreeTest]
+name = DropDocs Tree Builder
+description = Verifies dropdocs_build_tree() builds and sorts nested trees correctly.
+group = DropDocs
+file = dropdocs.test
+
+[DropDocsAccessTest]
+name = DropDocs Access Control
+description = Verifies that permissions gate the docs index, view, and reorder pages.
+group = DropDocs
+file = dropdocs.test
+
+[DropDocsCRUDTest]
+name = DropDocs CRUD
+description = Create, view, and delete doc nodes; verify they appear on the index.
+group = DropDocs
+file = dropdocs.test
+
+[DropDocsHierarchyTest]
+name = DropDocs Hierarchy
+description = Verifies parent-child doc relationships, tree rendering, and breadcrumbs.
+group = DropDocs
+file = dropdocs.test
+
+[DropDocsReorderTest]
+name = DropDocs Reorder
+description = Verifies that the reorder form saves weights and changes display order.
+group = DropDocs
+file = dropdocs.test

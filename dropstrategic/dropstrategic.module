@@ -1,0 +1,414 @@
+<?php
+/**
+ * @file
+ * Drop Strategic — shared OKR-style goal tracking for Drop Suite teams.
+ */
+
+// ---------------------------------------------------------------------------
+// Core hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function dropstrategic_autoload_info() {
+  return array(
+    'DropGoalStrategic'           => 'dropstrategic.entity.inc',
+    'DropGoalStrategicController' => 'dropstrategic.entity.inc',
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function dropstrategic_entity_info() {
+  return array(
+    'drop_goal_strategic' => array(
+      'label'            => t('Strategic Goal'),
+      'plural label'     => t('Strategic Goals'),
+      'entity class'     => 'DropGoalStrategic',
+      'controller class' => 'DropGoalStrategicController',
+      'base table'       => 'drop_strategic_goal',
+      'entity keys'      => array(
+        'id'    => 'gid',
+        'label' => 'title',
+      ),
+      'uri callback'     => 'entity_class_uri',
+      'access callback'  => 'dropstrategic_goal_access',
+      'module'           => 'dropstrategic',
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function dropstrategic_permission() {
+  return array(
+    'administer dropstrategic' => array(
+      'title'       => t('Administer strategic goals'),
+      'description' => t('Create, edit, and delete any strategic goal.'),
+    ),
+    'create strategic goals' => array(
+      'title'       => t('Create strategic goals'),
+      'description' => t('Create personal strategic goals.'),
+    ),
+    'view strategic goals' => array(
+      'title'       => t('View strategic goals'),
+      'description' => t('View the team goals dashboard.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dropstrategic_menu() {
+  $items = array();
+
+  $items['drop/strategic'] = array(
+    'title'            => 'Strategic Goals',
+    'page callback'    => 'dropstrategic_dashboard_page',
+    'access arguments' => array('view strategic goals'),
+    'file'             => 'dropstrategic.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 6,
+  );
+
+  $items['drop/strategic/dashboard'] = array(
+    'title'  => 'All goals',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 0,
+  );
+
+  $items['drop/strategic/mine'] = array(
+    'title'            => 'My goals',
+    'page callback'    => 'dropstrategic_mine_page',
+    'access arguments' => array('view strategic goals'),
+    'file'             => 'dropstrategic.pages.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 2,
+  );
+
+  $items['drop/strategic/add'] = array(
+    'title'            => 'Add goal',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropstrategic_goal_form'),
+    'access arguments' => array('create strategic goals'),
+    'file'             => 'dropstrategic.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+
+  $items['drop/strategic/%drop_goal_strategic'] = array(
+    'title callback'   => 'dropstrategic_goal_title',
+    'title arguments'  => array(2),
+    'page callback'    => 'dropstrategic_goal_view',
+    'page arguments'   => array(2),
+    'access arguments' => array('view strategic goals'),
+    'load arguments'   => array(2),
+    'file'             => 'dropstrategic.pages.inc',
+  );
+
+  $items['drop/strategic/%drop_goal_strategic/view'] = array(
+    'title'  => 'View',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 0,
+  );
+
+  $items['drop/strategic/%drop_goal_strategic/edit'] = array(
+    'title'            => 'Edit',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropstrategic_goal_form', 2),
+    'access callback'  => 'dropstrategic_goal_access',
+    'access arguments' => array('edit', 2),
+    'load arguments'   => array(2),
+    'file'             => 'dropstrategic.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 2,
+  );
+
+  $items['drop/strategic/%drop_goal_strategic/delete'] = array(
+    'title'            => 'Delete',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropstrategic_goal_delete_form', 2),
+    'access callback'  => 'dropstrategic_goal_access',
+    'access arguments' => array('delete', 2),
+    'load arguments'   => array(2),
+    'file'             => 'dropstrategic.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 10,
+  );
+
+  // Admin hub card — settings entry under admin/drop.
+  $items['admin/drop/strategic'] = array(
+    'title'            => 'Drop Strategic settings',
+    'description'      => t('Configure strategic goal tracking for the Drop Suite.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/strategic'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer dropstrategic'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 15,
+  );
+
+  // Key result toggle (AJAX).
+  $items['drop/strategic/kr/%/toggle'] = array(
+    'page callback'    => 'dropstrategic_kr_toggle',
+    'page arguments'   => array(3),
+    'access arguments' => array('view strategic goals'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function dropstrategic_menu_alter(&$items) {
+  // Push the delete tab to the end.
+  if (isset($items['drop/strategic/%drop_goal_strategic/delete'])) {
+    $items['drop/strategic/%drop_goal_strategic/delete']['weight'] = 20;
+  }
+}
+
+/**
+ * Entity loader for %drop_goal_strategic wildcard.
+ */
+function drop_goal_strategic_load($gid) {
+  $goals = entity_load('drop_goal_strategic', array($gid));
+  return $goals ? reset($goals) : FALSE;
+}
+
+/**
+ * Title callback for the goal view/edit pages.
+ */
+function dropstrategic_goal_title(DropGoalStrategic $goal) {
+  return $goal->title;
+}
+
+/**
+ * Access callback for strategic goal operations.
+ */
+function dropstrategic_goal_access($op, $goal = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (user_access('administer dropstrategic', $account)) {
+    return TRUE;
+  }
+  if ($op === 'view') {
+    return user_access('view strategic goals', $account);
+  }
+  if ($op === 'create') {
+    return user_access('create strategic goals', $account);
+  }
+  if (($op === 'edit' || $op === 'delete') && $goal) {
+    // Owners can edit/delete their own goals.
+    return user_access('create strategic goals', $account)
+      && (int) $goal->owner_uid === (int) $account->uid;
+  }
+  return FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Key results helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Loads all key results for a goal, ordered by weight.
+ *
+ * @param int $gid
+ * @return array
+ */
+function dropstrategic_key_results_load($gid) {
+  return db_select('drop_strategic_key_result', 'kr')
+    ->fields('kr')
+    ->condition('kr.gid', $gid)
+    ->orderBy('kr.weight')
+    ->orderBy('kr.krid')
+    ->execute()->fetchAll();
+}
+
+/**
+ * Saves key results for a goal, replacing existing records.
+ *
+ * @param int $gid
+ * @param array $key_results
+ *   Array of arrays with keys: title, target, current_value, done, weight.
+ */
+function dropstrategic_key_results_save($gid, array $key_results) {
+  db_delete('drop_strategic_key_result')->condition('gid', $gid)->execute();
+  foreach ($key_results as $weight => $kr) {
+    $title = trim($kr['title']);
+    if ($title === '') {
+      continue;
+    }
+    db_insert('drop_strategic_key_result')->fields(array(
+      'gid'           => $gid,
+      'title'         => $title,
+      'target'        => isset($kr['target']) ? trim($kr['target']) : NULL,
+      'current_value' => isset($kr['current_value']) ? trim($kr['current_value']) : NULL,
+      'done'          => !empty($kr['done']) ? 1 : 0,
+      'weight'        => (int) $weight,
+    ))->execute();
+  }
+}
+
+/**
+ * Calculates overall progress percentage from an array of key result objects.
+ *
+ * For KRs with a numeric target, progress = min(100, current/target * 100).
+ * For checkbox-only KRs, progress = 100 if done, 0 if not.
+ * Returns the average across all KRs, or 0 if there are none.
+ *
+ * @param array $key_results
+ *   Array of key result objects from dropstrategic_key_results_load().
+ * @return int
+ *   Progress percentage 0–100.
+ */
+function dropstrategic_calculate_progress(array $key_results) {
+  if (empty($key_results)) {
+    return 0;
+  }
+  $total = 0;
+  foreach ($key_results as $kr) {
+    if (!empty($kr->target) && is_numeric($kr->target) && (float) $kr->target > 0) {
+      $current = !empty($kr->current_value) && is_numeric($kr->current_value)
+        ? (float) $kr->current_value : 0;
+      $total += min(100, round($current / (float) $kr->target * 100));
+    }
+    else {
+      $total += $kr->done ? 100 : 0;
+    }
+  }
+  return (int) round($total / count($key_results));
+}
+
+// ---------------------------------------------------------------------------
+// Status / type / horizon helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns goal type options.
+ */
+function dropstrategic_type_options() {
+  return array(
+    'team'     => t('Team'),
+    'personal' => t('Personal'),
+  );
+}
+
+/**
+ * Returns goal status options.
+ */
+function dropstrategic_status_options() {
+  return array(
+    'active'    => t('Active'),
+    'achieved'  => t('Achieved'),
+    'paused'    => t('Paused'),
+    'abandoned' => t('Abandoned'),
+  );
+}
+
+/**
+ * Returns horizon options.
+ */
+function dropstrategic_horizon_options() {
+  return array(
+    'quarterly' => t('Quarterly'),
+    'annual'    => t('Annual'),
+    'open'      => t('Open-ended'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AJAX: key result toggle
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: toggle a key result done/not-done.
+ */
+function dropstrategic_kr_toggle($krid) {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  $token = isset($_GET['token']) ? $_GET['token'] : '';
+  if (!backdrop_valid_token($token, 'kr-toggle')) {
+    print backdrop_json_encode(array('error' => 'invalid token'));
+    exit();
+  }
+
+  $krid = (int) $krid;
+  $kr = db_select('drop_strategic_key_result', 'kr')
+    ->fields('kr')
+    ->condition('kr.krid', $krid)
+    ->execute()->fetchObject();
+
+  if (!$kr) {
+    print backdrop_json_encode(array('error' => 'not found'));
+    exit();
+  }
+
+  // Only admin or goal owner can toggle.
+  $goals = entity_load('drop_goal_strategic', array($kr->gid));
+  $goal  = $goals ? reset($goals) : NULL;
+  if (!$goal || !dropstrategic_goal_access('edit', $goal)) {
+    print backdrop_json_encode(array('error' => 'access denied'));
+    exit();
+  }
+
+  $new_done = $kr->done ? 0 : 1;
+  db_update('drop_strategic_key_result')
+    ->fields(array('done' => $new_done))
+    ->condition('krid', $krid)
+    ->execute();
+
+  // Recalculate progress so the JS can update the bar without a page reload.
+  $key_results = dropstrategic_key_results_load($kr->gid);
+  $progress = dropstrategic_calculate_progress($key_results);
+
+  print backdrop_json_encode(array('krid' => $krid, 'done' => $new_done, 'progress' => $progress));
+  exit();
+}
+
+// ---------------------------------------------------------------------------
+// Navigation integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function dropstrategic_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Strategy'),
+      'path'       => 'drop/strategic',
+      'permission' => 'view strategic goals',
+      'weight'     => 55,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function dropstrategic_drop_section_links($section) {
+  if ($section !== 'strategic') {
+    return array();
+  }
+
+  return array(
+    'dashboard' => array(
+      'title'        => t('Dashboard'),
+      'href'         => 'drop/strategic',
+      'weight'       => -10,
+      'active_paths' => array('drop/strategic', 'drop/strategic/dashboard'),
+    ),
+    'mine' => array(
+      'title'  => t('My Goals'),
+      'href'   => 'drop/strategic/mine',
+      'weight' => 0,
+    ),
+  );
+}

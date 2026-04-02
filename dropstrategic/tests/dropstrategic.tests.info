@@ -1,0 +1,11 @@
+[DropStrategicProgressTest]
+name = Drop Strategic Progress Calculation
+description = Verifies that progress is calculated correctly from key results.
+group = Drop Strategic
+file = dropstrategic.test
+
+[DropStrategicAccessTest]
+name = Drop Strategic Access Control
+description = Verifies that the strategic goals dashboard and CRUD require correct permissions.
+group = Drop Strategic
+file = dropstrategic.test

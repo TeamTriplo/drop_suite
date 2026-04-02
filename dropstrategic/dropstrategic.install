@@ -1,0 +1,159 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for Drop Strategic.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropstrategic_schema() {
+  $schema['drop_strategic_goal'] = array(
+    'description' => 'Strategic goals and OKRs.',
+    'fields' => array(
+      'gid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => '',
+      ),
+      'type' => array(
+        'type'        => 'varchar',
+        'length'      => 16,
+        'not null'    => TRUE,
+        'default'     => 'team',
+        'description' => 'personal or team.',
+      ),
+      'owner_uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'status' => array(
+        'type'        => 'varchar',
+        'length'      => 16,
+        'not null'    => TRUE,
+        'default'     => 'active',
+        'description' => 'active, achieved, paused, abandoned.',
+      ),
+      'horizon' => array(
+        'type'        => 'varchar',
+        'length'      => 16,
+        'not null'    => TRUE,
+        'default'     => 'quarterly',
+        'description' => 'quarterly, annual, open.',
+      ),
+      'due_date' => array(
+        'type'     => 'int',
+        'not null' => FALSE,
+        'default'  => NULL,
+        'description' => 'Optional target date as Unix timestamp.',
+      ),
+      'body' => array(
+        'type'     => 'text',
+        'size'     => 'big',
+        'not null' => TRUE,
+      ),
+      'body_format' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => 'filtered_html',
+      ),
+      'progress' => array(
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'Manual progress 0-100.',
+      ),
+      'private_notes' => array(
+        'type'     => 'text',
+        'size'     => 'big',
+        'not null' => TRUE,
+      ),
+      'private_notes_format' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => 'filtered_html',
+      ),
+      'uid' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+        'description' => 'UID of creator.',
+      ),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'changed'  => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+    ),
+    'primary key' => array('gid'),
+    'indexes' => array(
+      'type'      => array('type'),
+      'status'    => array('status'),
+      'owner_uid' => array('owner_uid'),
+    ),
+  );
+
+  $schema['drop_strategic_key_result'] = array(
+    'description' => 'Key results attached to a strategic goal.',
+    'fields' => array(
+      'krid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'gid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'title' => array(
+        'type'     => 'varchar',
+        'length'   => 512,
+        'not null' => TRUE,
+        'default'  => '',
+      ),
+      'target' => array(
+        'type'     => 'varchar',
+        'length'   => 64,
+        'not null' => FALSE,
+        'default'  => NULL,
+        'description' => 'Optional numeric target (stored as string for flexibility).',
+      ),
+      'current_value' => array(
+        'type'     => 'varchar',
+        'length'   => 64,
+        'not null' => FALSE,
+        'default'  => NULL,
+      ),
+      'done' => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'weight' => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+    ),
+    'primary key' => array('krid'),
+    'indexes' => array(
+      'gid' => array('gid'),
+    ),
+  );
+
+  return $schema;
+}

@@ -1,0 +1,862 @@
+<?php
+/**
+ * @file
+ * DropBridge — Unified daily to-do list across DropGoals, DropTasks, and DropCRM.
+ */
+
+// ---------------------------------------------------------------------------
+// Config info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_config_info().
+ */
+function dropbridge_config_info() {
+  return array(
+    'dropbridge.settings' => array(
+      'label' => t('DropBridge settings'),
+      'group' => t('Configuration'),
+    ),
+    'dropbridge.inbound' => array(
+      'label' => t('DropBridge inbound email settings'),
+      'group' => t('Configuration'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mail
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_mail().
+ *
+ * Handles the 'inbound_forward' key — a copy of an inbound email forwarded
+ * to the configured support address with a link to the ticket.
+ */
+function dropbridge_mail($key, &$message, $params) {
+  if ($key !== 'inbound_forward') {
+    return;
+  }
+
+  $sender_label = !empty($params['original_name'])
+    ? $params['original_name'] . ' <' . $params['original_from'] . '>'
+    : $params['original_from'];
+
+  $message['subject'] = '[FWD] ' . $params['subject'];
+
+  $body  = t('--- Forwarded inbound email ---') . "\n\n";
+  $body .= t('From: @sender', array('@sender' => $sender_label)) . "\n";
+  $body .= t('To: @to', array('@to' => $params['original_to'])) . "\n";
+  $body .= t('Subject: @subject', array('@subject' => $params['subject'])) . "\n\n";
+  $body .= $params['body'];
+  $body .= "\n\n--- " . t('Ticket link') . " ---\n";
+  $body .= $params['ticket_url'];
+
+  $message['body'][] = $body;
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function dropbridge_permission() {
+  return array(
+    'access dropbridge' => array(
+      'title'       => t('Access DropBridge daily list'),
+      'description' => t('View and act on the unified daily to-do list.'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function dropbridge_menu() {
+  $items = array();
+
+  $items['drop'] = array(
+    'title'            => 'Drop Suite',
+    'page callback'    => 'dropbridge_daily_list',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access dropbridge'),
+    'file'             => 'dropbridge.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  // Goal done toggle — only register if dropgoals is enabled.
+  if (module_exists('dropgoals')) {
+    // %drop_goal is at arg position 3.
+    $items['drop/goal/%drop_goal/done'] = array(
+      'page callback'    => 'dropbridge_goal_done',
+      'page arguments'   => array(2),
+      'access callback'  => 'dropgoals_goal_access',
+      'access arguments' => array('update', 2),
+      'file'             => 'dropbridge.pages.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
+
+  // Task done toggle — only register if droptasks is enabled.
+  if (module_exists('droptasks')) {
+    // %drop_task is at arg position 3.
+    $items['drop/task/%drop_task/done'] = array(
+      'page callback'    => 'dropbridge_task_done',
+      'page arguments'   => array(2),
+      'access callback'  => 'droptasks_task_access',
+      'access arguments' => array('update', 2),
+      'file'             => 'dropbridge.pages.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
+
+  // Ticket done — only register if droptickets is enabled.
+  if (module_exists('droptickets')) {
+    $items['drop/tickets/%drop_ticket/done'] = array(
+      'page callback'    => 'droptickets_ticket_mark_done',
+      'page arguments'   => array(2),
+      'access callback'  => 'droptickets_ticket_access',
+      'access arguments' => array('update', 2),
+      'file'             => 'droptickets.pages.inc',
+      'module'           => 'droptickets',
+      'type'             => MENU_CALLBACK,
+    );
+  }
+
+  // CRM activity done — only register if dropcrm is enabled.
+  if (module_exists('dropcrm')) {
+    // %crm_activity is at arg position 3.
+    $items['drop/activity/%crm_activity/done'] = array(
+      'page callback'    => 'dropbridge_activity_done',
+      'page arguments'   => array(2),
+      'access callback'  => 'dropcrm_activity_access',
+      'access arguments' => array('edit', 2),
+      'file'             => 'dropbridge.pages.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
+
+  // Dismiss site announcement.
+  $items['drop/announcement/dismiss'] = array(
+    'page callback'    => 'dropbridge_announcement_dismiss',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access dropbridge'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Settings page.
+  $items['drop/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropbridge_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'dropbridge.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 20,
+  );
+  // Inbound email settings — in the admin menu under Drop Suite.
+  $items['admin/drop/inbound-email'] = array(
+    'title'            => 'Inbound Email',
+    'description'      => 'Configure SendGrid inbound email processing and allowlist.',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropbridge_inbound_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'dropbridge.admin.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  // Unverified tickets report.
+  $items['drop/tickets/unverified'] = array(
+    'title'            => 'Unverified tickets',
+    'page callback'    => 'dropbridge_unverified_tickets_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'dropbridge.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Verify sender action (AJAX-friendly).
+  $items['drop/tickets/verify-sender/%'] = array(
+    'page callback'    => 'dropbridge_verify_sender',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'dropbridge.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // SendGrid inbound parse webhook — no user auth, validated by token.
+  $items['dropbridge/inbound-email'] = array(
+    'page callback'  => 'dropbridge_inbound_email_webhook',
+    'access callback' => TRUE,
+    'file'           => 'dropbridge.inbound.inc',
+    'type'           => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+// ---------------------------------------------------------------------------
+// CRM contact view integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_dropcrm_contact_view_alter().
+ *
+ * Appends a Tasks section to the CRM contact view page when droptasks is
+ * enabled and the contact has associated tasks.
+ */
+function dropbridge_dropcrm_contact_view_alter(&$output, $contact) {
+  if (!module_exists('droptasks')) {
+    return;
+  }
+
+  $tasks = db_select('drop_task', 't')
+    ->fields('t', array('tid', 'title', 'status', 'priority', 'due_date'))
+    ->condition('t.contact_id', $contact->cid)
+    ->orderBy('t.status', 'ASC')
+    ->orderBy('t.due_date', 'ASC')
+    ->execute()
+    ->fetchAll();
+
+  $rows = array();
+  foreach ($tasks as $task) {
+    $title_cell = l(check_plain($task->title), 'drop/tasks/' . $task->tid);
+    $priority_class = 'drop-priority-' . drop_base_priority_class($task->priority);
+    $priority_labels = drop_base_priority_labels();
+    $due = $task->due_date ? format_date($task->due_date, 'custom', 'M j, Y') : '—';
+    $status_label = $task->status === 'complete' ? t('Complete') : t('Pending');
+    $rows[] = array(
+      'data'  => array(
+        array('data' => $title_cell),
+        array('data' => isset($priority_labels[$task->priority]) ? $priority_labels[$task->priority] : '', 'class' => array($priority_class)),
+        $due,
+        $status_label,
+      ),
+      'class' => $task->status === 'complete' ? array('drop-task-complete') : array(),
+    );
+  }
+
+  $output['tasks'] = array(
+    '#weight' => 25,
+    '#prefix' => dropcrm_accordion_prefix(
+      t('Tasks'),
+      l(t('+ Add task'), 'drop/tasks/add',
+        array('attributes' => array('class' => array('drop-section-add')),
+              'query'      => array('contact' => $contact->cid)))
+    ),
+    '#suffix' => dropcrm_accordion_suffix(),
+    'table'   => array(
+      '#theme'  => 'table',
+      '#header' => array(t('Task'), t('Priority'), t('Due'), t('Status')),
+      '#rows'   => $rows,
+      '#empty'  => t('No tasks linked to this contact.'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_theme().
+ */
+function dropbridge_theme() {
+  return array(
+    'dropbridge_daily_list' => array(
+      'variables' => array('items' => array(), 'preview_date' => NULL, 'is_past' => FALSE),
+      'file'      => 'dropbridge.pages.inc',
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cron: background calendar fetch
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_cron().
+ *
+ * Fetches all configured ICS feeds in the background and stores raw ICS data
+ * in state so that the dashboard page never has to make an HTTP request.
+ */
+function dropbridge_cron() {
+  _dropbridge_cron_fetch_calendars();
+  _dropbridge_cron_time_reminders();
+}
+
+/**
+ * Fetches each configured ICS URL and persists the raw ICS string in state.
+ *
+ * Fetches both global calendars (from config) and personal calendars (from
+ * user data). Respects the configured TTL. Called from hook_cron().
+ */
+function _dropbridge_cron_fetch_calendars() {
+  $ttl = (int) config_get('dropbridge.settings', 'calendar_cache_seconds') ?: 1800;
+
+  // Build a combined list of URL lines: global first, then all personal.
+  $url_lines = array();
+
+  $global = config_get('dropbridge.settings', 'calendar_ics_url');
+  if (!empty(trim($global))) {
+    $url_lines = array_merge($url_lines, array_filter(array_map('trim', explode("\n", $global))));
+  }
+
+  // Personal calendars: stored as uid => url_string in state.
+  $personal_map = state_get('dropbridge.personal_calendars', array());
+  foreach ($personal_map as $uid => $url_string) {
+    if (!empty(trim($url_string))) {
+      $url_lines = array_merge($url_lines, array_filter(array_map('trim', explode("\n", $url_string))));
+    }
+  }
+
+  // Deduplicate by URL (first part before |).
+  $seen = array();
+  foreach ($url_lines as $url_line) {
+    $url = trim(explode('|', $url_line, 2)[0]);
+    if (empty($url) || isset($seen[$url])) {
+      continue;
+    }
+    $seen[$url] = TRUE;
+
+    $parts          = array_map('trim', explode('|', $url_line, 2));
+    $calendar_label = (isset($parts[1]) && $parts[1] !== '') ? $parts[1] : NULL;
+
+    $state_key = 'dropbridge.ical_' . md5($url);
+    $stored    = state_get($state_key);
+
+    if (!empty($stored['fetched']) && (REQUEST_TIME - $stored['fetched']) < $ttl) {
+      continue;
+    }
+
+    $response = backdrop_http_request($url, array('timeout' => 15));
+    if ($response->code != 200 || empty($response->data)) {
+      watchdog('dropbridge', 'Failed to fetch ICS feed (HTTP @code): @url',
+        array('@code' => $response->code, '@url' => $url), WATCHDOG_WARNING);
+      continue;
+    }
+
+    state_set($state_key, array(
+      'ics'     => $response->data,
+      'label'   => $calendar_label,
+      'fetched' => REQUEST_TIME,
+    ));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notification system
+// ---------------------------------------------------------------------------
+
+/**
+ * Sends a notification to a user via all configured channels.
+ *
+ * Other Drop modules should call this instead of sending directly, so that
+ * future channels (email, dashboard alerts, etc.) are automatically picked up.
+ *
+ * @param int $uid
+ *   The recipient's Backdrop user ID.
+ * @param string $message
+ *   Plain text message to send.
+ * @param array $options
+ *   Reserved for future use (e.g. channel overrides).
+ */
+function dropbridge_notify($uid, $message, $options = array()) {
+  $prefs = _dropbridge_notify_prefs($uid);
+  $bot_token = config_get('dropbridge.settings', 'slack_bot_token');
+
+  // Slack DM — requires a bot token and a per-user Slack member ID.
+  if (!empty($bot_token) && !empty($prefs['slack_user_id'])) {
+    dropbridge_slack_dm($prefs['slack_user_id'], $bot_token, $message);
+  }
+
+  // Future channels: email, dashboard alert.
+}
+
+/**
+ * Sends a Slack direct message to a specific user.
+ *
+ * @param string $slack_user_id
+ *   The recipient's Slack member ID (e.g. 'U0123ABC456').
+ * @param string $bot_token
+ *   The bot OAuth token (xoxb-...).
+ * @param string $message
+ *   Plain text message body.
+ *
+ * @return bool
+ *   TRUE on success, FALSE on failure.
+ */
+function dropbridge_slack_dm($slack_user_id, $bot_token, $message) {
+  $url  = 'https://slack.com/api/chat.postMessage';
+  $data = json_encode(array(
+    'channel' => $slack_user_id,
+    'text'    => $message,
+  ));
+
+  $response = backdrop_http_request($url, array(
+    'method'  => 'POST',
+    'headers' => array(
+      'Content-Type'  => 'application/json; charset=utf-8',
+      'Authorization' => 'Bearer ' . $bot_token,
+    ),
+    'data'    => $data,
+    'timeout' => 10,
+  ));
+
+  if ($response->code != 200) {
+    watchdog('dropbridge', 'Slack DM failed (HTTP @code) to @user.',
+      array('@code' => $response->code, '@user' => $slack_user_id), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $body = json_decode($response->data, TRUE);
+  if (empty($body['ok'])) {
+    watchdog('dropbridge', 'Slack DM error for @user: @error.',
+      array('@user' => $slack_user_id, '@error' => isset($body['error']) ? $body['error'] : 'unknown'),
+      WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Returns the notification prefs array for a given user.
+ *
+ * @param int $uid
+ *
+ * @return array
+ *   Keys: slack_user_id, workdays, work_start, work_end, reminder_offsets.
+ *   Returns an empty array if no prefs saved.
+ */
+function _dropbridge_notify_prefs($uid) {
+  $all = state_get('dropbridge.notify_prefs', array());
+  return isset($all[$uid]) ? $all[$uid] : array();
+}
+
+/**
+ * Returns hour options for time selects (0–23), formatted as 12-hour time.
+ *
+ * @return array
+ *   Hour (0–23) => label (e.g. "12:00 PM").
+ */
+function _dropbridge_hour_options() {
+  $options = array();
+  for ($h = 0; $h < 24; $h++) {
+    $suffix = $h < 12 ? 'AM' : 'PM';
+    $hour12 = $h % 12;
+    if ($hour12 === 0) {
+      $hour12 = 12;
+    }
+    $options[$h] = $hour12 . ':00 ' . $suffix;
+  }
+  return $options;
+}
+
+// ---------------------------------------------------------------------------
+// Cron: time entry reminders
+// ---------------------------------------------------------------------------
+
+/**
+ * Checks each configured user and sends a Slack DM if they haven't logged
+ * time since the start of their work day and a reminder window is active.
+ *
+ * Called from hook_cron(). Only fires when droptime is enabled.
+ *
+ * @param bool $force_debug
+ *   When TRUE, skips the hour-window check and the "already sent" guard,
+ *   regardless of the saved debug_mode setting. Used by the test button.
+ */
+function _dropbridge_cron_time_reminders($force_debug = FALSE) {
+  if (!module_exists('droptime')) {
+    return;
+  }
+
+  $bot_token = config_get('dropbridge.settings', 'slack_bot_token');
+  if (empty($bot_token)) {
+    return;
+  }
+
+  $debug = $force_debug || config_get('dropbridge.settings', 'slack_debug_mode');
+
+  $all_prefs = state_get('dropbridge.notify_prefs', array());
+  if (empty($all_prefs)) {
+    return;
+  }
+
+  foreach ($all_prefs as $uid => $prefs) {
+    // Skip if Slack user ID or reminder offsets not configured.
+    if (empty($prefs['slack_user_id']) || empty($prefs['reminder_offsets'])) {
+      continue;
+    }
+
+    $account = user_load($uid);
+    if (!$account || !$account->status) {
+      continue;
+    }
+
+    // Resolve the user's timezone.
+    $tz_name = (!empty($account->timezone)) ? $account->timezone : variable_get('date_default_timezone', 'UTC');
+    $tz      = new DateTimeZone($tz_name);
+    $now     = new DateTime('now', $tz);
+
+    // Check workday — skipped in debug mode.
+    $dow      = (int) $now->format('w'); // 0=Sun … 6=Sat
+    $workdays = isset($prefs['workdays']) ? $prefs['workdays'] : array(1, 2, 3, 4, 4);
+    if (!$debug && !in_array($dow, $workdays)) {
+      continue;
+    }
+
+    $current_hour = (int) $now->format('G');
+    $work_start   = isset($prefs['work_start']) ? (int) $prefs['work_start'] : 9;
+    $work_end     = isset($prefs['work_end'])   ? (int) $prefs['work_end']   : 18;
+
+    // Skip if outside work window — skipped in debug mode.
+    if (!$debug && ($current_hour < $work_start || $current_hour >= $work_end)) {
+      continue;
+    }
+
+    // The date string in the user's timezone, used for state keys.
+    $today_ymd = $now->format('Y-m-d');
+
+    // Timestamp for start of work day today (in user tz), as UTC.
+    $work_start_dt = new DateTime($today_ymd . ' ' . sprintf('%02d:00:00', $work_start), $tz);
+    $work_start_ts = $work_start_dt->getTimestamp();
+
+    // Check each reminder offset.
+    foreach ($prefs['reminder_offsets'] as $idx => $offset) {
+      $offset = (int) $offset;
+      if ($offset <= 0) {
+        continue;
+      }
+
+      // In normal mode, only fire if the current hour matches this reminder.
+      if (!$debug) {
+        $reminder_hour = ($work_start + $offset) % 24;
+        if ($current_hour !== $reminder_hour) {
+          continue;
+        }
+      }
+
+      // Has this reminder already fired today? Skip in debug mode.
+      $state_key = 'dropbridge.time_remind_' . $uid . '_' . $today_ymd . '_' . $idx;
+      if (!$debug && state_get($state_key)) {
+        continue;
+      }
+
+      // Count time entries logged for today (by date, not creation timestamp).
+      $entry_count = db_select('drop_time_entry', 'e')
+        ->condition('e.uid', $uid)
+        ->condition('e.entry_date', $today_ymd)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+
+      if ($entry_count > 0) {
+        if ($debug) {
+          watchdog('dropbridge', 'Debug: uid @uid has @count time entries since work start — no reminder sent.',
+            array('@uid' => $uid, '@count' => $entry_count), WATCHDOG_INFO);
+          $congrats = t('Nice work! You have already logged @count time @entries today. Keep it up!',
+            array(
+              '@count'   => $entry_count,
+              '@entries' => $entry_count == 1 ? t('entry') : t('entries'),
+            )
+          );
+          dropbridge_notify($uid, $congrats);
+          break;
+        }
+        else {
+          // Entries exist — mark as checked so we don't keep querying.
+          state_set($state_key, TRUE);
+        }
+        continue;
+      }
+
+      // No entries logged — send reminder.
+      $message = t("Heads up — you're @hours hours into your work day but haven't logged any time yet. Log time: @url",
+        array(
+          '@hours' => $offset,
+          '@url'   => url('drop/time', array('absolute' => TRUE)),
+        )
+      );
+
+      dropbridge_notify($uid, $message);
+
+      if (!$debug) {
+        state_set($state_key, TRUE);
+      }
+
+      watchdog('dropbridge', '@mode time reminder sent to uid @uid (offset @offset h).',
+        array(
+          '@mode'   => $debug ? 'Debug' : 'Scheduled',
+          '@uid'    => $uid,
+          '@offset' => $offset,
+        ),
+        WATCHDOG_INFO
+      );
+
+      // In debug mode, only send the first matching reminder to avoid spam.
+      if ($debug) {
+        break;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Personal calendar settings — user profile form
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_user_profile_form_alter().
+ *
+ * Adds "My Calendars" and "Time Reminders" fieldsets to the user profile form.
+ */
+function dropbridge_form_user_profile_form_alter(&$form, &$form_state) {
+  $account = $form['#user'];
+
+  // --- Notification / time reminder prefs ---
+  $prefs = _dropbridge_notify_prefs($account->uid);
+
+  $hour_options   = _dropbridge_hour_options();
+  $offset_options = array('' => t('— None —'));
+  for ($i = 1; $i <= 16; $i++) {
+    $offset_options[$i] = t('@h hour@s after start', array('@h' => $i, '@s' => $i === 1 ? '' : 's'));
+  }
+
+  $form['dropbridge_notifications'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Time Reminders'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#group'       => 'additional_settings',
+    '#weight'      => 9,
+    '#description' => t('Receive a Slack message if you haven\'t logged time during your work day. Requires a Slack bot token configured in <a href="@url">Drop settings</a> and your Slack member ID below.', array('@url' => url('drop/settings'))),
+  );
+
+  $form['dropbridge_notifications']['dropbridge_slack_user_id'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Slack member ID'),
+    '#default_value' => isset($prefs['slack_user_id']) ? $prefs['slack_user_id'] : '',
+    '#description'   => t('Your personal Slack member ID (e.g. <code>U0123ABC456</code>). Find it in Slack: click your name → Profile → ⋮ → Copy member ID.'),
+    '#size'          => 20,
+    '#placeholder'   => 'U…',
+  );
+
+  $workday_options = array(
+    1 => t('Mon'),
+    2 => t('Tue'),
+    3 => t('Wed'),
+    4 => t('Thu'),
+    5 => t('Fri'),
+    6 => t('Sat'),
+    0 => t('Sun'),
+  );
+  $form['dropbridge_notifications']['dropbridge_workdays'] = array(
+    '#type'          => 'checkboxes',
+    '#title'         => t('Work days'),
+    '#options'       => $workday_options,
+    '#default_value' => isset($prefs['workdays']) ? $prefs['workdays'] : array(1, 2, 3, 4, 4),
+    '#description'   => t('Days on which reminders can fire. Your timezone is taken from your <a href="@url">account settings</a>.', array('@url' => url('user/' . $account->uid . '/edit'))),
+  );
+
+  $form['dropbridge_notifications']['dropbridge_work_start'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Work day starts'),
+    '#options'       => $hour_options,
+    '#default_value' => isset($prefs['work_start']) ? $prefs['work_start'] : 9,
+    '#description'   => t('In your local timezone. Reminders will not fire before this time.'),
+  );
+
+  $form['dropbridge_notifications']['dropbridge_work_end'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Work day ends'),
+    '#options'       => $hour_options,
+    '#default_value' => isset($prefs['work_end']) ? $prefs['work_end'] : 18,
+    '#description'   => t('Reminders will not fire at or after this time.'),
+  );
+
+  $current_offsets = isset($prefs['reminder_offsets']) ? $prefs['reminder_offsets'] : array();
+  for ($i = 0; $i < 3; $i++) {
+    $form['dropbridge_notifications']['dropbridge_offset_' . $i] = array(
+      '#type'          => 'select',
+      '#title'         => t('Reminder @n', array('@n' => $i + 1)),
+      '#options'       => $offset_options,
+      '#default_value' => isset($current_offsets[$i]) ? $current_offsets[$i] : '',
+    );
+  }
+
+  // --- Personal calendars ---
+  $form['dropbridge_calendars'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('My Calendars'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#group'       => 'additional_settings',
+    '#weight'      => 10,
+    '#description' => t('Personal iCal feeds that appear only on your dashboard. One URL per line. Optionally add a label: <code>URL | Label</code>.'),
+  );
+
+  $personal_map = state_get('dropbridge.personal_calendars', array());
+  $current = isset($personal_map[$account->uid]) ? $personal_map[$account->uid] : '';
+
+  $form['dropbridge_calendars']['dropbridge_personal_ical'] = array(
+    '#type'          => 'textarea',
+    '#title'         => t('Personal iCal URL(s)'),
+    '#default_value' => $current,
+    '#rows'          => 4,
+    '#description'   => t('Find your private URL in Google Calendar: Settings → click a calendar → "Integrate calendar" → "Secret address in iCal format".'),
+  );
+
+  $form['#submit'][] = 'dropbridge_user_profile_form_submit';
+}
+
+/**
+ * Submit handler: saves personal calendar URLs and notification prefs.
+ */
+function dropbridge_user_profile_form_submit($form, &$form_state) {
+  $account  = $form['#user'];
+  $values   = $form_state['values'];
+
+  // Save personal calendar URLs.
+  $url_text     = trim($values['dropbridge_personal_ical']);
+  $personal_map = state_get('dropbridge.personal_calendars', array());
+  if ($url_text === '') {
+    unset($personal_map[$account->uid]);
+  }
+  else {
+    $personal_map[$account->uid] = $url_text;
+  }
+  state_set('dropbridge.personal_calendars', $personal_map);
+
+  // Save notification / time reminder prefs.
+  $all_prefs = state_get('dropbridge.notify_prefs', array());
+
+  $slack_user_id = trim($values['dropbridge_slack_user_id']);
+  $workdays      = array_keys(array_filter($values['dropbridge_workdays']));
+  $work_start    = (int) $values['dropbridge_work_start'];
+  $work_end      = (int) $values['dropbridge_work_end'];
+
+  $offsets = array();
+  for ($i = 0; $i < 3; $i++) {
+    $val = $values['dropbridge_offset_' . $i];
+    if ($val !== '' && (int) $val > 0) {
+      $offsets[] = (int) $val;
+    }
+  }
+
+  if (empty($slack_user_id) && empty($offsets)) {
+    unset($all_prefs[$account->uid]);
+  }
+  else {
+    $all_prefs[$account->uid] = array(
+      'slack_user_id'    => $slack_user_id,
+      'workdays'         => $workdays,
+      'work_start'       => $work_start,
+      'work_end'         => $work_end,
+      'reminder_offsets' => $offsets,
+    );
+  }
+
+  state_set('dropbridge.notify_prefs', $all_prefs);
+}
+
+// ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function dropbridge_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Dashboard'),
+      'path'       => 'drop',
+      'permission' => 'access dropbridge',
+      'weight'     => 0,
+    ),
+    array(
+      'title'      => t('Settings'),
+      'path'       => 'drop/settings',
+      'permission' => 'administer site configuration',
+      'weight'     => 100,
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Site announcement banner
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_preprocess_layout().
+ *
+ * Injects a dismissible site announcement banner above the messages area on
+ * every page for team members who have not yet dismissed the current message.
+ *
+ * Runs before layout_preprocess_layout() (weight 60) so that once we set
+ * $variables['messages'], layout will leave it alone.
+ */
+function dropbridge_preprocess_layout(&$variables) {
+  global $user;
+
+  if (!backdrop_is_html()) {
+    return;
+  }
+
+  if (!$user->uid || !user_access('access dropbridge')) {
+    return;
+  }
+
+  $text = (string) config_get('dropbridge.settings', 'announcement_text');
+  if (empty(trim($text))) {
+    return;
+  }
+
+  $hash = substr(md5($text), 0, 8);
+
+  // Check if this user has already dismissed this announcement.
+  $dismissed = state_get('dropbridge.announcement_dismissed_' . $user->uid, '');
+  if ($dismissed === $hash) {
+    return;
+  }
+
+  $dismiss_url = url('drop/announcement/dismiss', array('query' => array('h' => $hash, 'destination' => current_path())));
+
+  $banner  = '<div class="dropbridge-announcement" id="dropbridge-announcement">';
+  $banner .= '<span class="dropbridge-announcement-text">' . check_plain($text) . '</span>';
+  $banner .= '<a class="dropbridge-announcement-dismiss" href="' . $dismiss_url . '" title="' . t('Dismiss') . '">&#x2715;</a>';
+  $banner .= '</div>';
+
+  backdrop_add_css(backdrop_get_path('module', 'dropbridge') . '/dropbridge.css');
+
+  // Prepend banner to messages. Setting $variables['messages'] here prevents
+  // layout_preprocess_layout() from overwriting it.
+  $existing_messages = isset($variables['messages']) ? $variables['messages'] : theme('status_messages');
+  $variables['messages'] = $banner . $existing_messages;
+}
+
+/**
+ * Page callback: dismiss the current site announcement for the current user.
+ */
+function dropbridge_announcement_dismiss() {
+  global $user;
+
+  $hash = isset($_GET['h']) ? preg_replace('/[^a-f0-9]/', '', $_GET['h']) : '';
+  if ($hash) {
+    state_set('dropbridge.announcement_dismissed_' . $user->uid, $hash);
+  }
+
+  backdrop_goto(isset($_GET['destination']) ? $_GET['destination'] : 'drop');
+}

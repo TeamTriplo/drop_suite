@@ -1,0 +1,98 @@
+<?php
+/**
+ * @file
+ * Integrates DropCRM contacts with SimpleNews newsletter subscriptions.
+ *
+ * Adds a Newsletters tab to the contact view page where admins can subscribe
+ * or unsubscribe the contact from any available newsletter. Uses the contact's
+ * primary email address. Subscriptions are confirmed immediately (no opt-in
+ * email sent) since this is an admin-initiated action.
+ */
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function dropnewsletter_menu() {
+  // Keep the newsletters path accessible directly but not as a tab.
+  $items['drop/crm/contact/%crm_contact/newsletters'] = array(
+    'title'            => 'Newsletters',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropnewsletter_contact_form', 3),
+    'access callback'  => 'dropcrm_contact_access',
+    'access arguments' => array('edit', 3),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'dropnewsletter.pages.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_dropcrm_contact_view_alter().
+ *
+ * Injects the newsletter subscriptions section into the contact view page.
+ */
+function dropnewsletter_dropcrm_contact_view_alter(&$output, $contact) {
+  module_load_include('inc', 'dropnewsletter', 'dropnewsletter.pages');
+  $form = backdrop_get_form('dropnewsletter_contact_form', $contact);
+  $output['newsletters'] = array(
+    '#weight' => 35,
+    '#prefix' => dropcrm_accordion_prefix(t('Newsletter Subscriptions')),
+    '#suffix' => dropcrm_accordion_suffix(),
+    'form'    => $form,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the primary email address for a contact, or NULL if none exists.
+ *
+ * @param object $contact
+ *   CrmContact entity.
+ *
+ * @return string|NULL
+ */
+function dropnewsletter_get_primary_email($contact) {
+  $value = db_select('crm_contact_method', 'cm')
+    ->fields('cm', array('value'))
+    ->condition('cm.cid', $contact->cid)
+    ->condition('cm.type', 'email')
+    ->condition('cm.is_primary', 1)
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+  return $value ?: NULL;
+}
+
+/**
+ * Returns the current newsletter subscription status for an email address.
+ *
+ * @param string $mail
+ *   Email address to check.
+ *
+ * @return array
+ *   Array keyed by newsletter tid with status string:
+ *   'subscribed', 'unsubscribed', or absent if never interacted.
+ */
+function dropnewsletter_get_subscriptions($mail) {
+  $subscriber = simplenews_subscriber_load_by_mail($mail);
+  if (!$subscriber || empty($subscriber->newsletter_subscription)) {
+    return array();
+  }
+  $statuses = array();
+  foreach ($subscriber->newsletter_subscription as $tid => $subscription) {
+    if ($subscription->status == SIMPLENEWS_SUBSCRIPTION_STATUS_SUBSCRIBED) {
+      $statuses[$tid] = 'subscribed';
+    }
+    elseif ($subscription->status == SIMPLENEWS_SUBSCRIPTION_STATUS_UNSUBSCRIBED) {
+      $statuses[$tid] = 'unsubscribed';
+    }
+  }
+  return $statuses;
+}
