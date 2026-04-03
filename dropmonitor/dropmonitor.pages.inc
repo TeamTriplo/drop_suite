@@ -95,49 +95,6 @@ function dropmonitor_dashboard_page() {
           );
         }
 
-        // Updates.
-        if (isset($agent['pending_updates'])) {
-          $update_class = '';
-          if ($agent['pending_security'] > 0) {
-            $update_class = 'dropmonitor-warning';
-          }
-          $update_detail = '';
-          if ($agent['pending_security'] > 0) {
-            $update_detail = $agent['pending_security'] . ' ' . t('security');
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Updates'),
-            $agent['pending_updates'] . ' ' . t('pending'),
-            $update_detail,
-            $update_class
-          );
-        }
-
-        // PHP + Backdrop.
-        $versions = array();
-        if (!empty($agent['php_version'])) {
-          $versions[] = 'PHP ' . $agent['php_version'];
-        }
-        if (!empty($agent['backdrop_version'])) {
-          $versions[] = 'Backdrop ' . $agent['backdrop_version'];
-        }
-        if (!empty($versions)) {
-          $output .= _dropmonitor_metric_item(t('Stack'), implode(', ', $versions), '');
-        }
-
-        // Cron.
-        if (isset($agent['cron_age_hours'])) {
-          $cron_class = '';
-          if ($agent['cron_age_hours'] > 24) {
-            $cron_class = 'dropmonitor-warning';
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Cron'),
-            $agent['cron_age_hours'] . 'h ' . t('ago'),
-            '',
-            $cron_class
-          );
-        }
 
         // DB size.
         if (isset($agent['db_size_mb'])) {
@@ -157,6 +114,27 @@ function dropmonitor_dashboard_page() {
           isset($linode['region']) ? $linode['region'] : '',
           $linode_class
         );
+      }
+      // Show specs.
+      if (isset($linode['specs']) && is_array($linode['specs'])) {
+        $specs = $linode['specs'];
+        $specs_detail = array();
+        if (!empty($specs['vcpus'])) {
+          $specs_detail[] = $specs['vcpus'] . ' vCPU' . ($specs['vcpus'] != 1 ? 's' : '');
+        }
+        if (!empty($specs['memory'])) {
+          $specs_detail[] = round($specs['memory'] / 1024, 1) . ' GB RAM';
+        }
+        if (!empty($specs['disk'])) {
+          $specs_detail[] = round($specs['disk'] / 1024, 0) . ' GB disk';
+        }
+        if (!empty($specs_detail)) {
+          $output .= _dropmonitor_metric_item(
+            t('Resources'),
+            implode(', ', $specs_detail),
+            ''
+          );
+        }
       }
       if (isset($linode['transfer_used_gb'])) {
         $output .= _dropmonitor_metric_item(
@@ -251,11 +229,35 @@ function dropmonitor_server_detail_page($server) {
     if (!empty($data)) {
       $rows = array();
       foreach ($data as $key => $value) {
-        $display_value = is_array($value) ? '<pre>' . check_plain(json_encode($value, JSON_PRETTY_PRINT)) . '</pre>' : check_plain($value);
-        $rows[] = array(
-          array('data' => '<strong>' . check_plain($key) . '</strong>'),
-          $display_value,
-        );
+        if ($type === 'linode' && $key === 'specs' && is_array($value)) {
+          // Format Linode specs nicely.
+          $specs_output = '<ul style="margin: 5px 0; padding-left: 20px;">';
+          $specs_output .= !empty($value['disk']) ? '<li>Disk: ' . round($value['disk'] / 1024, 0) . ' GB</li>' : '';
+          $specs_output .= !empty($value['memory']) ? '<li>Memory: ' . $value['memory'] . ' MB (' . round($value['memory'] / 1024, 1) . ' GB)</li>' : '';
+          $specs_output .= !empty($value['vcpus']) ? '<li>vCPUs: ' . $value['vcpus'] . '</li>' : '';
+          $specs_output .= !empty($value['gpus']) && $value['gpus'] > 0 ? '<li>GPUs: ' . $value['gpus'] . '</li>' : '';
+          $specs_output .= !empty($value['transfer']) ? '<li>Transfer: ' . $value['transfer'] . ' GB/month</li>' : '';
+          $specs_output .= '</ul>';
+          $rows[] = array(
+            array('data' => '<strong>Specs</strong>'),
+            $specs_output,
+          );
+        }
+        elseif (is_array($value)) {
+          // Other arrays show as formatted JSON.
+          $display_value = '<pre>' . check_plain(json_encode($value, JSON_PRETTY_PRINT)) . '</pre>';
+          $rows[] = array(
+            array('data' => '<strong>' . check_plain($key) . '</strong>'),
+            $display_value,
+          );
+        }
+        else {
+          // Simple values.
+          $rows[] = array(
+            array('data' => '<strong>' . check_plain($key) . '</strong>'),
+            check_plain($value),
+          );
+        }
       }
       $output .= theme('table', array('rows' => $rows));
     }
