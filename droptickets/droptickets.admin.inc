@@ -856,10 +856,20 @@ function droptickets_settings_form($form, &$form_state) {
 
   $form['#config'] = 'droptickets.settings';
 
-  $form['notification_lifetime'] = array(
+  $form['statuses_link'] = array(
+    '#markup' => '<p>' . l(t('Manage statuses and Kanban lanes'), 'drop/tickets/settings/statuses') . '</p>',
+    '#weight' => -100,
+  );
+
+  // --- Notifications ---
+  $form['notifications'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Notifications'),
+  );
+  $form['notifications']['notification_lifetime'] = array(
     '#type'          => 'select',
     '#title'         => t('Delete notifications after'),
-    '#description'   => t('Notifications older than this will be deleted during cron. Choose "Never" to keep all notifications indefinitely.'),
+    '#description'   => t('Choose "Never" to keep all notifications indefinitely.'),
     '#options'       => array(
       0   => t('Never'),
       7   => t('7 days'),
@@ -870,28 +880,47 @@ function droptickets_settings_form($form, &$form_state) {
     ),
     '#default_value' => $config->get('notification_lifetime'),
   );
-
-  $form['jira_base_url'] = array(
-    '#type'          => 'textfield',
-    '#title'         => t('JIRA base URL'),
-    '#description'   => t('Your JIRA instance URL, e.g. <code>https://yourteam.atlassian.net</code>. Used to build ticket links when importing a CSV.'),
-    '#default_value' => $config->get('jira_base_url'),
-    '#maxlength'     => 255,
-  );
-
-  $form['slack_webhook_url'] = array(
+  $form['notifications']['slack_webhook_url'] = array(
     '#type'          => 'textfield',
     '#title'         => t('Slack webhook URL'),
-    '#description'   => t('Incoming webhook URL from Slack. When set, a message is posted to Slack whenever a new ticket is created. Leave blank to disable.'),
+    '#description'   => t('Posts to Slack when a new ticket is created. Leave blank to disable.'),
     '#default_value' => $config->get('slack_webhook_url'),
     '#maxlength'     => 512,
     '#placeholder'   => 'https://hooks.slack.com/services/…',
   );
+  $form['notifications']['reactions_enabled'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Enable emoji reactions'),
+    '#description'   => t('Reactions notify the ticket author.'),
+    '#default_value' => $config->get('reactions_enabled'),
+  );
 
-  $form['auto_close_days'] = array(
+  // --- Automation ---
+  $form['automation'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Automation'),
+  );
+
+  // Build status options from config for auto-close source/target.
+  $all_statuses = droptickets_status_options();
+
+  $form['automation']['auto_close_from'] = array(
     '#type'          => 'select',
-    '#title'         => t('Auto-close Done tickets after'),
-    '#description'   => t('Done tickets that have not been updated within this period will be automatically moved to Closed during cron. Choose "Never" to disable auto-closing.'),
+    '#title'         => t('Auto-close: source status'),
+    '#description'   => t('Tickets in this status will be auto-closed after the period below.'),
+    '#options'       => array('' => t('— Disabled —')) + $all_statuses,
+    '#default_value' => $config->get('auto_close_from') ?: 'done',
+  );
+  $form['automation']['auto_close_to'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Auto-close: target status'),
+    '#description'   => t('Status to move tickets to when auto-closed.'),
+    '#options'       => $all_statuses,
+    '#default_value' => $config->get('auto_close_to') ?: 'closed',
+  );
+  $form['automation']['auto_close_days'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Auto-close after'),
     '#options'       => array(
       0   => t('Never'),
       7   => t('7 days'),
@@ -903,11 +932,10 @@ function droptickets_settings_form($form, &$form_state) {
     ),
     '#default_value' => $config->get('auto_close_days') ?: 0,
   );
-
-  $form['stale_days'] = array(
+  $form['automation']['stale_days'] = array(
     '#type'          => 'select',
     '#title'         => t('Stale ticket threshold'),
-    '#description'   => t('Tickets not yet done and not updated within this many days appear in the Stale tickets report.'),
+    '#description'   => t('Tickets not updated within this many days appear in the Stale report.'),
     '#options'       => array(
       1  => t('1 day'),
       3  => t('3 days'),
@@ -921,79 +949,64 @@ function droptickets_settings_form($form, &$form_state) {
     '#default_value' => $config->get('stale_days'),
   );
 
-  $form['flag_soft_limit'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Flagged tickets soft limit'),
-    '#description'   => t('Show a warning when the number of flagged tickets exceeds this value.'),
-    '#options'       => array(
-      2  => t('2'),
-      4  => t('4'),
-      6  => t('6'),
-      8  => t('8'),
-      10 => t('10'),
-      12 => t('12'),
-      15 => t('15'),
-    ),
-    '#default_value' => $config->get('flag_soft_limit'),
+  // --- Display ---
+  $form['display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display'),
   );
-
-  // Kanban column soft limits.
-  $kanban_limits = $config->get('kanban_limits') ?: array();
-  $form['kanban_limits_fieldset'] = array(
-    '#type'        => 'fieldset',
-    '#title'       => t('Kanban column soft limits'),
-    '#description' => t('Show a warning on the Kanban board when a column exceeds this number of tickets. Set to 0 for no limit.'),
-    '#collapsible' => TRUE,
-    '#collapsed'   => TRUE,
-    '#tree'        => TRUE,
-  );
-  foreach (droptickets_kanban_statuses() as $status_key => $status_label) {
-    $form['kanban_limits_fieldset'][$status_key] = array(
-      '#type'          => 'number',
-      '#title'         => $status_label,
-      '#default_value' => isset($kanban_limits[$status_key]) ? (int) $kanban_limits[$status_key] : 0,
-      '#min'           => 0,
-      '#max'           => 999,
-      '#size'          => 4,
-    );
-  }
-
-  $form['comment_order'] = array(
+  $form['display']['comment_order'] = array(
     '#type'          => 'radios',
     '#title'         => t('Comment order'),
-    '#description'   => t('The order in which comments are displayed on ticket pages.'),
     '#options'       => array(
       'asc'  => t('Oldest first'),
       'desc' => t('Newest first'),
     ),
     '#default_value' => $config->get('comment_order') ?: 'asc',
   );
-
-  $form['reactions_enabled'] = array(
-    '#type'          => 'checkbox',
-    '#title'         => t('Enable emoji reactions'),
-    '#description'   => t('Allow team members to react to tickets and comments with emoji. Reactions notify the author.'),
-    '#default_value' => $config->get('reactions_enabled'),
+  $form['display']['flag_soft_limit'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Flagged tickets soft limit'),
+    '#description'   => t('Warn when flagged tickets exceed this count.'),
+    '#options'       => array(
+      2  => '2', 4 => '4', 6 => '6', 8 => '8',
+      10 => '10', 12 => '12', 15 => '15',
+    ),
+    '#default_value' => $config->get('flag_soft_limit'),
   );
 
+  // --- Team ---
+  $form['team'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Team'),
+  );
   $team = droptickets_assignee_options();
   $saved_defaults = $config->get('default_watchers');
-  // If nothing saved yet, default to everyone.
   $default_watcher_uids = ($saved_defaults !== NULL) ? $saved_defaults : array_keys($team);
-
-  $form['default_watchers'] = array(
+  $form['team']['default_watchers'] = array(
     '#type'        => 'checkboxes',
     '#title'       => t('Default watchers on new tickets'),
-    '#description' => t('Team members checked here will be pre-selected as watchers when creating a new ticket.'),
+    '#description' => t('Pre-selected as watchers when creating a new ticket.'),
     '#options'     => $team,
     '#default_value' => $default_watcher_uids,
   );
 
+  // --- Import ---
+  $form['import'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Import'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['import']['jira_base_url'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('JIRA base URL'),
+    '#description'   => t('e.g. <code>https://yourteam.atlassian.net</code>. Used for ticket links when importing CSV.'),
+    '#default_value' => $config->get('jira_base_url'),
+    '#maxlength'     => 255,
+  );
+
   $form = system_settings_form($form);
-  // Normalize checkboxes to a plain array of selected UIDs before saving.
   $form['#submit'][] = 'droptickets_settings_form_normalize_watchers';
-  // Save kanban limits separately (tree-structured, not auto-saved).
-  $form['#submit'][] = 'droptickets_settings_form_save_kanban_limits';
   return $form;
 }
 
@@ -1012,16 +1025,10 @@ function droptickets_settings_form_normalize_watchers($form, &$form_state) {
 }
 
 /**
- * Submit handler: save kanban column soft limits to config.
+ * Legacy submit handler — kanban limits are now managed on the statuses page.
  */
 function droptickets_settings_form_save_kanban_limits($form, &$form_state) {
-  if (isset($form_state['values']['kanban_limits_fieldset'])) {
-    $limits = array();
-    foreach ($form_state['values']['kanban_limits_fieldset'] as $key => $value) {
-      $limits[$key] = max(0, (int) $value);
-    }
-    config_set('droptickets.settings', 'kanban_limits', $limits);
-  }
+  // No-op. Kanban limits are now stored in droptickets.statuses config.
 }
 
 // ---------------------------------------------------------------------------
@@ -1300,5 +1307,411 @@ function droptickets_import_delete_form_submit($form, &$form_state) {
   ));
 
   $form_state['redirect'] = 'drop/tickets/import';
+}
+
+// -------------------------------------------------------------------------
+// Status management.
+// -------------------------------------------------------------------------
+
+/**
+ * Form for managing ticket statuses and kanban lanes.
+ */
+function droptickets_statuses_form($form, &$form_state) {
+  $form['#theme'] = 'droptickets_statuses_form';
+
+  $config = config('droptickets.statuses');
+  $statuses = $config->get('statuses');
+  if (empty($statuses) || !is_array($statuses)) {
+    $statuses = array();
+  }
+
+  // Sort by weight for display.
+  uasort($statuses, function($a, $b) {
+    return (isset($a['weight']) ? $a['weight'] : 0) - (isset($b['weight']) ? $b['weight'] : 0);
+  });
+
+  $form['#tree'] = TRUE;
+
+  $form['description'] = array(
+    '#markup' => '<p>' . t('Configure ticket statuses and which ones appear as Kanban board lanes. Statuses with the "Active" group appear in the default ticket list. "Inactive" statuses (Icebox, Closed) are hidden from default views.') . '</p>',
+  );
+
+  $group_options = array(
+    'active' => t('Active'),
+    'inactive' => t('Inactive'),
+  );
+
+  $form['statuses'] = array(
+    '#type' => 'container',
+  );
+
+  // Count tickets per status for delete warnings.
+  $ticket_counts = db_select('drop_ticket', 't')
+    ->fields('t', array('status'))
+    ->groupBy('t.status')
+    ->execute()
+    ->fetchAllKeyed(0, 0);
+  $ticket_counts_real = array();
+  $result = db_query('SELECT status, COUNT(*) AS cnt FROM {drop_ticket} GROUP BY status');
+  foreach ($result as $row) {
+    $ticket_counts_real[$row->status] = (int) $row->cnt;
+  }
+
+  $weight = 0;
+  foreach ($statuses as $key => $info) {
+    $count = isset($ticket_counts_real[$key]) ? $ticket_counts_real[$key] : 0;
+    $form['statuses'][$key] = array(
+      '#type' => 'container',
+    );
+    $form['statuses'][$key]['key'] = array(
+      '#markup' => '<code>' . check_plain($key) . '</code>',
+    );
+    $form['statuses'][$key]['delete'] = array(
+      '#markup' => l(t('delete'), 'drop/tickets/settings/statuses/' . $key . '/delete',
+        array('attributes' => array('class' => array('droptickets-status-delete')))),
+    );
+    $form['statuses'][$key]['label'] = array(
+      '#type' => 'textfield',
+      '#default_value' => isset($info['label']) ? $info['label'] : $key,
+      '#size' => 20,
+      '#maxlength' => 64,
+      '#required' => TRUE,
+    );
+    $form['statuses'][$key]['group'] = array(
+      '#type' => 'select',
+      '#options' => $group_options,
+      '#default_value' => isset($info['group']) ? $info['group'] : 'active',
+    );
+    $form['statuses'][$key]['kanban'] = array(
+      '#type' => 'checkbox',
+      '#default_value' => !empty($info['kanban']),
+    );
+    $form['statuses'][$key]['kanban_limit'] = array(
+      '#type' => 'number',
+      '#default_value' => isset($info['kanban_limit']) ? $info['kanban_limit'] : 0,
+      '#size' => 4,
+      '#min' => 0,
+      '#max' => 100,
+    );
+    $form['statuses'][$key]['weight'] = array(
+      '#type' => 'number',
+      '#default_value' => isset($info['weight']) ? $info['weight'] : $weight,
+      '#size' => 4,
+      '#min' => -50,
+      '#max' => 50,
+    );
+    $weight++;
+  }
+
+  // New status fields — rendered inline.
+  $form['new_status'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Add new status'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#attributes' => array('class' => array('droptickets-new-status')),
+  );
+  $form['new_status']['key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Machine name'),
+    '#required' => FALSE,
+    '#size' => 15,
+    '#maxlength' => 32,
+    '#attributes' => array('placeholder' => t('e.g. waiting_on_client')),
+    '#element_validate' => array('_droptickets_validate_status_key'),
+  );
+  $form['new_status']['label'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label'),
+    '#size' => 15,
+    '#maxlength' => 64,
+  );
+  $form['new_status']['group'] = array(
+    '#type' => 'select',
+    '#title' => t('Group'),
+    '#options' => $group_options,
+    '#default_value' => 'active',
+  );
+  $form['new_status']['kanban'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Kanban'),
+  );
+  $form['new_status']['kanban_limit'] = array(
+    '#type' => 'number',
+    '#title' => t('Limit'),
+    '#default_value' => 0,
+    '#min' => 0,
+    '#max' => 100,
+    '#size' => 3,
+  );
+  $form['new_status']['weight'] = array(
+    '#type' => 'number',
+    '#title' => t('Weight'),
+    '#default_value' => count($statuses),
+    '#size' => 3,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save statuses'),
+  );
+
+  return $form;
+}
+
+/**
+ * Element validate callback for status machine name.
+ */
+function _droptickets_validate_status_key($element, &$form_state) {
+  $value = $element['#value'];
+  if (empty($value)) {
+    return;
+  }
+  if (!preg_match('/^[a-z][a-z0-9_]*$/', $value)) {
+    form_error($element, t('Machine name must start with a lowercase letter and contain only lowercase letters, numbers, and underscores.'));
+    return;
+  }
+  $config = config('droptickets.statuses');
+  $statuses = $config->get('statuses');
+  if (isset($statuses[$value])) {
+    form_error($element, t('A status with the machine name %key already exists.', array('%key' => $value)));
+  }
+}
+
+/**
+ * Submit handler for statuses form.
+ */
+function droptickets_statuses_form_submit($form, &$form_state) {
+  $config = config('droptickets.statuses');
+  $values = $form_state['values'];
+
+  // Update existing statuses.
+  $statuses = array();
+  if (!empty($values['statuses'])) {
+    foreach ($values['statuses'] as $key => $data) {
+      $statuses[$key] = array(
+        'label' => $data['label'],
+        'group' => $data['group'],
+        'kanban' => (bool) $data['kanban'],
+        'kanban_limit' => (int) $data['kanban_limit'],
+        'weight' => (int) $data['weight'],
+      );
+    }
+  }
+
+  // Add new status if provided.
+  if (!empty($values['new_status']['key']) && !empty($values['new_status']['label'])) {
+    $new_key = $values['new_status']['key'];
+    $statuses[$new_key] = array(
+      'label' => $values['new_status']['label'],
+      'group' => $values['new_status']['group'],
+      'kanban' => (bool) $values['new_status']['kanban'],
+      'kanban_limit' => (int) $values['new_status']['kanban_limit'],
+      'weight' => (int) $values['new_status']['weight'],
+    );
+  }
+
+  $config->set('statuses', $statuses);
+  $config->save();
+
+  // Clear the static cache.
+  backdrop_static_reset('_droptickets_load_statuses');
+
+  backdrop_set_message(t('Statuses saved.'));
+}
+
+// -------------------------------------------------------------------------
+// Status delete with reassignment.
+// -------------------------------------------------------------------------
+
+/**
+ * Confirmation form for deleting a status.
+ *
+ * If tickets exist with this status, requires reassignment to another status
+ * before deletion.
+ */
+function droptickets_status_delete_form($form, &$form_state, $status_key) {
+  $config = config('droptickets.statuses');
+  $statuses = $config->get('statuses');
+
+  if (!isset($statuses[$status_key])) {
+    backdrop_set_message(t('Status %key does not exist.', array('%key' => $status_key)), 'error');
+    backdrop_goto('drop/tickets/settings/statuses');
+    return;
+  }
+
+  $info = $statuses[$status_key];
+  $form['#status_key'] = $status_key;
+
+  // Count tickets using this status.
+  $ticket_count = (int) db_select('drop_ticket', 't')
+    ->condition('status', $status_key)
+    ->countQuery()
+    ->execute()
+    ->fetchField();
+
+  $form['info'] = array(
+    '#markup' => '<p>' . t('You are about to delete the status %label (<code>@key</code>).', array(
+      '%label' => $info['label'],
+      '@key' => $status_key,
+    )) . '</p>',
+  );
+
+  if ($ticket_count > 0) {
+    $form['warning'] = array(
+      '#markup' => '<p class="messages warning">' . t('@count ticket(s) currently use this status. Choose a new status to reassign them to before deleting.', array(
+        '@count' => $ticket_count,
+      )) . '</p>',
+    );
+
+    // Build options from remaining statuses.
+    $options = array();
+    foreach ($statuses as $key => $s) {
+      if ($key !== $status_key) {
+        $options[$key] = $s['label'];
+      }
+    }
+
+    $form['reassign_to'] = array(
+      '#type' => 'select',
+      '#title' => t('Reassign tickets to'),
+      '#options' => $options,
+      '#required' => TRUE,
+    );
+  }
+
+  $form['ticket_count'] = array(
+    '#type' => 'value',
+    '#value' => $ticket_count,
+  );
+
+  $confirm_button = $ticket_count > 0 ? t('Reassign and delete') : t('Delete');
+  $confirm_description = $ticket_count === 0
+    ? t('No tickets use this status. It will be removed immediately.')
+    : '';
+
+  return confirm_form(
+    $form,
+    t('Delete status %label?', array('%label' => $info['label'])),
+    'drop/tickets/settings/statuses',
+    $confirm_description,
+    $confirm_button,
+    t('Cancel')
+  );
+}
+
+/**
+ * Submit handler for status delete form.
+ */
+function droptickets_status_delete_form_submit($form, &$form_state) {
+  $status_key = $form['#status_key'];
+  $config = config('droptickets.statuses');
+  $statuses = $config->get('statuses');
+  $label = isset($statuses[$status_key]) ? $statuses[$status_key]['label'] : $status_key;
+
+  // Reassign tickets if needed.
+  $ticket_count = $form_state['values']['ticket_count'];
+  if ($ticket_count > 0 && !empty($form_state['values']['reassign_to'])) {
+    $new_status = $form_state['values']['reassign_to'];
+    $updated = db_update('drop_ticket')
+      ->fields(array('status' => $new_status))
+      ->condition('status', $status_key)
+      ->execute();
+
+    $new_label = isset($statuses[$new_status]) ? $statuses[$new_status]['label'] : $new_status;
+    backdrop_set_message(t('Reassigned @count ticket(s) from %old to %new.', array(
+      '@count' => $updated,
+      '%old' => $label,
+      '%new' => $new_label,
+    )));
+
+    watchdog('droptickets', 'Reassigned @count tickets from status @old to @new during status deletion.', array(
+      '@count' => $updated,
+      '@old' => $status_key,
+      '@new' => $new_status,
+    ), WATCHDOG_INFO);
+  }
+
+  // Remove the status from config.
+  unset($statuses[$status_key]);
+  $config->set('statuses', $statuses);
+  $config->save();
+
+  backdrop_static_reset('_droptickets_load_statuses');
+
+  backdrop_set_message(t('Status %label deleted.', array('%label' => $label)));
+  watchdog('droptickets', 'Deleted ticket status @key (%label).', array(
+    '@key' => $status_key,
+    '%label' => $label,
+  ), WATCHDOG_INFO);
+
+  $form_state['redirect'] = 'drop/tickets/settings/statuses';
+}
+
+/**
+ * Theme function for the statuses form — renders as a table.
+ */
+function theme_droptickets_statuses_form($variables) {
+  $form = $variables['form'];
+
+  backdrop_add_css('
+    .droptickets-statuses-table td,
+    .droptickets-statuses-table th { padding: 4px 8px; vertical-align: middle; }
+    .droptickets-statuses-table input[type="text"],
+    .droptickets-statuses-table input[type="number"] { margin: 0; padding: 4px 6px; }
+    .droptickets-statuses-table select { margin: 0; padding: 2px 4px; }
+    .droptickets-statuses-table input[type="checkbox"] { margin: 0; }
+    .droptickets-statuses-table .form-item { margin: 0; }
+    .droptickets-new-status .fieldset-wrapper { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
+    .droptickets-new-status .form-item { margin: 0; }
+    .droptickets-new-status .form-item-new-status-kanban { align-self: center; padding-top: 1.2em; }
+  ', 'inline');
+
+  $header = array(
+    t('Label'),
+    t('Group'),
+    t('Kanban'),
+    t('Limit'),
+    t('Weight'),
+    '',
+  );
+
+  $rows = array();
+  if (isset($form['statuses'])) {
+    foreach (element_children($form['statuses']) as $key) {
+      // Add tabledrag class to the weight field.
+      $form['statuses'][$key]['weight']['#attributes']['class'][] = 'status-weight';
+
+      // Render key markup but don't show it as a column — hide it.
+      backdrop_render($form['statuses'][$key]['key']);
+
+      $rows[] = array(
+        'data' => array(
+          backdrop_render($form['statuses'][$key]['label']),
+          backdrop_render($form['statuses'][$key]['group']),
+          backdrop_render($form['statuses'][$key]['kanban']),
+          backdrop_render($form['statuses'][$key]['kanban_limit']),
+          backdrop_render($form['statuses'][$key]['weight']),
+          backdrop_render($form['statuses'][$key]['delete']),
+        ),
+        'class' => array('draggable'),
+      );
+    }
+  }
+
+  $output = theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'empty' => t('No statuses configured.'),
+    'attributes' => array('id' => 'droptickets-statuses-table', 'class' => array('droptickets-statuses-table')),
+  ));
+
+  backdrop_add_tabledrag('droptickets-statuses-table', 'order', 'sibling', 'status-weight');
+
+  // Render remaining form elements (new status fieldset, submit button).
+  $output .= backdrop_render_children($form);
+
+  return $output;
 }
 

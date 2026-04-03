@@ -14,7 +14,7 @@
 /* Server card */
 .dropmonitor-card {
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   border-top: 3px solid #94a3b8;
   padding: 0;
@@ -43,17 +43,18 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .dropmonitor-card-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .dropmonitor-card-header h3 a {
-  color: #1e293b;
+  color: #0f172a;
   text-decoration: none;
 }
 
@@ -94,7 +95,7 @@
 
 .dropmonitor-status-unknown {
   background: #f1f5f9;
-  color: #64748b;
+  color: #475569;
 }
 
 /* Metrics grid */
@@ -107,8 +108,8 @@
 
 .dropmonitor-metric {
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
-  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
 }
 
 .dropmonitor-metric:nth-child(2n) {
@@ -120,7 +121,8 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: #64748b;
+  font-weight: 600;
   margin-bottom: 2px;
 }
 
@@ -134,12 +136,12 @@
 .dropmonitor-metric-detail {
   display: block;
   font-size: 0.75rem;
-  color: #64748b;
+  color: #475569;
 }
 
 /* Metric alert colors */
 .dropmonitor-metric.dropmonitor-warning .dropmonitor-metric-value {
-  color: #d97706;
+  color: #b45309;
 }
 
 .dropmonitor-metric.dropmonitor-critical .dropmonitor-metric-value {
@@ -154,16 +156,18 @@
 .dropmonitor-card-footer {
   padding: 0.5rem 1rem;
   background: #f8fafc;
-  font-size: 0.75rem;
-  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  color: #64748b;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .dropmonitor-refresh-link {
-  color: #64748b;
+  color: #475569;
   text-decoration: none;
+  font-weight: 500;
 }
 
 .dropmonitor-refresh-link:hover {
@@ -176,7 +180,7 @@
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
   padding-bottom: 0.25rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #cbd5e1;
 }
 
 .dropmonitor-detail h3 .dropmonitor-status {
@@ -185,7 +189,7 @@
 }
 
 .dropmonitor-checked-at {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.85rem;
   margin: 0.25rem 0 0.5rem;
 }

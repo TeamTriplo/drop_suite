@@ -162,6 +162,18 @@ function dropbridge_menu() {
     'type'             => MENU_LOCAL_TASK,
     'weight'           => 20,
   );
+  // DropBridge settings — in the admin menu under Drop Suite.
+  $items['admin/drop/bridge'] = array(
+    'title'            => 'DropBridge settings',
+    'description'      => t('Configure Slack notifications, calendar feeds, and dashboard options.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/settings'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 5,
+  );
+
   // Inbound email settings — in the admin menu under Drop Suite.
   $items['admin/drop/inbound-email'] = array(
     'title'            => 'Inbound Email',

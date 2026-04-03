@@ -5,6 +5,42 @@
  */
 
 // ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_config_info().
+ */
+function droptickets_config_info() {
+  return array(
+    'droptickets.settings' => array(
+      'label' => t('DropTickets settings'),
+      'group' => t('Drop Suite'),
+    ),
+    'droptickets.statuses' => array(
+      'label' => t('DropTickets statuses'),
+      'group' => t('Drop Suite'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_theme().
+ */
+function droptickets_theme() {
+  return array(
+    'droptickets_statuses_form' => array(
+      'render element' => 'form',
+      'file' => 'droptickets.admin.inc',
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Autoload
 // ---------------------------------------------------------------------------
 
@@ -609,6 +645,17 @@ function droptickets_menu() {
     'weight'           => 10,
   );
 
+  $items['admin/drop/tickets/statuses'] = array(
+    'title'            => 'Ticket statuses',
+    'description'      => t('Manage ticket statuses and Kanban board lanes.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/tickets/settings/statuses'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 11,
+  );
+
   // Settings.
   $items['drop/tickets/settings'] = array(
     'title'            => 'Settings',
@@ -619,6 +666,25 @@ function droptickets_menu() {
     'file'             => 'droptickets.admin.inc',
     'type'             => MENU_LOCAL_TASK,
     'weight'           => 80,
+  );
+
+  // Status management.
+  $items['drop/tickets/settings/statuses'] = array(
+    'title'            => 'Manage Statuses',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_statuses_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.admin.inc',
+  );
+
+  $items['drop/tickets/settings/statuses/%/delete'] = array(
+    'title'            => 'Delete status',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptickets_status_delete_form', 4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptickets'),
+    'file'             => 'droptickets.admin.inc',
   );
 
   return $items;
@@ -759,23 +825,27 @@ function droptickets_cron() {
       ->execute();
   }
 
-  // Auto-close Done tickets after the configured number of days.
+  // Auto-close tickets: move from source status to target status after N days.
   $auto_close_days = (int) config_get('droptickets.settings', 'auto_close_days');
-  if ($auto_close_days > 0) {
+  $auto_close_from = config_get('droptickets.settings', 'auto_close_from');
+  $auto_close_to = config_get('droptickets.settings', 'auto_close_to');
+  if ($auto_close_days > 0 && !empty($auto_close_from) && !empty($auto_close_to)) {
     $cutoff = REQUEST_TIME - ($auto_close_days * 86400);
     $tids = db_select('drop_ticket', 't')
       ->fields('t', array('tid'))
-      ->condition('t.status', 'done')
+      ->condition('t.status', $auto_close_from)
       ->condition('t.changed', $cutoff, '<')
       ->execute()
       ->fetchCol();
     if ($tids) {
       db_update('drop_ticket')
-        ->fields(array('status' => 'closed', 'changed' => REQUEST_TIME))
+        ->fields(array('status' => $auto_close_to, 'changed' => REQUEST_TIME))
         ->condition('tid', $tids, 'IN')
         ->execute();
-      watchdog('droptickets', 'Auto-closed @count Done tickets older than @days days.', array(
+      watchdog('droptickets', 'Auto-closed @count tickets (from @from to @to) older than @days days.', array(
         '@count' => count($tids),
+        '@from'  => $auto_close_from,
+        '@to'    => $auto_close_to,
         '@days'  => $auto_close_days,
       ), WATCHDOG_INFO);
     }
@@ -1824,6 +1894,20 @@ function droptickets_type_options() {
  * Returns status options for discussion-type tickets.
  */
 function droptickets_discussion_status_options() {
+  $config = config('droptickets.statuses');
+  $disc = $config->get('discussion_statuses');
+  if (!empty($disc) && is_array($disc)) {
+    $options = array();
+    // Sort by weight.
+    uasort($disc, function($a, $b) {
+      return (isset($a['weight']) ? $a['weight'] : 0) - (isset($b['weight']) ? $b['weight'] : 0);
+    });
+    foreach ($disc as $key => $info) {
+      $options[$key] = t($info['label']);
+    }
+    return $options;
+  }
+  // Fallback if config is missing.
   return array(
     'disc_open'      => t('Open'),
     'disc_active'    => t('Active'),
@@ -1845,26 +1929,66 @@ function droptickets_all_status_options() {
 }
 
 /**
- * Returns ticket status options.
+ * Returns ticket status options (key => label), sorted by weight.
  */
 function droptickets_status_options() {
-  return array(
-    'icebox'      => t('Icebox'),
-    'open'        => t('Open'),
-    'todo'        => t('To Do'),
-    'in_progress' => t('In Progress'),
-    'in_review'   => t('In Review'),
-    'blocked'     => t('Blocked'),
-    'done'        => t('Done'),
-    'closed'      => t('Closed'),
-  );
+  $statuses = _droptickets_load_statuses();
+  $options = array();
+  foreach ($statuses as $key => $info) {
+    $options[$key] = t($info['label']);
+  }
+  return $options;
 }
 
 /**
- * Returns statuses considered "active" — everything except Icebox and Closed.
+ * Returns status keys considered "active" (group = active).
  */
 function droptickets_active_statuses() {
-  return array('open', 'todo', 'in_progress', 'in_review', 'blocked', 'done');
+  $statuses = _droptickets_load_statuses();
+  $active = array();
+  foreach ($statuses as $key => $info) {
+    if (isset($info['group']) && $info['group'] === 'active') {
+      $active[] = $key;
+    }
+  }
+  return $active;
+}
+
+/**
+ * Loads and caches the statuses config, sorted by weight.
+ *
+ * @return array
+ *   Associative array of status definitions keyed by machine name.
+ */
+function _droptickets_load_statuses() {
+  $statuses = &backdrop_static(__FUNCTION__);
+  if (isset($statuses)) {
+    return $statuses;
+  }
+
+  $config = config('droptickets.statuses');
+  $statuses = $config->get('statuses');
+
+  if (empty($statuses) || !is_array($statuses)) {
+    // Fallback if config is missing.
+    $statuses = array(
+      'icebox'      => array('label' => 'Icebox', 'group' => 'inactive', 'kanban' => FALSE, 'weight' => 0),
+      'open'        => array('label' => 'Open', 'group' => 'active', 'kanban' => FALSE, 'weight' => 1),
+      'todo'        => array('label' => 'To Do', 'group' => 'active', 'kanban' => TRUE, 'weight' => 2),
+      'in_progress' => array('label' => 'In Progress', 'group' => 'active', 'kanban' => TRUE, 'weight' => 3),
+      'in_review'   => array('label' => 'In Review', 'group' => 'active', 'kanban' => TRUE, 'weight' => 4),
+      'blocked'     => array('label' => 'Blocked', 'group' => 'active', 'kanban' => TRUE, 'weight' => 5),
+      'done'        => array('label' => 'Done', 'group' => 'active', 'kanban' => TRUE, 'weight' => 6),
+      'closed'      => array('label' => 'Closed', 'group' => 'inactive', 'kanban' => FALSE, 'weight' => 7),
+    );
+  }
+
+  // Sort by weight.
+  uasort($statuses, function($a, $b) {
+    return (isset($a['weight']) ? $a['weight'] : 0) - (isset($b['weight']) ? $b['weight'] : 0);
+  });
+
+  return $statuses;
 }
 
 /**
@@ -1892,15 +2016,18 @@ function _droptickets_status_select_html($selected) {
 
 /**
  * Returns the statuses shown on the Kanban board (in column order).
+ *
+ * Only statuses with kanban = TRUE are included, sorted by weight.
  */
 function droptickets_kanban_statuses() {
-  return array(
-    'todo'        => t('To Do'),
-    'in_progress' => t('In Progress'),
-    'in_review'   => t('In Review'),
-    'blocked'     => t('Blocked'),
-    'done'        => t('Done'),
-  );
+  $statuses = _droptickets_load_statuses();
+  $kanban = array();
+  foreach ($statuses as $key => $info) {
+    if (!empty($info['kanban'])) {
+      $kanban[$key] = t($info['label']);
+    }
+  }
+  return $kanban;
 }
 
 /**
@@ -2097,4 +2224,15 @@ function droptickets_drop_section_links($section) {
   );
 
   return $links;
+}
+
+/**
+ * Implements hook_preprocess_layout().
+ *
+ * Adds a body class on kanban pages so CSS can widen the content region.
+ */
+function droptickets_preprocess_layout(&$variables) {
+  if (strpos(current_path(), 'drop/tickets/kanban') === 0) {
+    $variables['classes'][] = 'layout-kanban-wide';
+  }
 }

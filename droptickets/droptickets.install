@@ -1067,6 +1067,74 @@ function droptickets_update_1025() {
 }
 
 /**
+ * Ensure the default "General" term exists in the drop_boards vocabulary.
+ */
+function droptickets_update_1026() {
+  $vocab = taxonomy_vocabulary_load('drop_boards');
+  if (!$vocab) {
+    return t('drop_boards vocabulary not found.');
+  }
+
+  // Check if a "General" term already exists.
+  $existing = taxonomy_term_load_multiple(array(), array(
+    'vocabulary' => 'drop_boards',
+    'name' => 'General',
+  ));
+  if (empty($existing)) {
+    $term = new TaxonomyTerm(array(
+      'name'       => 'General',
+      'vocabulary' => 'drop_boards',
+    ));
+    taxonomy_term_save($term);
+    return t('Created default "General" kanban board term.');
+  }
+
+  return t('"General" term already exists.');
+}
+
+/**
+ * Create field_drop_board field and instance if missing.
+ */
+function droptickets_update_1027() {
+  if (!field_info_field('field_drop_board')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_board',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_boards', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  if (!field_info_instance('drop_ticket', 'field_drop_board', 'drop_ticket')) {
+    field_create_instance(array(
+      'field_name'  => 'field_drop_board',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => 'Kanban Boards',
+      'required'    => FALSE,
+      'description' => 'Select which Kanban board(s) this ticket appears on.',
+      'widget'      => array(
+        'type'   => 'options_buttons',
+        'weight' => 22,
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'hidden',
+          'type'   => 'hidden',
+          'weight' => 22,
+        ),
+      ),
+    ));
+  }
+
+  return t('Created field_drop_board field and instance on drop_ticket.');
+}
+
+/**
  * Convert drop_ticket_reaction.emoji column to utf8mb4 for emoji support.
  * (Superseded by 1014 which reverts to ASCII codes instead.)
  */

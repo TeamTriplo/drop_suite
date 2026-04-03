@@ -582,6 +582,17 @@ function droptickets_member_page($account) {
 function droptickets_kanban_page() {
   backdrop_set_title(t('Kanban'));
 
+  // Verify the Kanban board field exists before attempting queries.
+  if (!db_table_exists('field_data_field_drop_board')) {
+    watchdog('droptickets', 'Kanban board failed to load: field_data_field_drop_board table is missing. Run database updates or reinstall the field.', array(), WATCHDOG_ERROR);
+    return '<div class="messages error">'
+      . '<h2>' . t('Kanban board is not available') . '</h2>'
+      . '<p>' . t('The Kanban Boards field has not been set up on this site. Please run <a href="@update_url">database updates</a> or contact your site administrator.', array(
+          '@update_url' => url('core/update.php'),
+        )) . '</p>'
+      . '</div>';
+  }
+
   $module_path = backdrop_get_path('module', 'droptickets');
   $output = array(
     '#attached' => array(
@@ -635,6 +646,7 @@ function droptickets_kanban_page() {
       . check_plain($name) . '</a>';
   }
   $switcher .= '</div>';
+  $output['controls_open'] = array('#markup' => '<div class="droptickets-kanban-controls">', '#weight' => -25);
   $output['board_switcher'] = array('#markup' => $switcher, '#weight' => -20);
 
   // --- Project filter ---
@@ -704,6 +716,7 @@ function droptickets_kanban_page() {
     '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $my_kanban_link . '</div>',
     '#weight' => -10,
   );
+  $output['controls_close'] = array('#markup' => '</div>', '#weight' => -5);
 
   // --- Base query ---
   $query = db_select('drop_ticket', 't')
@@ -803,7 +816,17 @@ function droptickets_kanban_page() {
   }
 
   // Load per-column soft limits.
-  $kanban_limits = config_get('droptickets.settings', 'kanban_limits') ?: array();
+  // Load per-lane limits from statuses config, falling back to old settings.
+  $all_statuses = _droptickets_load_statuses();
+  $kanban_limits = array();
+  foreach ($all_statuses as $skey => $sinfo) {
+    if (!empty($sinfo['kanban_limit'])) {
+      $kanban_limits[$skey] = (int) $sinfo['kanban_limit'];
+    }
+  }
+  if (empty($kanban_limits)) {
+    $kanban_limits = config_get('droptickets.settings', 'kanban_limits') ?: array();
+  }
 
   // Render board.
   $board = '<div class="droptickets-kanban">';

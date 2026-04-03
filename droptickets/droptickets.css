@@ -1134,10 +1134,17 @@ a.droptickets-flag-on svg,
    --------------------------------------------------------------------------- */
 
 
+/* Kanban controls — constrained width */
+.droptickets-kanban-controls {
+  max-width: 1600px;
+}
+
+/* Kanban board — centered, uses available space */
 .droptickets-kanban {
   display: flex;
   gap: 1rem;
   align-items: flex-start;
+  justify-content: center;
   overflow-x: auto;
   padding-bottom: 1.5rem;
   min-height: 200px;
@@ -1195,6 +1202,7 @@ a.droptickets-flag-on svg,
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 300px;
 }
 
 .droptickets-kanban-card {

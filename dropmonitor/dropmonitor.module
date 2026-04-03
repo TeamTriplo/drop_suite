@@ -149,6 +149,17 @@ function dropmonitor_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  // Admin menu link.
+  $items['admin/drop/monitor'] = array(
+    'title'            => 'Drop Monitor settings',
+    'description'      => t('Configure server monitoring, Linode API, and alert thresholds.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/monitor/settings'),
+    'access arguments' => array('administer dropmonitor'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 20,
+  );
+
   return $items;
 }
 
@@ -291,6 +302,7 @@ function dropmonitor_sync_servers_from_linode() {
   $api_token = $config->get('linode_api_token');
 
   if (empty($api_token)) {
+    watchdog('dropmonitor', 'Linode sync failed: No API token configured.', array(), WATCHDOG_WARNING);
     return array(
       'added' => 0,
       'updated' => 0,
@@ -298,10 +310,15 @@ function dropmonitor_sync_servers_from_linode() {
     );
   }
 
+  watchdog('dropmonitor', 'Starting Linode API sync.', array(), WATCHDOG_INFO);
+
   module_load_include('inc', 'dropmonitor', 'dropmonitor.checks');
   $instances = _dropmonitor_linode_api('linode/instances', $api_token);
 
   if (!$instances || !isset($instances['data'])) {
+    watchdog('dropmonitor', 'Linode sync failed: API returned no data. Response: @response', array(
+      '@response' => print_r($instances, TRUE),
+    ), WATCHDOG_ERROR);
     return array(
       'added' => 0,
       'updated' => 0,
@@ -381,6 +398,12 @@ function dropmonitor_sync_servers_from_linode() {
       $added++;
     }
   }
+
+  watchdog('dropmonitor', 'Linode sync complete: @added added, @updated updated out of @total instances.', array(
+    '@added' => $added,
+    '@updated' => $updated,
+    '@total' => count($instances['data']),
+  ), WATCHDOG_INFO);
 
   return array(
     'added' => $added,

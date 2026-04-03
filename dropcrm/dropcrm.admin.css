@@ -167,19 +167,20 @@ a.crm-hero-tag:hover {
    --------------------------------------------------------------------------- */
 
 .crm-section-accordion {
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  margin-bottom: 0.75rem;
-  background: #fff;
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0.25rem;
+  background: transparent;
 }
 
 .crm-section-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6em 1em;
-  background: #f5f5f5;
-  border-radius: 4px;
+  padding: 0.5em 0;
+  background: transparent;
+  border-bottom: 2px solid #e2e8f0;
+  border-radius: 0;
   cursor: pointer;
   user-select: none;
   list-style: none;
@@ -187,8 +188,8 @@ a.crm-hero-tag:hover {
 }
 
 .crm-section-accordion[open] > .crm-section-summary {
-  border-bottom: 1px solid #e0e0e0;
-  border-radius: 4px 4px 0 0;
+  border-bottom: 2px solid #cbd5e1;
+  border-radius: 0;
 }
 
 .crm-section-summary::-webkit-details-marker {
@@ -294,7 +295,39 @@ a.crm-method-edit-link:hover {
 }
 
 .crm-section-body {
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0;
+}
+
+/* Inline tags at bottom of contact view */
+.crm-tags-inline {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.crm-tags-label {
+  font-weight: 600;
+  color: #475569;
+  margin-right: 0.25em;
+}
+
+.crm-tags-inline .crm-hero-tag {
+  display: inline-block;
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.crm-section-help {
+  text-align: center;
+  font-size: 0.88em;
+  font-style: italic;
+  color: #64748b;
+  margin: 0.25em 0;
 }
 
 .crm-section-body > .views-element-container,

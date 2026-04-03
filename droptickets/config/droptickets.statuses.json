@@ -1,0 +1,67 @@
+{
+    "_config_name": "droptickets.statuses",
+    "statuses": {
+        "icebox": {
+            "label": "Icebox",
+            "group": "inactive",
+            "kanban": false,
+            "weight": 0
+        },
+        "open": {
+            "label": "Open",
+            "group": "active",
+            "kanban": false,
+            "weight": 1
+        },
+        "todo": {
+            "label": "To Do",
+            "group": "active",
+            "kanban": true,
+            "weight": 2
+        },
+        "in_progress": {
+            "label": "In Progress",
+            "group": "active",
+            "kanban": true,
+            "weight": 3
+        },
+        "in_review": {
+            "label": "In Review",
+            "group": "active",
+            "kanban": true,
+            "weight": 4
+        },
+        "blocked": {
+            "label": "Blocked",
+            "group": "active",
+            "kanban": true,
+            "weight": 5
+        },
+        "done": {
+            "label": "Done",
+            "group": "active",
+            "kanban": true,
+            "weight": 6
+        },
+        "closed": {
+            "label": "Closed",
+            "group": "inactive",
+            "kanban": false,
+            "weight": 7
+        }
+    },
+    "discussion_statuses": {
+        "disc_open": {
+            "label": "Open",
+            "weight": 0
+        },
+        "disc_active": {
+            "label": "Active",
+            "weight": 1
+        },
+        "disc_concluded": {
+            "label": "Concluded",
+            "weight": 2
+        }
+    }
+}

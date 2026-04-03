@@ -182,7 +182,7 @@ function dropmonitor_schema() {
 /**
  * Add Linode metadata columns to dropmonitor_server table.
  */
-function dropmonitor_update_7001(&$sandbox) {
+function dropmonitor_update_1001() {
   $spec = array(
     'description' => 'Disk allocation in GB from Linode.',
     'type' => 'int',

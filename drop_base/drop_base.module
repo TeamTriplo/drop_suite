@@ -843,6 +843,9 @@ function drop_base_form_user_admin_permissions_alter(&$form, &$form_state, $form
     'droptime',
     'droptickets',
     'dropdocs',
+    'dropemail',
+    'dropmonitor',
+    'dropnewsletter',
     'dropstrategic',
   );
 

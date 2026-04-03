@@ -103,11 +103,9 @@ function dropmonitor_servers_list() {
 
   // Sync button.
   $output .= '<div style="margin-bottom: 20px;">';
-  $sync_url = url('drop/monitor/servers/sync', array(
+  $output .= l(t('Sync from Linode API'), 'drop/monitor/servers/sync', array(
     'query' => array('token' => backdrop_get_token('dropmonitor-sync')),
-  ));
-  $output .= l(t('Sync from Linode API'), $sync_url, array(
-    'attributes' => array('class' => 'button button-primary'),
+    'attributes' => array('class' => array('button', 'button-primary')),
   ));
   $output .= '</div>';
 
@@ -299,8 +297,10 @@ function dropmonitor_server_delete_form_submit($form, &$form_state) {
  * Callback for syncing servers from Linode API.
  */
 function dropmonitor_sync_callback() {
-  if (!backdrop_valid_token($_GET['token'], 'dropmonitor-sync')) {
-    return MENU_NOT_FOUND;
+  if (!isset($_GET['token']) || !backdrop_valid_token($_GET['token'], 'dropmonitor-sync')) {
+    watchdog('dropmonitor', 'Sync attempt with invalid or missing CSRF token.', array(), WATCHDOG_WARNING);
+    backdrop_access_denied();
+    return;
   }
 
   $result = dropmonitor_sync_servers_from_linode();

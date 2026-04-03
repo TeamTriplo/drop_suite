@@ -86,6 +86,17 @@ function dropemail_menu() {
     'file'             => 'dropemail.admin.inc',
   );
 
+  // Admin menu link.
+  $items['admin/drop/email'] = array(
+    'title'            => 'Drop Email settings',
+    'description'      => t('Configure the default From address and name for outgoing emails.'),
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/admin/dropemail'),
+    'access arguments' => array('administer dropemail'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 15,
+  );
+
   return $items;
 }
 

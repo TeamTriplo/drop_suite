@@ -47,9 +47,9 @@ function _dropmonitor_check_http($server) {
   $data = array();
   $status = 'ok';
 
-  // HTTP response check.
+  // HTTP response check. Suppress notices from core when connections fail.
   $start = microtime(TRUE);
-  $response = backdrop_http_request($server->site_url, array('timeout' => 15));
+  @$response = backdrop_http_request($server->site_url, array('timeout' => 15));
   $elapsed_ms = round((microtime(TRUE) - $start) * 1000);
 
   $data['response_code'] = isset($response->code) ? (int) $response->code : 0;
@@ -151,10 +151,15 @@ function _dropmonitor_check_agent($server) {
   $alert_disk_percent = $config->get('alert_disk_percent');
 
   $url = $server->agent_url . '?token=' . urlencode($server->agent_token);
-  $response = backdrop_http_request($url, array('timeout' => 15));
+  @$response = backdrop_http_request($url, array('timeout' => 15));
 
   if (!isset($response->data) || $response->code != 200) {
     $error = isset($response->error) ? $response->error : 'No response';
+    watchdog('dropmonitor', 'Agent check failed for %label: @error (HTTP @code)', array(
+      '%label' => $server->label,
+      '@error' => $error,
+      '@code' => isset($response->code) ? $response->code : 0,
+    ), WATCHDOG_WARNING);
     dropmonitor_save_check($server->sid, 'agent', 'error', array(
       'error' => $error,
       'response_code' => isset($response->code) ? $response->code : 0,
@@ -164,6 +169,9 @@ function _dropmonitor_check_agent($server) {
 
   $data = json_decode($response->data, TRUE);
   if (!is_array($data)) {
+    watchdog('dropmonitor', 'Agent check for %label returned invalid JSON.', array(
+      '%label' => $server->label,
+    ), WATCHDOG_WARNING);
     dropmonitor_save_check($server->sid, 'agent', 'error', array(
       'error' => 'Invalid JSON response',
     ));
@@ -218,6 +226,10 @@ function _dropmonitor_check_linode($server) {
   // Get instance info.
   $instance = _dropmonitor_linode_api('linode/instances/' . $server->linode_id, $api_token);
   if (!$instance) {
+    watchdog('dropmonitor', 'Linode API check failed for %label (Linode ID: @id).', array(
+      '%label' => $server->label,
+      '@id' => $server->linode_id,
+    ), WATCHDOG_WARNING);
     dropmonitor_save_check($server->sid, 'linode', 'error', array(
       'error' => 'Failed to fetch Linode instance data',
     ));
@@ -260,7 +272,7 @@ function _dropmonitor_check_linode($server) {
  */
 function _dropmonitor_linode_api($endpoint, $api_token) {
   $url = 'https://api.linode.com/v4/' . $endpoint;
-  $response = backdrop_http_request($url, array(
+  @$response = backdrop_http_request($url, array(
     'headers' => array(
       'Authorization' => 'Bearer ' . $api_token,
       'Content-Type' => 'application/json',

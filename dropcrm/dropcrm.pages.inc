@@ -48,6 +48,36 @@ function dropcrm_contact_view(CrmContact $contact) {
     $output['actions'] = array('#markup' => drop_base_page_actions($actions), '#weight' => -100);
     $output['details'] = entity_view($contact, 'full');
     $output['details']['#weight'] = 0;
+
+    // Hide warmth from the entity display (shown only on reports).
+    if (isset($output['details']['crm_contact'][$contact->cid]['field_crm_warmth'])) {
+      unset($output['details']['crm_contact'][$contact->cid]['field_crm_warmth']);
+    }
+
+    // Move tags to bottom and render inline.
+    if (isset($output['details']['crm_contact'][$contact->cid]['field_drop_tags'])) {
+      $tags_element = $output['details']['crm_contact'][$contact->cid]['field_drop_tags'];
+      unset($output['details']['crm_contact'][$contact->cid]['field_drop_tags']);
+      // Re-render tags as inline label: value.
+      $tag_items = field_get_items('crm_contact', $contact, 'field_drop_tags');
+      if ($tag_items) {
+        $tag_names = array();
+        foreach ($tag_items as $item) {
+          if (!empty($item['tid'])) {
+            $term = taxonomy_term_load($item['tid']);
+            if ($term) {
+              $tag_names[] = '<span class="crm-hero-tag">' . check_plain($term->name) . '</span>';
+            }
+          }
+        }
+        if ($tag_names) {
+          $output['tags_bottom'] = array(
+            '#markup' => '<div class="crm-tags-inline"><span class="crm-tags-label">' . t('Tags:') . '</span> ' . implode(' ', $tag_names) . '</div>',
+            '#weight' => 200,
+          );
+        }
+      }
+    }
   }
 
   // --- Affiliated contacts (organizations only) ---
