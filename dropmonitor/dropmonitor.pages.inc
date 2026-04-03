@@ -424,6 +424,14 @@ function dropmonitor_uptime_dashboard() {
       $pct_html = '<span class="' . $pct_class . '">' . $pct . '%</span>';
     }
 
+    $check_link = '';
+    if (user_access('administer dropmonitor')) {
+      $check_link = l(t('Check now'), 'drop/monitor/uptime/' . $pid . '/check', array(
+        'query' => array('token' => backdrop_get_token('dropmonitor_check')),
+        'attributes' => array('class' => array('dropmonitor-check-now')),
+      ));
+    }
+
     $rows[] = array(
       l(check_plain($project->name), 'drop/monitor/uptime/' . $pid),
       '<span class="dropmonitor-metric-detail">' . l(check_plain($project->site_url), $project->site_url, array('external' => TRUE)) . '</span>',
@@ -431,8 +439,11 @@ function dropmonitor_uptime_dashboard() {
       $response,
       $pct_html,
       '<span class="dropmonitor-metric-detail">' . $checked . '</span>',
+      $check_link,
     );
   }
+
+  $header[] = '';
 
   $output = theme('table', array(
     'header' => $header,
@@ -521,4 +532,59 @@ function dropmonitor_uptime_detail_page($pid) {
   $output .= '<p>' . l(t('Back to uptime dashboard'), 'drop/monitor/uptime') . '</p>';
 
   return $output;
+}
+
+/**
+ * "Check now" callback — runs an immediate uptime check for one project.
+ *
+ * Clears alerts and banner state if the site is back up.
+ */
+function dropmonitor_uptime_check_now($pid) {
+  $pid = (int) $pid;
+
+  if (!isset($_GET['token']) || !backdrop_valid_token($_GET['token'], 'dropmonitor_check')) {
+    backdrop_access_denied();
+    return;
+  }
+
+  $project = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name', 'site_url'))
+    ->condition('pid', $pid)
+    ->execute()
+    ->fetchObject();
+
+  if (!$project || empty($project->site_url)) {
+    backdrop_set_message(t('Project not found or has no URL.'), 'error');
+    backdrop_goto('drop/monitor/uptime');
+    return;
+  }
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+  _dropmonitor_check_uptime($project);
+
+  // Report result.
+  $latest = db_select('dropmonitor_uptime', 'u')
+    ->fields('u')
+    ->condition('pid', $pid)
+    ->orderBy('checked', 'DESC')
+    ->range(0, 1)
+    ->execute()
+    ->fetchObject();
+
+  if ($latest && $latest->status) {
+    backdrop_set_message(t('%name is UP (HTTP @code, @ms ms).', array(
+      '%name' => $project->name,
+      '@code' => $latest->response_code,
+      '@ms' => $latest->response_ms,
+    )));
+  }
+  else {
+    $code = $latest ? $latest->response_code : 0;
+    backdrop_set_message(t('%name is still DOWN (HTTP @code).', array(
+      '%name' => $project->name,
+      '@code' => $code,
+    )), 'warning');
+  }
+
+  backdrop_goto('drop/monitor/uptime');
 }

@@ -226,6 +226,46 @@ function dropmonitor_schema() {
     ),
   );
 
+  // Active outage alerts — one row per project per team member.
+  $schema['dropmonitor_alert'] = array(
+    'description' => 'Active outage alerts for team members.',
+    'fields' => array(
+      'aid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'pid' => array(
+        'description' => 'Project ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'User ID to notify.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'is_read' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('aid'),
+    'indexes' => array(
+      'uid_read' => array('uid', 'is_read'),
+      'pid' => array('pid'),
+    ),
+  );
+
   return $schema;
 }
 
@@ -319,4 +359,15 @@ function dropmonitor_update_1002() {
     db_create_table('dropmonitor_uptime', $schema['dropmonitor_uptime']);
   }
   return t('Created uptime monitoring table.');
+}
+
+/**
+ * Create dropmonitor_alert table for outage notifications.
+ */
+function dropmonitor_update_1003() {
+  if (!db_table_exists('dropmonitor_alert')) {
+    $schema = dropmonitor_schema();
+    db_create_table('dropmonitor_alert', $schema['dropmonitor_alert']);
+  }
+  return t('Created outage alert table.');
 }

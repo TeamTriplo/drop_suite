@@ -46,6 +46,74 @@ function dropmonitor_init() {
 }
 
 /**
+ * Implements hook_page_build().
+ *
+ * Shows a site-wide banner when any project has been down for 30+ minutes.
+ */
+function dropmonitor_page_build(&$page) {
+  // Only show on drop/ pages and only to people who can access monitoring.
+  if (strpos(current_path(), 'drop/') !== 0 || !user_access('access dropmonitor')) {
+    return;
+  }
+
+  // Check for active outages over 30 minutes.
+  $outages = _dropmonitor_active_outages(30);
+  if (empty($outages)) {
+    return;
+  }
+
+  $items = array();
+  foreach ($outages as $outage) {
+    $duration = format_interval(REQUEST_TIME - $outage->down_since);
+    $items[] = t('<strong>@name</strong> has been down for @duration', array(
+      '@name' => $outage->name,
+      '@duration' => $duration,
+    )) . ' ' . l(t('Check now'), 'drop/monitor/uptime/' . $outage->pid . '/check', array(
+      'query' => array('token' => backdrop_get_token('dropmonitor_check')),
+    ));
+  }
+
+  $banner = '<div class="dropmonitor-outage-banner">';
+  $banner .= '<strong>' . t('Site outage alert:') . '</strong> ';
+  $banner .= implode(' &middot; ', $items);
+  $banner .= '</div>';
+
+  $page['content']['dropmonitor_banner'] = array(
+    '#markup' => $banner,
+    '#weight' => -999,
+  );
+
+  backdrop_add_css(backdrop_get_path('module', 'dropmonitor') . '/dropmonitor.css');
+}
+
+/**
+ * Returns active outages that have been down for at least $minutes.
+ */
+function _dropmonitor_active_outages($minutes = 30) {
+  $outages = array();
+  if (!db_table_exists('drop_project')) {
+    return $outages;
+  }
+
+  $projects = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name', 'site_url'))
+    ->condition('p.active', 1)
+    ->condition('p.site_url', '', '!=')
+    ->execute()
+    ->fetchAll();
+
+  foreach ($projects as $project) {
+    $down_since = state_get('dropmonitor.uptime_down_since.' . $project->pid, 0);
+    if ($down_since && (REQUEST_TIME - $down_since) >= ($minutes * 60)) {
+      $project->down_since = $down_since;
+      $outages[] = $project;
+    }
+  }
+
+  return $outages;
+}
+
+/**
  * Implements hook_menu().
  */
 function dropmonitor_menu() {
@@ -177,6 +245,16 @@ function dropmonitor_menu() {
     'file' => 'dropmonitor.pages.inc',
     'type' => MENU_LOCAL_TASK,
     'weight' => 5,
+  );
+
+  // Uptime check now (single project).
+  $items['drop/monitor/uptime/%/check'] = array(
+    'title' => 'Check now',
+    'page callback' => 'dropmonitor_uptime_check_now',
+    'page arguments' => array(3),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_CALLBACK,
   );
 
   // Uptime detail per project.

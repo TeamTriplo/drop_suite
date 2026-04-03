@@ -87,9 +87,10 @@ function _dropmonitor_uptime_state_change($project, $is_up, $code, $response_ms)
     return;
   }
 
-  // No change — but check for escalation if still down.
+  // No change — but check for team notification (10 min) and escalation (30 min).
   if ((int) $previous === $is_up) {
     if (!$is_up) {
+      _dropmonitor_check_team_notify($project);
       _dropmonitor_check_escalation($project);
     }
     return;
@@ -104,6 +105,14 @@ function _dropmonitor_uptime_state_change($project, $is_up, $code, $response_ms)
     $downtime = $down_since ? format_interval(REQUEST_TIME - $down_since) : t('unknown');
     state_del('dropmonitor.uptime_down_since.' . $project->pid);
     state_del('dropmonitor.uptime_escalated.' . $project->pid);
+    state_del('dropmonitor.uptime_team_notified.' . $project->pid);
+
+    // Clear all outage alerts for this project.
+    if (db_table_exists('dropmonitor_alert')) {
+      db_delete('dropmonitor_alert')
+        ->condition('pid', $project->pid)
+        ->execute();
+    }
 
     $message = ':white_check_mark: *' . $project->name . '* is BACK UP (was down for ' . $downtime . ')';
     watchdog('dropmonitor', '@name is back up after @duration downtime. Response: @code in @ms ms.', array(
@@ -131,6 +140,63 @@ function _dropmonitor_uptime_state_change($project, $is_up, $code, $response_ms)
     // Immediate alert to support channel only.
     _dropmonitor_slack_alert($message);
   }
+}
+
+/**
+ * Notifies all team members after 10 minutes of downtime.
+ *
+ * Creates alert entries in dropmonitor_alert for each team member.
+ * Fires once per outage.
+ */
+function _dropmonitor_check_team_notify($project) {
+  $notified = state_get('dropmonitor.uptime_team_notified.' . $project->pid, FALSE);
+  if ($notified) {
+    return;
+  }
+
+  $down_since = state_get('dropmonitor.uptime_down_since.' . $project->pid, 0);
+  if (!$down_since) {
+    return;
+  }
+
+  $down_minutes = (REQUEST_TIME - $down_since) / 60;
+  if ($down_minutes < 10) {
+    return;
+  }
+
+  state_set('dropmonitor.uptime_team_notified.' . $project->pid, TRUE);
+
+  if (!db_table_exists('dropmonitor_alert')) {
+    return;
+  }
+
+  // Get all users with the team_member role.
+  $team_uids = array();
+  $result = db_query("SELECT uid FROM {users_roles} WHERE role = 'team_member'");
+  foreach ($result as $row) {
+    $team_uids[] = (int) $row->uid;
+  }
+  // Always include uid 1.
+  if (!in_array(1, $team_uids)) {
+    $team_uids[] = 1;
+  }
+
+  foreach ($team_uids as $uid) {
+    db_insert('dropmonitor_alert')
+      ->fields(array(
+        'pid' => $project->pid,
+        'uid' => $uid,
+        'is_read' => 0,
+        'created' => REQUEST_TIME,
+      ))
+      ->execute();
+  }
+
+  watchdog('dropmonitor', 'Created outage alerts for @count team members: @name has been down for @min minutes.', array(
+    '@count' => count($team_uids),
+    '@name' => $project->name,
+    '@min' => round($down_minutes),
+  ), WATCHDOG_WARNING);
 }
 
 /**
