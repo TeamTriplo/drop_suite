@@ -1742,6 +1742,21 @@ function dropcrm_drop_nav_links() {
 }
 
 /**
+ * Implements hook_drop_settings_info().
+ */
+function dropcrm_drop_settings_info() {
+  return array(
+    'dropcrm' => array(
+      'title' => t('DropCRM'),
+      'description' => t('Contact types, fields, rating, outreach goals.'),
+      'path' => 'drop/crm/settings',
+      'permission' => 'administer crm',
+      'weight' => 0,
+    ),
+  );
+}
+
+/**
  * Implements hook_drop_section_links().
  */
 function dropcrm_drop_section_links($section) {

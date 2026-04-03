@@ -577,6 +577,15 @@ function drop_base_menu() {
     'type'             => MENU_NORMAL_ITEM,
   );
 
+  // Settings dashboard.
+  $items['drop/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'drop_base_settings_dashboard',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_base.pages.inc',
+  );
+
   // Drop Suite admin hub — visible in the Backdrop Configuration menu.
   $items['admin/drop'] = array(
     'title'            => 'Drop Suite',

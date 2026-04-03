@@ -151,16 +151,14 @@ function dropbridge_menu() {
     'type'             => MENU_CALLBACK,
   );
 
-  // Settings page.
-  $items['drop/settings'] = array(
-    'title'            => 'Settings',
+  // Settings page (moved from drop/settings to drop/settings/bridge).
+  $items['drop/settings/bridge'] = array(
+    'title'            => 'DropBridge Settings',
     'page callback'    => 'backdrop_get_form',
     'page arguments'   => array('dropbridge_settings_form'),
     'access callback'  => 'user_access',
     'access arguments' => array('administer site configuration'),
     'file'             => 'dropbridge.admin.inc',
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 20,
   );
   // DropBridge settings — in the admin menu under Drop Suite.
   $items['admin/drop/bridge'] = array(
@@ -803,6 +801,28 @@ function dropbridge_drop_nav_links() {
       'path'       => 'drop/settings',
       'permission' => 'administer site configuration',
       'weight'     => 100,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function dropbridge_drop_settings_info() {
+  return array(
+    'dropbridge' => array(
+      'title' => t('DropBridge'),
+      'description' => t('Dashboard, Slack notifications, and calendar feeds.'),
+      'path' => 'drop/settings/bridge',
+      'permission' => 'administer site configuration',
+      'weight' => 5,
+    ),
+    'dropbridge_inbound' => array(
+      'title' => t('Inbound Email'),
+      'description' => t('SendGrid inbound email processing and sender allowlist.'),
+      'path' => 'drop/settings/inbound',
+      'permission' => 'administer site configuration',
+      'weight' => 6,
     ),
   );
 }

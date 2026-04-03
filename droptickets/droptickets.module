@@ -2145,6 +2145,28 @@ function droptickets_drop_nav_links() {
 }
 
 /**
+ * Implements hook_drop_settings_info().
+ */
+function droptickets_drop_settings_info() {
+  return array(
+    'droptickets' => array(
+      'title' => t('DropTickets'),
+      'description' => t('Notifications, Slack, auto-close, stale thresholds, comment order.'),
+      'path' => 'drop/tickets/settings',
+      'permission' => 'administer droptickets',
+      'weight' => 10,
+    ),
+    'droptickets_statuses' => array(
+      'title' => t('Ticket Statuses'),
+      'description' => t('Manage statuses and Kanban board lanes.'),
+      'path' => 'drop/tickets/settings/statuses',
+      'permission' => 'administer droptickets',
+      'weight' => 11,
+    ),
+  );
+}
+
+/**
  * Implements hook_drop_section_nav_extras().
  */
 function droptickets_drop_section_nav_extras($section) {

@@ -177,6 +177,21 @@ function dropmonitor_drop_nav_links() {
 }
 
 /**
+ * Implements hook_drop_settings_info().
+ */
+function dropmonitor_drop_settings_info() {
+  return array(
+    'dropmonitor' => array(
+      'title' => t('Drop Monitor'),
+      'description' => t('Server monitoring, Linode API, alert thresholds.'),
+      'path' => 'drop/monitor/settings',
+      'permission' => 'administer dropmonitor',
+      'weight' => 20,
+    ),
+  );
+}
+
+/**
  * Menu loader for %dropmonitor_server.
  */
 function dropmonitor_server_load($sid) {

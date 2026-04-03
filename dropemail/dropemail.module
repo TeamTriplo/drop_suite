@@ -145,6 +145,21 @@ function _dropemail_ticket_access($ticket) {
  * Appends a "Send email" link to the contact hero action buttons when the
  * contact has a primary email address.
  */
+/**
+ * Implements hook_drop_settings_info().
+ */
+function dropemail_drop_settings_info() {
+  return array(
+    'dropemail' => array(
+      'title' => t('Drop Email'),
+      'description' => t('Default From address and name for outgoing emails.'),
+      'path' => 'drop/admin/dropemail',
+      'permission' => 'administer dropemail',
+      'weight' => 15,
+    ),
+  );
+}
+
 function dropemail_dropcrm_contact_hero_actions_alter(&$actions, $contact) {
   if (!user_access('send dropemail')) {
     return;
