@@ -2617,6 +2617,7 @@ function dropcrm_report_clients() {
 
   $cids = array_map(function($r) { return $r->cid; }, $results);
 
+  // Load status field values.
   $status_by_cid = array();
   $status_rows = db_select('field_data_field_crm_status', 's')
     ->fields('s', array('entity_id', 'field_crm_status_value'))
@@ -2627,6 +2628,39 @@ function dropcrm_report_clients() {
   foreach ($status_rows as $row) {
     $status_by_cid[$row->entity_id] = $row->field_crm_status_value;
   }
+
+  // Load warmth field values.
+  $warmth_by_cid = array();
+  if (db_table_exists('field_data_field_crm_warmth')) {
+    $warmth_rows = db_select('field_data_field_crm_warmth', 'w')
+      ->fields('w', array('entity_id', 'field_crm_warmth_value'))
+      ->condition('w.entity_id', $cids, 'IN')
+      ->condition('w.entity_type', 'crm_contact')
+      ->execute()
+      ->fetchAll();
+    foreach ($warmth_rows as $row) {
+      $warmth_by_cid[$row->entity_id] = $row->field_crm_warmth_value;
+    }
+  }
+
+  // Sort results by warmth (hot first, then warm, then cold/unset), then name.
+  $warmth_order = array('hot' => 0, 'warm' => 1, 'cold' => 2);
+  usort($results, function($a, $b) use ($warmth_by_cid, $warmth_order) {
+    $wa = isset($warmth_by_cid[$a->cid], $warmth_order[$warmth_by_cid[$a->cid]])
+      ? $warmth_order[$warmth_by_cid[$a->cid]] : 3;
+    $wb = isset($warmth_by_cid[$b->cid], $warmth_order[$warmth_by_cid[$b->cid]])
+      ? $warmth_order[$warmth_by_cid[$b->cid]] : 3;
+    if ($wa !== $wb) {
+      return $wa - $wb;
+    }
+    return strcasecmp($a->name, $b->name);
+  });
+
+  $warmth_labels = array(
+    'hot' => t('Hot'),
+    'warm' => t('Warm'),
+    'cold' => t('Cold'),
+  );
 
   $bundle_labels = array(
     'crm_person'       => t('Person'),
@@ -2643,20 +2677,43 @@ function dropcrm_report_clients() {
       ? '<span class="dropcrm-status-note">' . nl2br(check_plain($status_by_cid[$contact->cid])) . '</span>'
       : '<span class="dropcrm-status-empty">—</span>';
 
+    $warmth_val = isset($warmth_by_cid[$contact->cid]) ? $warmth_by_cid[$contact->cid] : '';
+    $warmth_display = isset($warmth_labels[$warmth_val]) ? $warmth_labels[$warmth_val] : '—';
+    $warmth_cell = '<span class="dropcrm-warmth dropcrm-warmth-' . $warmth_val . '">' . $warmth_display . '</span>';
+
+    $row_class = array();
+    if ($warmth_val === 'hot') {
+      $row_class[] = 'dropcrm-row-hot';
+    }
+    elseif ($warmth_val === 'warm') {
+      $row_class[] = 'dropcrm-row-warm';
+    }
+
     $rows[] = array(
-      l(check_plain($contact->name), 'drop/crm/contacts/' . $contact->cid . '/edit', $link_options),
-      check_plain($type_label),
-      array('data' => $status_note, 'class' => array('dropcrm-col-status')),
+      'data' => array(
+        l(check_plain($contact->name), 'drop/crm/contacts/' . $contact->cid . '/edit', $link_options),
+        check_plain($type_label),
+        array('data' => $warmth_cell, 'class' => array('dropcrm-col-warmth')),
+        array('data' => $status_note, 'class' => array('dropcrm-col-status')),
+      ),
+      'class' => $row_class,
     );
   }
 
-  $output  = theme('table', array(
-    'header'     => array(t('Name'), t('Type'), t('Status')),
+  $table  = theme('table', array(
+    'header'     => array(t('Name'), t('Type'), t('Warmth'), t('Status')),
     'rows'       => $rows,
     'attributes' => array('class' => array('dropcrm-clients-table')),
     'empty'      => t('No contacts found.'),
   ));
-  $output .= '<p class="dropcrm-report-count">' . format_plural(count($rows), '1 client', '@count clients') . '</p>';
+  $table .= '<p class="dropcrm-report-count">' . format_plural(count($rows), '1 client', '@count clients') . '</p>';
+
+  $output = array(
+    '#markup' => $table,
+    '#attached' => array(
+      'css' => array(backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css'),
+    ),
+  );
 
   return $output;
 }

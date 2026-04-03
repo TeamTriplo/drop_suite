@@ -1185,3 +1185,50 @@ function dropcrm_update_1020() {
     '@d' => count($rids),
   ));
 }
+
+/**
+ * Add field_crm_warmth (Hot/Warm/Cold) to crm_organization bundle.
+ */
+function dropcrm_update_1021() {
+  // Create the field if it doesn't exist.
+  if (!field_info_field('field_crm_warmth')) {
+    $field = array(
+      'field_name' => 'field_crm_warmth',
+      'type' => 'list_text',
+      'cardinality' => 1,
+      'settings' => array(
+        'allowed_values' => array(
+          'hot' => 'Hot',
+          'warm' => 'Warm',
+          'cold' => 'Cold',
+        ),
+      ),
+    );
+    field_create_field($field);
+  }
+
+  // Attach to crm_organization bundle if not already present.
+  if (!field_info_instance('crm_contact', 'field_crm_warmth', 'crm_organization')) {
+    $instance = array(
+      'field_name' => 'field_crm_warmth',
+      'entity_type' => 'crm_contact',
+      'bundle' => 'crm_organization',
+      'label' => t('Warmth'),
+      'description' => t('Client engagement level.'),
+      'widget' => array(
+        'type' => 'options_select',
+        'weight' => 3,
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'inline',
+          'type' => 'list_default',
+          'weight' => 3,
+        ),
+      ),
+    );
+    field_create_instance($instance);
+  }
+
+  return t('Added Warmth field (Hot/Warm/Cold) to organizations.');
+}

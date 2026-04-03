@@ -732,3 +732,31 @@ a.crm-method-edit-link:hover {
   width: 16px;
   height: 16px;
 }
+
+/* Client warmth indicators */
+.dropcrm-warmth {
+  font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dropcrm-warmth-hot {
+  color: #dc2626;
+}
+
+.dropcrm-warmth-warm {
+  color: #d97706;
+}
+
+.dropcrm-warmth-cold {
+  color: #94a3b8;
+}
+
+.dropcrm-clients-table tr.dropcrm-row-hot td {
+  background-color: #fef2f2;
+}
+
+.dropcrm-clients-table tr.dropcrm-row-warm td {
+  background-color: #fffbeb;
+}
