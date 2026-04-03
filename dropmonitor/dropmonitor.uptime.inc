@@ -130,9 +130,11 @@ function _dropmonitor_uptime_state_change($project, $is_up, $code, $response_ms)
     // Site went down — immediate alert.
     state_set('dropmonitor.uptime_down_since.' . $project->pid, REQUEST_TIME);
 
-    $message = ':red_circle: *' . $project->name . '* is DOWN (HTTP ' . $code . ')';
-    watchdog('dropmonitor', '@name is DOWN. HTTP @code, response time @ms ms.', array(
+    $reason = _dropmonitor_http_reason($code);
+    $message = ':red_circle: *' . $project->name . '* is DOWN — ' . $reason;
+    watchdog('dropmonitor', '@name is DOWN. @reason (HTTP @code, @ms ms).', array(
       '@name' => $project->name,
+      '@reason' => $reason,
       '@code' => $code,
       '@ms' => $response_ms,
     ), WATCHDOG_ERROR);
@@ -364,4 +366,46 @@ function dropmonitor_uptime_latest() {
   $query->join($subquery, 'latest', 'u.pid = latest.pid AND u.checked = latest.max_checked');
 
   return $query->execute()->fetchAllAssoc('pid');
+}
+
+/**
+ * Returns a human-readable reason for an HTTP response code.
+ */
+function _dropmonitor_http_reason($code) {
+  $reasons = array(
+    0   => t('Connection timeout — server may be unreachable'),
+    400 => t('Bad request'),
+    401 => t('Authentication required'),
+    403 => t('Access forbidden — check server configuration'),
+    404 => t('Page not found — check URL'),
+    408 => t('Request timeout'),
+    500 => t('Internal server error — check application logs'),
+    502 => t('Bad gateway — upstream server not responding'),
+    503 => t('Service unavailable — server overloaded or in maintenance'),
+    504 => t('Gateway timeout — upstream server too slow'),
+    520 => t('Unknown error (Cloudflare)'),
+    521 => t('Web server is down (Cloudflare)'),
+    522 => t('Connection timed out (Cloudflare)'),
+    523 => t('Origin is unreachable (Cloudflare)'),
+    524 => t('Timeout occurred (Cloudflare)'),
+  );
+
+  if (isset($reasons[$code])) {
+    return $reasons[$code];
+  }
+
+  if ($code >= 200 && $code < 300) {
+    return t('OK');
+  }
+  if ($code >= 300 && $code < 400) {
+    return t('Redirect');
+  }
+  if ($code >= 400 && $code < 500) {
+    return t('Client error (HTTP @code)', array('@code' => $code));
+  }
+  if ($code >= 500) {
+    return t('Server error (HTTP @code)', array('@code' => $code));
+  }
+
+  return t('Unknown (HTTP @code)', array('@code' => $code));
 }

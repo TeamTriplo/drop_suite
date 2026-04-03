@@ -406,10 +406,14 @@ function dropmonitor_uptime_dashboard() {
     if (isset($latest[$pid])) {
       $check = $latest[$pid];
       $is_up = (int) $check->status;
+      $reason = _dropmonitor_http_reason((int) $check->response_code);
       $status_html = $is_up
         ? '<span class="dropmonitor-up">' . t('UP') . '</span>'
         : '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
       $response = $check->response_code . ' <span class="dropmonitor-metric-detail">(' . $check->response_ms . 'ms)</span>';
+      if (!$is_up) {
+        $response .= '<br><span class="dropmonitor-metric-detail">' . $reason . '</span>';
+      }
       $checked = format_interval(REQUEST_TIME - $check->checked, 1) . ' ' . t('ago');
     }
     else {
@@ -501,12 +505,13 @@ function dropmonitor_uptime_detail_page($pid) {
     $output .= '<p>' . t('No uptime data recorded yet.') . '</p>';
   }
   else {
-    $header = array(t('Time'), t('Status'), t('HTTP'), t('Response time'));
+    $header = array(t('Time'), t('Status'), t('HTTP'), t('Reason'), t('Response time'));
     $rows = array();
     foreach ($checks as $check) {
       $status_html = $check->status
         ? '<span class="dropmonitor-up">' . t('UP') . '</span>'
         : '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
+      $reason = $check->status ? '' : _dropmonitor_http_reason((int) $check->response_code);
 
       $row_class = $check->status ? array() : array('dropmonitor-row-down');
       $rows[] = array(
@@ -514,6 +519,7 @@ function dropmonitor_uptime_detail_page($pid) {
           format_date($check->checked, 'short'),
           $status_html,
           $check->response_code,
+          $reason,
           $check->response_ms . 'ms',
         ),
         'class' => $row_class,
