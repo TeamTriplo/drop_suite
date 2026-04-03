@@ -202,3 +202,35 @@
   width: 200px;
   white-space: nowrap;
 }
+
+/* Uptime indicators */
+.dropmonitor-up {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.dropmonitor-down {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.dropmonitor-warning-text {
+  color: #d97706;
+  font-weight: 700;
+}
+
+/* Uptime table */
+.dropmonitor-uptime-table td {
+  vertical-align: middle;
+}
+
+/* Downtime row highlight in log */
+.dropmonitor-uptime-log tr.dropmonitor-row-down td {
+  background-color: #fef2f2;
+}
+
+.dropmonitor-report-count {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}

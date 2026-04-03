@@ -18,6 +18,35 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#maxlength' => 255,
   );
 
+  $uptime_token = $config->get('uptime_token');
+  $form['uptime_token'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Uptime check token'),
+    '#description' => t('Shared secret for the uptime check endpoint. Add this to your system crontab: <code>*/10 * * * * curl -s "@url?token=YOUR_TOKEN"</code>', array(
+      '@url' => url('drop/monitor/uptime-check', array('absolute' => TRUE)),
+    )),
+    '#default_value' => $uptime_token,
+    '#maxlength' => 128,
+  );
+
+  $form['slack_alert_channel'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Slack alert channel ID'),
+    '#description' => t('Channel for immediate outage notifications (e.g. #support-notifications). Find the ID in channel details.'),
+    '#default_value' => $config->get('slack_alert_channel'),
+    '#maxlength' => 32,
+    '#placeholder' => 'C0123ABC456',
+  );
+
+  $form['slack_escalation_channel'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Slack escalation channel ID'),
+    '#description' => t('Channel for sustained outage alerts after 30 minutes (e.g. #escalated-notifications). Set audio notifications on this channel.'),
+    '#default_value' => $config->get('slack_escalation_channel'),
+    '#maxlength' => 32,
+    '#placeholder' => 'C0123ABC456',
+  );
+
   $form['check_interval'] = array(
     '#type' => 'select',
     '#title' => t('Check interval'),
@@ -83,6 +112,9 @@ function dropmonitor_settings_form($form, &$form_state) {
 function dropmonitor_settings_form_submit($form, &$form_state) {
   $config = config('dropmonitor.settings');
   $config->set('linode_api_token', $form_state['values']['linode_api_token']);
+  $config->set('uptime_token', $form_state['values']['uptime_token']);
+  $config->set('slack_alert_channel', $form_state['values']['slack_alert_channel']);
+  $config->set('slack_escalation_channel', $form_state['values']['slack_escalation_channel']);
   $config->set('check_interval', $form_state['values']['check_interval']);
   $config->set('alert_disk_percent', $form_state['values']['alert_disk_percent']);
   $config->set('alert_cert_days', $form_state['values']['alert_cert_days']);

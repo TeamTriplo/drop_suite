@@ -361,3 +361,164 @@ function _dropmonitor_metric_item($label, $value, $detail = '', $class = '') {
   $output .= '</div>';
   return $output;
 }
+
+// -------------------------------------------------------------------------
+// Uptime monitoring pages.
+// -------------------------------------------------------------------------
+
+/**
+ * Uptime dashboard — shows all projects with URLs and their current status.
+ */
+function dropmonitor_uptime_dashboard() {
+  backdrop_set_title(t('Uptime Monitor'));
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+
+  // Get all active projects with site URLs.
+  $projects = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name', 'site_url'))
+    ->condition('p.active', 1)
+    ->condition('p.site_url', '', '!=')
+    ->orderBy('p.name')
+    ->execute()
+    ->fetchAll();
+
+  if (empty($projects)) {
+    return '<p>' . t('No projects have a Website URL configured. Add a URL to a project to enable uptime monitoring.') . '</p>';
+  }
+
+  $latest = dropmonitor_uptime_latest();
+
+  $header = array(
+    t('Project'),
+    t('URL'),
+    t('Status'),
+    t('Response'),
+    t('Uptime (14d)'),
+    t('Last checked'),
+  );
+
+  $rows = array();
+  foreach ($projects as $project) {
+    $pid = $project->pid;
+    $pct = dropmonitor_uptime_percentage($pid, 14);
+
+    if (isset($latest[$pid])) {
+      $check = $latest[$pid];
+      $is_up = (int) $check->status;
+      $status_html = $is_up
+        ? '<span class="dropmonitor-up">' . t('UP') . '</span>'
+        : '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
+      $response = $check->response_code . ' <span class="dropmonitor-metric-detail">(' . $check->response_ms . 'ms)</span>';
+      $checked = format_interval(REQUEST_TIME - $check->checked, 1) . ' ' . t('ago');
+    }
+    else {
+      $status_html = '<span class="dropmonitor-status-unknown">' . t('No data') . '</span>';
+      $response = '—';
+      $checked = t('Never');
+    }
+
+    $pct_html = '—';
+    if ($pct !== NULL) {
+      $pct_class = $pct >= 99.5 ? 'dropmonitor-up' : ($pct >= 95 ? 'dropmonitor-warning-text' : 'dropmonitor-down');
+      $pct_html = '<span class="' . $pct_class . '">' . $pct . '%</span>';
+    }
+
+    $rows[] = array(
+      l(check_plain($project->name), 'drop/monitor/uptime/' . $pid),
+      '<span class="dropmonitor-metric-detail">' . l(check_plain($project->site_url), $project->site_url, array('external' => TRUE)) . '</span>',
+      $status_html,
+      $response,
+      $pct_html,
+      '<span class="dropmonitor-metric-detail">' . $checked . '</span>',
+    );
+  }
+
+  $output = theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array('class' => array('dropmonitor-uptime-table')),
+  ));
+
+  $output .= '<p class="dropmonitor-report-count">' . format_plural(count($projects), '1 project monitored', '@count projects monitored') . '</p>';
+
+  return $output;
+}
+
+/**
+ * Uptime detail page for a single project.
+ */
+function dropmonitor_uptime_detail_page($pid) {
+  $pid = (int) $pid;
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+
+  $project = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name', 'site_url'))
+    ->condition('pid', $pid)
+    ->execute()
+    ->fetchObject();
+
+  if (!$project) {
+    return MENU_NOT_FOUND;
+  }
+
+  backdrop_set_title(t('Uptime: @name', array('@name' => $project->name)));
+
+  $pct = dropmonitor_uptime_percentage($pid, 14);
+
+  $output = '<div class="dropmonitor-detail">';
+
+  // Summary.
+  $output .= '<p>';
+  $output .= t('URL: ') . l(check_plain($project->site_url), $project->site_url, array('external' => TRUE));
+  if ($pct !== NULL) {
+    $output .= ' &middot; ' . t('14-day uptime: <strong>@pct%</strong>', array('@pct' => $pct));
+  }
+  $output .= '</p>';
+
+  // Recent checks log.
+  $checks = db_select('dropmonitor_uptime', 'u')
+    ->fields('u')
+    ->condition('pid', $pid)
+    ->orderBy('checked', 'DESC')
+    ->range(0, 200)
+    ->execute()
+    ->fetchAll();
+
+  if (empty($checks)) {
+    $output .= '<p>' . t('No uptime data recorded yet.') . '</p>';
+  }
+  else {
+    $header = array(t('Time'), t('Status'), t('HTTP'), t('Response time'));
+    $rows = array();
+    foreach ($checks as $check) {
+      $status_html = $check->status
+        ? '<span class="dropmonitor-up">' . t('UP') . '</span>'
+        : '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
+
+      $row_class = $check->status ? array() : array('dropmonitor-row-down');
+      $rows[] = array(
+        'data' => array(
+          format_date($check->checked, 'short'),
+          $status_html,
+          $check->response_code,
+          $check->response_ms . 'ms',
+        ),
+        'class' => $row_class,
+      );
+    }
+    $output .= theme('table', array(
+      'header' => $header,
+      'rows' => $rows,
+      'attributes' => array('class' => array('dropmonitor-uptime-log')),
+    ));
+  }
+
+  $output .= '</div>';
+
+  // Back link.
+  $output .= '<p>' . l(t('Back to uptime dashboard'), 'drop/monitor/uptime') . '</p>';
+
+  return $output;
+}

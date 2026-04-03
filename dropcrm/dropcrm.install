@@ -60,6 +60,13 @@ function dropcrm_schema() {
         'not null'    => TRUE,
         'default'     => 0,
       ),
+      'site_url' => array(
+        'description' => 'Website URL for the project (used by uptime monitoring).',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
       'uid' => array(
         'type'     => 'int',
         'unsigned' => TRUE,
@@ -1231,4 +1238,20 @@ function dropcrm_update_1021() {
   }
 
   return t('Added Warmth field (Hot/Warm/Cold) to organizations.');
+}
+
+/**
+ * Add site_url column to drop_project for uptime monitoring.
+ */
+function dropcrm_update_1022() {
+  if (!db_field_exists('drop_project', 'site_url')) {
+    db_add_field('drop_project', 'site_url', array(
+      'description' => 'Website URL for the project (used by uptime monitoring).',
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => TRUE,
+      'default' => '',
+    ));
+  }
+  return t('Added site_url column to drop_project.');
 }

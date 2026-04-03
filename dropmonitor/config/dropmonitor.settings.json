@@ -1,6 +1,9 @@
 {
     "_config_name": "dropmonitor.settings",
     "linode_api_token": "",
+    "uptime_token": "",
+    "slack_alert_channel": "",
+    "slack_escalation_channel": "",
     "check_interval": 3600,
     "alert_disk_percent": 10,
     "alert_cert_days": 14,

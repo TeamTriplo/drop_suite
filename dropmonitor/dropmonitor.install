@@ -176,6 +176,56 @@ function dropmonitor_schema() {
     ),
   );
 
+  // Uptime log — one row per check per project.
+  $schema['dropmonitor_uptime'] = array(
+    'description' => 'Uptime check log for project websites.',
+    'fields' => array(
+      'uid' => array(
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'pid' => array(
+        'description' => 'Project ID from drop_project.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'status' => array(
+        'description' => '1 = up, 0 = down.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'response_code' => array(
+        'description' => 'HTTP response code.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'response_ms' => array(
+        'description' => 'Response time in milliseconds.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'checked' => array(
+        'description' => 'Unix timestamp of this check.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('uid'),
+    'indexes' => array(
+      'pid' => array('pid'),
+      'pid_checked' => array('pid', 'checked'),
+      'status' => array('status'),
+    ),
+  );
+
   return $schema;
 }
 
@@ -258,4 +308,15 @@ function dropmonitor_update_1001() {
   if (!db_field_exists('dropmonitor_server', 'linode_created')) {
     db_add_field('dropmonitor_server', 'linode_created', $spec);
   }
+}
+
+/**
+ * Create dropmonitor_uptime table for project uptime monitoring.
+ */
+function dropmonitor_update_1002() {
+  if (!db_table_exists('dropmonitor_uptime')) {
+    $schema = dropmonitor_schema();
+    db_create_table('dropmonitor_uptime', $schema['dropmonitor_uptime']);
+  }
+  return t('Created uptime monitoring table.');
 }

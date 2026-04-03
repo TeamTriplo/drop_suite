@@ -2460,6 +2460,15 @@ function dropcrm_project_form($form, &$form_state, $project = NULL) {
     '#description'   => t('Used to identify this project in the time log and reports.'),
   );
 
+  $form['site_url'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Website URL'),
+    '#default_value' => $is_edit && !empty($project->site_url) ? $project->site_url : '',
+    '#maxlength'     => 255,
+    '#description'   => t('The primary URL for this project (e.g. https://example.com). Used for uptime monitoring.'),
+    '#placeholder'   => 'https://',
+  );
+
   $form['active'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Active'),
@@ -2525,9 +2534,10 @@ function dropcrm_project_form_submit($form, &$form_state) {
     $project = entity_create('drop_project', array());
   }
 
-  $project->name   = trim($values['name']);
-  $project->color  = $values['color'];
-  $project->active = (int) $values['active'];
+  $project->name     = trim($values['name']);
+  $project->color    = $values['color'];
+  $project->site_url = trim($values['site_url']);
+  $project->active   = (int) $values['active'];
 
   // Parse cid from autocomplete value.
   $raw = trim($values['cid_autocomplete']);

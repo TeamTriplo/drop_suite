@@ -160,6 +160,35 @@ function dropmonitor_menu() {
     'weight'           => 20,
   );
 
+  // Uptime check endpoint (called by system cron every 10 minutes).
+  $items['drop/monitor/uptime-check'] = array(
+    'title' => 'Uptime check',
+    'page callback' => 'dropmonitor_uptime_check_endpoint',
+    'access callback' => TRUE,
+    'file' => 'dropmonitor.uptime.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Uptime dashboard.
+  $items['drop/monitor/uptime'] = array(
+    'title' => 'Uptime',
+    'page callback' => 'dropmonitor_uptime_dashboard',
+    'access arguments' => array('access dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 5,
+  );
+
+  // Uptime detail per project.
+  $items['drop/monitor/uptime/%'] = array(
+    'title' => 'Uptime log',
+    'page callback' => 'dropmonitor_uptime_detail_page',
+    'page arguments' => array(3),
+    'access arguments' => array('access dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
 }
 
@@ -214,17 +243,57 @@ function dropmonitor_server_title($server) {
  * Implements hook_cron().
  */
 function dropmonitor_cron() {
+  // Server checks (Linode API, HTTP, agent) — run on configurable interval.
   $config = config('dropmonitor.settings');
   $interval = $config->get('check_interval');
-  $last_run = state_get('dropmonitor_last_cron', 0);
+  $last_server_check = state_get('dropmonitor_last_cron', 0);
 
-  if ((REQUEST_TIME - $last_run) < $interval) {
-    return;
+  if ((REQUEST_TIME - $last_server_check) >= $interval) {
+    module_load_include('inc', 'dropmonitor', 'dropmonitor.checks');
+    dropmonitor_run_all_checks();
+    state_set('dropmonitor_last_cron', REQUEST_TIME);
   }
 
-  module_load_include('inc', 'dropmonitor', 'dropmonitor.checks');
-  dropmonitor_run_all_checks();
-  state_set('dropmonitor_last_cron', REQUEST_TIME);
+  // Uptime checks — run every time cron fires (ideally every 10 minutes).
+  $last_uptime = state_get('dropmonitor_last_uptime', 0);
+  if ((REQUEST_TIME - $last_uptime) >= 540) { // At least 9 minutes apart.
+    module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+    if (db_table_exists('dropmonitor_uptime')) {
+      dropmonitor_run_uptime_checks();
+      state_set('dropmonitor_last_uptime', REQUEST_TIME);
+    }
+  }
+
+  // Purge old uptime "up" records daily.
+  $last_purge = state_get('dropmonitor_last_purge', 0);
+  if ((REQUEST_TIME - $last_purge) >= 86400) {
+    module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+    dropmonitor_uptime_purge(14);
+    state_set('dropmonitor_last_purge', REQUEST_TIME);
+  }
+}
+
+/**
+ * Uptime check endpoint — called by system cron every 10 minutes.
+ *
+ * Example crontab entry:
+ *   *​/10 * * * * curl -s "https://support.simplo.site/drop/monitor/uptime-check?token=SECRET"
+ */
+function dropmonitor_uptime_check_endpoint() {
+  $config = config('dropmonitor.settings');
+  $token = $config->get('uptime_token');
+
+  if (empty($token) || !isset($_GET['token']) || $_GET['token'] !== $token) {
+    backdrop_add_http_header('Status', '403 Forbidden');
+    backdrop_json_output(array('error' => 'Invalid token'));
+    backdrop_exit();
+  }
+
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+  dropmonitor_run_uptime_checks();
+
+  backdrop_json_output(array('status' => 'ok', 'time' => REQUEST_TIME));
+  backdrop_exit();
 }
 
 // -------------------------------------------------------------------------
