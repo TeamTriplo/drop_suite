@@ -112,6 +112,13 @@ function dropmonitor_schema() {
         'length' => 45,
         'not null' => FALSE,
       ),
+      'origin_ip' => array(
+        'description' => 'Origin IP to bypass CDN (e.g. Cloudflare) for agent checks.',
+        'type' => 'varchar',
+        'length' => 45,
+        'not null' => TRUE,
+        'default' => '',
+      ),
       'linode_created' => array(
         'description' => 'Unix timestamp when created on Linode.',
         'type' => 'int',
@@ -359,6 +366,22 @@ function dropmonitor_update_1002() {
     db_create_table('dropmonitor_uptime', $schema['dropmonitor_uptime']);
   }
   return t('Created uptime monitoring table.');
+}
+
+/**
+ * Add origin_ip column to dropmonitor_server for CDN bypass.
+ */
+function dropmonitor_update_1004() {
+  if (!db_field_exists('dropmonitor_server', 'origin_ip')) {
+    db_add_field('dropmonitor_server', 'origin_ip', array(
+      'description' => 'Origin IP to bypass CDN (e.g. Cloudflare) for agent checks.',
+      'type' => 'varchar',
+      'length' => 45,
+      'not null' => TRUE,
+      'default' => '',
+    ));
+  }
+  return t('Added origin IP field for CDN bypass.');
 }
 
 /**

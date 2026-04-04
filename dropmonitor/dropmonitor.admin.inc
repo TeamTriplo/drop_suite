@@ -221,6 +221,14 @@ function dropmonitor_server_form($form, &$form_state, $server = NULL) {
     '#maxlength' => 128,
   );
 
+  $form['origin_ip'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Origin IP'),
+    '#description' => t('If this server is behind Cloudflare or another CDN, enter the origin server IP here. Agent checks will hit the IP directly, bypassing the CDN.'),
+    '#default_value' => $server ? $server->origin_ip : '',
+    '#maxlength' => 45,
+  );
+
   $form['linode_id'] = array(
     '#type' => 'number',
     '#title' => t('Linode ID'),
@@ -268,6 +276,7 @@ function dropmonitor_server_form_submit($form, &$form_state) {
     'site_url' => $values['site_url'],
     'agent_url' => $values['agent_url'],
     'agent_token' => $values['agent_token'],
+    'origin_ip' => $values['origin_ip'],
     'linode_id' => !empty($values['linode_id']) ? (int) $values['linode_id'] : NULL,
     'active' => (int) $values['active'],
     'weight' => (int) $values['weight'],

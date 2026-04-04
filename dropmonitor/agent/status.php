@@ -68,6 +68,16 @@ if ($apt_output) {
 
 $data['php_version'] = PHP_VERSION;
 
+// ---- OS version -----------------------------------------------------------
+
+$data['os_version'] = '';
+if (is_readable('/etc/os-release')) {
+  $os_release = parse_ini_file('/etc/os-release');
+  if (!empty($os_release['PRETTY_NAME'])) {
+    $data['os_version'] = $os_release['PRETTY_NAME'];
+  }
+}
+
 // ---- Server uptime --------------------------------------------------------
 
 $data['uptime_seconds'] = 0;

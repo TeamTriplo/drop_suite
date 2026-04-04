@@ -151,7 +151,30 @@ function _dropmonitor_check_agent($server) {
   $alert_disk_percent = $config->get('alert_disk_percent');
 
   $url = $server->agent_url . '?token=' . urlencode($server->agent_token);
-  @$response = backdrop_http_request($url, array('timeout' => 15));
+
+  $options = array('timeout' => 15);
+
+  // If an origin IP is set, rewrite the URL to hit the IP directly and pass
+  // the original hostname as a Host header. This bypasses CDNs like Cloudflare.
+  if (!empty($server->origin_ip)) {
+    $parsed = parse_url($url);
+    $host = $parsed['host'];
+    $scheme = isset($parsed['scheme']) ? $parsed['scheme'] : 'https';
+    $path = isset($parsed['path']) ? $parsed['path'] : '/';
+    $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
+    $url = $scheme . '://' . $server->origin_ip . $path . $query;
+    $options['headers'] = array('Host' => $host);
+    // Tell SSL to verify against the original hostname, not the IP.
+    $options['context'] = stream_context_create(array(
+      'ssl' => array(
+        'peer_name' => $host,
+        'verify_peer' => TRUE,
+        'verify_peer_name' => TRUE,
+      ),
+    ));
+  }
+
+  @$response = backdrop_http_request($url, $options);
 
   if (!isset($response->data) || $response->code != 200) {
     $error = isset($response->error) ? $response->error : 'No response';

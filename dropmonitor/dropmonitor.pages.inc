@@ -113,16 +113,18 @@ function dropmonitor_dashboard_page() {
           );
         }
 
-        // PHP + Backdrop version.
-        $versions = array();
-        if (!empty($agent['php_version'])) {
-          $versions[] = 'PHP ' . $agent['php_version'];
-        }
-        if (!empty($agent['backdrop_version'])) {
-          $versions[] = 'Backdrop ' . $agent['backdrop_version'];
-        }
-        if (!empty($versions)) {
-          $output .= _dropmonitor_metric_item(t('Stack'), implode(', ', $versions), '');
+        // PHP + Backdrop + OS version.
+        if (!empty($agent['php_version']) || !empty($agent['backdrop_version'])) {
+          $php_short = !empty($agent['php_version']) ? preg_replace('/[-+].*$/', '', $agent['php_version']) : '';
+          $value = $php_short ? 'PHP ' . $php_short : 'Backdrop ' . $agent['backdrop_version'];
+          $details = array();
+          if ($php_short && !empty($agent['backdrop_version'])) {
+            $details[] = 'Backdrop ' . $agent['backdrop_version'];
+          }
+          if (!empty($agent['os_version'])) {
+            $details[] = check_plain($agent['os_version']);
+          }
+          $output .= _dropmonitor_metric_item(t('Stack'), $value, implode('<br>', $details));
         }
 
         // Cron.
@@ -161,21 +163,19 @@ function dropmonitor_dashboard_page() {
       // Show specs.
       if (isset($linode['specs']) && is_array($linode['specs'])) {
         $specs = $linode['specs'];
-        $specs_detail = array();
+        $cpu_ram = array();
         if (!empty($specs['vcpus'])) {
-          $specs_detail[] = $specs['vcpus'] . ' vCPU' . ($specs['vcpus'] != 1 ? 's' : '');
+          $cpu_ram[] = $specs['vcpus'] . ' vCPUs';
         }
         if (!empty($specs['memory'])) {
-          $specs_detail[] = round($specs['memory'] / 1024, 1) . ' GB RAM';
+          $cpu_ram[] = round($specs['memory'] / 1024, 1) . ' GB RAM';
         }
-        if (!empty($specs['disk'])) {
-          $specs_detail[] = round($specs['disk'] / 1024, 0) . ' GB disk';
-        }
-        if (!empty($specs_detail)) {
+        $disk_detail = !empty($specs['disk']) ? round($specs['disk'] / 1024, 0) . ' GB disk' : '';
+        if (!empty($cpu_ram)) {
           $output .= _dropmonitor_metric_item(
             t('Resources'),
-            implode(', ', $specs_detail),
-            ''
+            implode(', ', $cpu_ram),
+            $disk_detail
           );
         }
       }

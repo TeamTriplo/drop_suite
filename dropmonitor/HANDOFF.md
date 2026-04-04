@@ -24,8 +24,10 @@ Drop Suite collection of modules.
 ### Remote (live)
 
 - **support.simplo.site** — the production support site on the `simplo` Linode (104.237.157.18)
-- The `status.php` agent has been deployed to `support.simplo.site/status.php` and is working
-- The module has NOT been deployed to the live site yet (the `modules/drop/` directory on the remote is owned by root, so rsync as the `triplo` user fails — needs `sudo chown -R triplo:triplo /var/www/triplo/support/simplo/src/modules/drop/` on the server first)
+- Module is deployed and running at `support.simplo.site/drop/monitor`
+- Push code with: `~/bin/push-to-support.sh dropmonitor` (or no args for all modules)
+- Cache must be cleared manually after push (bee not available at expected path on remote)
+- Database updates must be run manually after schema changes
 
 ## Module architecture
 
@@ -60,6 +62,7 @@ The Linode API only reports disk *allocation* (how much of the plan's disk is as
 | `dropmonitor.css` | Dashboard card layout, status badges, metric grid styling |
 | `config/dropmonitor.settings.json` | Default config values |
 | `agent/status.php` | Standalone agent script to deploy on remote servers |
+| `~/bin/push-to-support.sh` | Deploys module code to live support.simplo.site |
 
 ## Database tables
 
@@ -100,26 +103,64 @@ Latest check results. One row per server per check type (upserted).
 - `access dropmonitor` — view the dashboard
 - `administer dropmonitor` — manage servers, settings, run manual checks
 
-## Current state (as of 2026-04-02)
+## Current state (as of 2026-04-03)
 
 ### What's working
-- Module is enabled on the local supportsite
+- Module is enabled on the local supportsite and deployed to live support.simplo.site
 - 7 online Linode servers are configured (auto-populated from the API)
 - Linode API checks work (status, region, specs, transfer)
 - HTTP checks work (response code, time, SSL cert expiry)
-- Agent check works for the simplo server (disk, updates, PHP, Backdrop, DB size, uptime)
+- Agent checks working on 3 servers: simplo, Triplo-PROD (flatbushfood.coop), FMR
+- NPT agent check works via origin_ip bypass (Cloudflare blocks direct requests)
+- Status agent collects: disk space, pending updates, PHP version, OS version (Ubuntu), Backdrop version, DB size, uptime
 - Dashboard renders server cards with color-coded status badges
 - Server detail page shows all raw check data
 - Manual refresh (all and per-server) works
+- Push-to-support script (`~/bin/push-to-support.sh`) for deploying to live site
+
+### Agent deployment status
+
+| Server | status.php | Token | OS reported |
+|--------|-----------|-------|-------------|
+| simplo | Deployed | Yes | Ubuntu 16.04.7 LTS |
+| Triplo-PROD | Deployed (flatbush docroot) | Yes | Ubuntu 16.04.7 LTS |
+| FMR | Deployed | Yes | Ubuntu 22.04.5 LTS |
+| NPT | Deployed (needs origin_ip) | Yes | Ubuntu 24.04.3 LTS |
+| triplo-prod-three | Not deployed | — | — |
+| triplo-prod-two | Not deployed | — | — |
+| triplo-development | Not deployed | — | — |
+
+### Origin IP (CDN bypass)
+
+Servers behind Cloudflare (like NPT) block `backdrop_http_request()` with a JS
+challenge, returning 403. The `origin_ip` field on the server record rewrites the
+agent URL to hit the origin IP directly with a `Host` header matching the domain.
+SSL verification uses the original hostname via `stream_context_create()`.
+
+To configure: edit the server at `drop/monitor/servers/{sid}/edit`, enter the
+server's real IP in the "Origin IP" field.
 
 ### What's not done yet
-- **Agent deployment**: `status.php` is only on the simplo server. Needs to be deployed to the other 6 servers with unique tokens. Each server needs: (1) copy status.php, (2) set a unique DROPMONITOR_TOKEN, (3) update the server record in dropmonitor with agent_url and agent_token.
-- **Site URLs**: Only the simplo server has a site_url configured. The other 6 need their primary URLs added for HTTP checks to work. Edit at `drop/monitor/servers`.
-- **Live deployment**: Module needs to be deployed to the live support.simplo.site. Blocked by directory permissions (see "Remote" section above).
-- **Cron data**: The agent couldn't read cron_last from the simplo server's state table (returned 0). May need to investigate — could be a DB permissions issue in status.php or the state table structure.
+- **Agent deployment**: 3 servers still need status.php deployed (triplo-prod-three, triplo-prod-two, triplo-development). Each needs SSH access and appropriate file permissions.
+- **Cron data**: The agent can't read cron_last from some servers' state tables (returns 0). May be a DB permissions issue or state table structure.
 - **Historical data**: Currently only stores the latest check per server. No history/trending. Could add a `dropmonitor_check_history` table later.
 - **Email/Slack alerts**: No notification system yet when thresholds are breached. Could integrate with DropBridge's existing `dropbridge_notify()` system.
-- **Auto-import from Linode API**: Currently servers are added manually or via SQL. Could add a "Import from Linode" button that auto-discovers all instances.
+
+### Future idea: standalone status app
+
+Rather than deploying `status.php` into individual Backdrop site docroots (which
+requires matching file permissions per site), build a standalone PHP app that runs
+once per server:
+
+- Lives at a fixed path (e.g. `/var/www/status/`) with its own nginx vhost
+- One install per server covers all sites on that box
+- Not tied to any Backdrop docroot — no permission issues
+- Self-contained: single directory with `index.php` + `config.php`
+- Could discover all Backdrop sites on the server and report on each
+- Accessible via subdomain (e.g. `status.triplo-prod.triplo.co`) or port
+
+This would replace the per-site status.php approach. Delegation candidate — does
+not require deep Drop Monitor knowledge to build.
 
 ## Deploying the agent to a new server
 
