@@ -90,8 +90,6 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/doc/\d+$#',
     // Project view: drop/projects/{pid}
     '#^drop/projects/\d+$#',
-    // Calendar.
-    '#^drop/calendar$#',
     // Meeting agenda.
     '#^drop/meeting$#',
     // Settings pages.
@@ -261,6 +259,9 @@ function _drop_base_render_nav() {
   // Collect links from all modules, filter by access, sort by weight.
   $links = module_invoke_all('drop_nav_links');
   $links = array_filter($links, function($link) {
+    if (isset($link['visible']) && !$link['visible']) {
+      return FALSE;
+    }
     return empty($link['permission']) || user_access($link['permission']);
   });
   if (empty($links)) {

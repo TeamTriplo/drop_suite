@@ -140,7 +140,7 @@ class DropTasksCRUDTest extends DropTasksTestBase {
     $this->backdropLogin($this->regularUser);
     $this->backdropPost('drop/tasks/' . $task->tid . '/delete', array(), t('Delete'));
 
-    $this->assertText('deleted');
+    $this->assertText('Task to delete deleted', 'Confirmation message shown after deleting a task.');
     $this->backdropGet('drop/tasks');
     $this->assertNoText('Task to delete');
   }

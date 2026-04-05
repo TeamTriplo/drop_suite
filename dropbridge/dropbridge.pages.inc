@@ -1112,6 +1112,11 @@ function dropbridge_calendar_page() {
   backdrop_set_title(t('Calendar'));
   backdrop_add_css(backdrop_get_path('module', 'dropbridge') . '/dropbridge.calendar.css');
 
+  // If no calendar feeds are configured, show a helpful message.
+  if (!_dropbridge_has_calendar_feeds()) {
+    return '<p>' . t('No calendar feeds have been configured yet. An administrator can add iCal feeds in the <a href="@url">DropBridge settings</a>.', array('@url' => url('drop/settings/bridge'))) . '</p>';
+  }
+
   // Build 7-day range starting today.
   $today = new DateTime('today');
   $days = array();
@@ -1126,7 +1131,8 @@ function dropbridge_calendar_page() {
   // Fetch events for the entire week.
   $events_by_day = _dropbridge_fetch_week_events($today, $range_end);
 
-  $output = '<div class="dropbridge-calendar-week">';
+  $output = '<h2 class="dropbridge-calendar-heading">' . t('7 day planner') . '</h2>';
+  $output .= '<div class="dropbridge-calendar-week">';
 
   foreach ($days as $day) {
     $date_str = $day->format('Y-m-d');
@@ -1136,8 +1142,8 @@ function dropbridge_calendar_page() {
       $day_class .= ' dropbridge-calendar-day--today';
     }
 
-    $day_label = $day->format('l'); // "Monday", "Tuesday", etc.
-    $date_label = $day->format('M j'); // "Apr 5"
+    $day_label = $day->format('l');
+    $date_label = $day->format('M j');
 
     $output .= '<div class="' . $day_class . '">';
     $output .= '<div class="dropbridge-calendar-day-header">';
@@ -1180,7 +1186,35 @@ function dropbridge_calendar_page() {
       . '</div>';
   }
 
+  // Timezone note.
+  global $user;
+  $output .= '<div class="dropbridge-calendar-tz-note">'
+    . t('Please update your <a href="@url">region and time zone settings</a> to see events in your own time zone.', array('@url' => url('user/' . $user->uid . '/edit')))
+    . '</div>';
+
   return $output;
+}
+
+/**
+ * Checks whether any calendar feeds (global or personal) are configured.
+ *
+ * @return bool
+ *   TRUE if at least one iCal URL is configured.
+ */
+function _dropbridge_has_calendar_feeds() {
+  global $user;
+
+  $global = config_get('dropbridge.settings', 'calendar_ics_url');
+  if (!empty(trim($global))) {
+    return TRUE;
+  }
+
+  $personal_map = state_get('dropbridge.personal_calendars', array());
+  if (!empty($personal_map[$user->uid]) && !empty(trim($personal_map[$user->uid]))) {
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 /**

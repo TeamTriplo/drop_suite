@@ -926,6 +926,8 @@ class DropTicketsWorkflowTest extends DropTicketsTestBase {
    */
   public function testCronAutoClosesOldDoneTickets() {
     config_set('droptickets.settings', 'auto_close_days', 7);
+    config_set('droptickets.settings', 'auto_close_from', 'done');
+    config_set('droptickets.settings', 'auto_close_to', 'closed');
 
     $project = $this->createTestProject();
     $ticket  = $this->createTestTicket($project, array('status' => 'done'));
@@ -951,6 +953,8 @@ class DropTicketsWorkflowTest extends DropTicketsTestBase {
    */
   public function testCronDoesNotCloseRecentDoneTickets() {
     config_set('droptickets.settings', 'auto_close_days', 7);
+    config_set('droptickets.settings', 'auto_close_from', 'done');
+    config_set('droptickets.settings', 'auto_close_to', 'closed');
 
     $project = $this->createTestProject();
     $ticket  = $this->createTestTicket($project, array('status' => 'done'));

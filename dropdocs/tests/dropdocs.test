@@ -345,12 +345,32 @@ class DropDocsCRUDTest extends DropDocsTestBase {
   }
 
   /**
-   * Index shows "No documentation yet." when no docs exist.
+   * Index shows the empty message using the default display name.
    */
   public function testIndexShowsEmptyMessage() {
     $this->backdropLogin($this->viewerUser);
     $this->backdropGet('drop/docs');
-    $this->assertText('No documentation yet.');
+    $this->assertText('No docs yet.');
+  }
+
+  /**
+   * The configurable display name changes the empty message and sidebar title.
+   */
+  public function testDisplayNameConfig() {
+    // Change the display name to "Knowledge Base".
+    $config = config('dropdocs.settings');
+    $config->set('display_name', 'Knowledge Base');
+    $config->save();
+
+    // Empty message should reflect the new name.
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('No knowledge base yet.');
+
+    // Create a doc and verify the sidebar uses the full display name.
+    $doc = $this->createTestDoc('KB Article');
+    $this->backdropGet('drop/doc/' . $doc->nid);
+    $this->assertText('Knowledge Base');
   }
 
   /**
@@ -400,7 +420,8 @@ class DropDocsCRUDTest extends DropDocsTestBase {
 
     $this->backdropLogin($this->viewerUser);
     $this->backdropGet('drop/doc/' . $doc->nid);
-    $this->assertText('Documentation');
+    // Default display name maps to "Documentation" for the sidebar heading.
+    $this->assertText(dropdocs_display_name('full'));
     $this->assertRaw('dropdocs-sidebar');
   }
 

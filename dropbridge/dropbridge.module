@@ -816,6 +816,7 @@ function dropbridge_drop_nav_links() {
       'path'       => 'drop/calendar',
       'permission' => 'access dropbridge',
       'weight'     => 75,
+      'visible'    => _dropbridge_nav_calendar_visible(),
     ),
     array(
       'title'      => t('Settings'),
@@ -824,6 +825,20 @@ function dropbridge_drop_nav_links() {
       'weight'     => 100,
     ),
   );
+}
+
+/**
+ * Checks whether the Calendar nav link should be visible.
+ *
+ * Returns TRUE if any global calendar feeds are configured. Personal-only
+ * calendars still show the page once you navigate there, but the nav link
+ * requires at least one global feed so the feature is "turned on" site-wide.
+ *
+ * @return bool
+ */
+function _dropbridge_nav_calendar_visible() {
+  $global = config_get('dropbridge.settings', 'calendar_ics_url');
+  return !empty(trim($global));
 }
 
 /**

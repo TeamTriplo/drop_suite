@@ -716,6 +716,7 @@ class DropCRMProjectFieldUITest extends DropCRMTestBase {
     parent::setUp('dropcrm', 'field_ui');
     $this->adminUser = $this->backdropCreateUser(array(
       'administer crm',
+      'administer drop entities',
       'access crm',
       'administer fields',
     ));
@@ -726,18 +727,18 @@ class DropCRMProjectFieldUITest extends DropCRMTestBase {
    */
   public function testAdminCanAccessProjectFieldUI() {
     $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/crm/projects/manage/fields');
+    $this->backdropGet('drop/projects/manage/fields');
     $this->assertResponse(200, 'Admin user can access the project Field UI page.');
     $this->assertText('Add new field', 'The Add new field row is present on the page.');
   }
 
   /**
-   * A user without administer crm is denied access.
+   * A user without administer drop entities is denied access.
    */
   public function testNonAdminDeniedProjectFieldUI() {
     $regularUser = $this->backdropCreateUser(array('access crm'));
     $this->backdropLogin($regularUser);
-    $this->backdropGet('drop/crm/projects/manage/fields');
+    $this->backdropGet('drop/projects/manage/fields');
     $this->assertResponse(403, 'Non-admin user is denied access to the project Field UI page.');
   }
 }
