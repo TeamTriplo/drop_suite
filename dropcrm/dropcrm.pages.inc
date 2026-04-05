@@ -141,15 +141,22 @@ function dropcrm_contact_view(CrmContact $contact) {
       else {
         $value = check_plain($method->value);
       }
-      $edit_link = '';
+      $ops = '';
       if (dropcrm_contact_method_access('edit', $method)) {
-        $edit_link = l(t('Edit'), 'drop/crm/contact-methods/manage/' . $method->cmid . '/edit',
+        $ops .= l(t('Edit'), 'drop/crm/contact-methods/manage/' . $method->cmid . '/edit',
           array('attributes' => array('class' => array('crm-method-edit-link'))));
+      }
+      if (dropcrm_contact_method_access('delete', $method)) {
+        if ($ops) {
+          $ops .= ' &middot; ';
+        }
+        $ops .= l(t('Delete'), 'drop/crm/contact-methods/manage/' . $method->cmid . '/delete',
+          array('query' => array('destination' => 'drop/crm/contact/' . $contact->cid)));
       }
       $method_rows[] = array(
         array('data' => '<span class="crm-method-type">' . check_plain($type_label) . '</span>', 'class' => array('crm-method-col-type')),
         array('data' => ($label_text ? '<span class="crm-method-label">' . $label_text . '</span> ' : '') . $value, 'class' => array('crm-method-col-value')),
-        array('data' => $edit_link, 'class' => array('crm-method-col-edit')),
+        array('data' => $ops, 'class' => array('crm-method-col-edit')),
       );
     }
   }

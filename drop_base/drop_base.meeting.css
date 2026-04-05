@@ -1,0 +1,114 @@
+/**
+ * @file
+ * Meeting agenda page styles.
+ */
+
+.drop-meeting-agenda h3 {
+  margin: 1.5em 0 0.5em;
+  font-size: 1.1em;
+  color: #333;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0.3em;
+}
+
+.drop-meeting-agenda h3:first-child {
+  margin-top: 0;
+}
+
+/* Item rows */
+.drop-meeting-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.6em 0.8em;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.drop-meeting-item:last-child {
+  border-bottom: none;
+}
+
+.drop-meeting-item:hover {
+  background: #fafafa;
+}
+
+/* Type badge */
+.drop-meeting-type {
+  display: inline-block;
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 0.15em 0.5em;
+  border-radius: 3px;
+  white-space: nowrap;
+  min-width: 3.5em;
+  text-align: center;
+}
+
+.drop-meeting-type--task {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.drop-meeting-type--ticket {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Title */
+.drop-meeting-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.drop-meeting-title a {
+  color: #333;
+  text-decoration: none;
+}
+
+.drop-meeting-title a:hover {
+  text-decoration: underline;
+}
+
+/* Priority text (inherits from drop_base.css priority classes) */
+.drop-meeting-priority {
+  font-size: 0.8em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Due date */
+.drop-meeting-due {
+  font-size: 0.8em;
+  color: #757575;
+  white-space: nowrap;
+}
+
+/* Actions */
+.drop-meeting-actions {
+  display: flex;
+  gap: 0.3em;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.drop-meeting-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  color: #757575;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.drop-meeting-action--done:hover {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.drop-meeting-action--postpone:hover {
+  background: #fff8e1;
+  color: #e65100;
+}

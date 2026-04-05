@@ -234,6 +234,14 @@ a.drop-section-add {
   color: var(--drop-text, #222);
 }
 
+.drop-nav-separator {
+  width: 1px;
+  height: 1.2em;
+  background: var(--drop-border, #ccc);
+  margin: 0 0.3rem;
+  flex-shrink: 0;
+}
+
 .drop-nav a.drop-nav-active {
   background: var(--drop-primary, #1565c0);
   color: #fff;

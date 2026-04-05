@@ -491,3 +491,42 @@ function drop_base_project_delete_form_submit($form, &$form_state) {
   backdrop_set_message(t('Project %name deleted.', array('%name' => $project->name)));
   $form_state['redirect'] = 'drop/projects';
 }
+
+// ---------------------------------------------------------------------------
+// Drop Base settings form
+// ---------------------------------------------------------------------------
+
+/**
+ * Form callback for Drop Base settings.
+ */
+function drop_base_settings_form($form, &$form_state) {
+  $config = config('drop_base.settings');
+
+  $form['narrow_page_width'] = array(
+    '#type'          => 'number',
+    '#title'         => t('Narrow page width'),
+    '#description'   => t('Maximum width in pixels for pages that work better at a narrower width (e.g. Meeting, Settings). Set to 0 for no limit.'),
+    '#default_value' => $config->get('narrow_page_width'),
+    '#min'           => 0,
+    '#max'           => 2400,
+    '#field_suffix'  => 'px',
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Save settings'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for drop_base_settings_form().
+ */
+function drop_base_settings_form_submit($form, &$form_state) {
+  $config = config('drop_base.settings');
+  $config->set('narrow_page_width', (int) $form_state['values']['narrow_page_width']);
+  $config->save();
+  backdrop_set_message(t('Settings saved.'));
+}

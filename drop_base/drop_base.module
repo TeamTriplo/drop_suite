@@ -48,6 +48,60 @@ function drop_base_preprocess_layout(&$variables) {
   if (!$has_sidebar) {
     $variables['classes'][] = 'layout--no-sidebar';
   }
+
+  // Apply narrow page width to individual entity view pages.
+  if (_drop_base_is_narrow_page($path)) {
+    $variables['classes'][] = 'drop-narrow-page';
+    $width = config_get('drop_base.settings', 'narrow_page_width');
+    if ($width) {
+      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . (int) $width . 'px; margin: 0 auto; }', 'inline');
+    }
+  }
+}
+
+/**
+ * Checks whether the current path should use the narrow page layout.
+ *
+ * Narrow pages are individual entity views — not lists or kanban boards.
+ *
+ * @param string $path
+ *   The current Backdrop path.
+ *
+ * @return bool
+ */
+function _drop_base_is_narrow_page($path) {
+  $patterns = array(
+    // Individual ticket view: drop/tickets/{tid} (but not drop/tickets or
+    // drop/tickets/board, drop/tickets/settings, etc.)
+    '#^drop/tickets/\d+$#',
+    // CRM contact view: drop/crm/contact/{cid}
+    '#^drop/crm/contact/\d+$#',
+    // CRM activity view: drop/crm/activity/{aid}
+    '#^drop/crm/activity/\d+$#',
+    // CRM contact method view: drop/crm/contact-method/{cmid} (entity_ui path)
+    '#^drop/crm/contact-methods/\d+$#',
+    // Individual task view: drop/tasks/{tid}
+    '#^drop/tasks/\d+$#',
+    // Goals list and individual goal view.
+    '#^drop/goals$#',
+    '#^drop/goals/manage/\d+$#',
+    // Docs list and individual doc view.
+    '#^drop/docs$#',
+    '#^drop/doc/\d+$#',
+    // Project view: drop/projects/{pid}
+    '#^drop/projects/\d+$#',
+    // Meeting agenda.
+    '#^drop/meeting$#',
+    // Settings pages.
+    '#^drop/settings#',
+  );
+
+  foreach ($patterns as $pattern) {
+    if (preg_match($pattern, $path)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
 
 /**
@@ -215,6 +269,9 @@ function _drop_base_render_nav() {
   // Render nav items, marking the active section.
   $items_html = '';
   foreach ($links as $link) {
+    if (!empty($link['separator'])) {
+      $items_html .= '<span class="drop-nav-separator"></span>';
+    }
     $is_active = _drop_base_nav_is_active($link['path'], $path);
     $class = $is_active ? ' class="drop-nav-active"' : '';
     $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . check_plain($link['title']) . '</a>';
@@ -950,6 +1007,40 @@ function drop_base_menu() {
     'weight'           => 0,
   );
 
+  // --- Drop Base settings ---
+  $items['drop/settings/base'] = array(
+    'title'            => 'Drop Base',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_base_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_base.admin.inc',
+  );
+
+  // --- Meeting agenda ---
+  $items['drop/meeting'] = array(
+    'title'            => 'Meeting',
+    'page callback'    => 'drop_base_meeting_page',
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_base.pages.inc',
+  );
+  $items['drop/meeting/remove-tag/%'] = array(
+    'title'            => 'Remove meeting tag',
+    'page callback'    => 'drop_base_meeting_remove_tag',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_base.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/meeting/postpone/%'] = array(
+    'title'            => 'Postpone meeting item',
+    'page callback'    => 'drop_base_meeting_postpone',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_base.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   // Pin/unpin report toggle endpoint.
   $items['drop-base/pin-report/%'] = array(
     'page callback'   => 'drop_base_pin_report_toggle',
@@ -1135,10 +1226,31 @@ function drop_base_drop_nav_links() {
       'weight'     => 15,
     ),
     array(
+      'title'      => t('Meeting'),
+      'path'       => 'drop/meeting',
+      'weight'     => 80,
+      'separator'  => TRUE,
+    ),
+    array(
       'title'      => t('Team'),
       'path'       => 'drop/team',
       'permission' => 'access drop team',
       'weight'     => 90,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function drop_base_drop_settings_info() {
+  return array(
+    'drop_base' => array(
+      'title' => t('Drop Base'),
+      'description' => t('Page width and other base settings.'),
+      'path' => 'drop/settings/base',
+      'permission' => 'administer site configuration',
+      'weight' => 0,
     ),
   );
 }
