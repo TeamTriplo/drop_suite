@@ -332,9 +332,9 @@ function dropmonitor_cron() {
     state_set('dropmonitor_last_cron', REQUEST_TIME);
   }
 
-  // Uptime checks — run every time cron fires (ideally every 10 minutes).
+  // Uptime checks — run frequently; per-project intervals are enforced inside.
   $last_uptime = state_get('dropmonitor_last_uptime', 0);
-  if ((REQUEST_TIME - $last_uptime) >= 540) { // At least 9 minutes apart.
+  if ((REQUEST_TIME - $last_uptime) >= 240) { // At least 4 minutes apart.
     module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
     if (db_table_exists('dropmonitor_uptime')) {
       dropmonitor_run_uptime_checks();
@@ -352,10 +352,11 @@ function dropmonitor_cron() {
 }
 
 /**
- * Uptime check endpoint — called by system cron every 10 minutes.
+ * Uptime check endpoint — called by system cron every 5 minutes.
  *
+ * Per-project check intervals are enforced inside the check function.
  * Example crontab entry:
- *   *​/10 * * * * curl -s "https://support.simplo.site/drop/monitor/uptime-check?token=SECRET"
+ *   *​/5 * * * * curl -s "https://support.simplo.site/drop/monitor/uptime-check?token=SECRET"
  */
 function dropmonitor_uptime_check_endpoint() {
   $config = config('dropmonitor.settings');

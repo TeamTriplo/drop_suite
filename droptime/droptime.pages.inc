@@ -59,7 +59,7 @@ function droptime_daily_page() {
     $output['no_projects'] = array(
       '#markup' => '<p class="droptime-notice">'
         . t('No active projects yet. !link to get started.', array(
-            '!link' => l(t('Add a project'), 'drop/crm/projects/add'),
+            '!link' => l(t('Add a project'), 'drop/projects/add'),
           ))
         . '</p>',
       '#weight' => 0,

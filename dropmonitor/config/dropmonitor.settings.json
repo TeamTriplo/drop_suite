@@ -7,5 +7,6 @@
     "check_interval": 3600,
     "alert_disk_percent": 10,
     "alert_cert_days": 14,
-    "alert_response_ms": 5000
+    "alert_response_ms": 5000,
+    "failure_threshold": 3
 }

@@ -1,0 +1,264 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the Drop Base module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function drop_base_schema() {
+  $schema = array();
+
+  $schema['drop_project'] = array(
+    'description' => 'Projects used across the Drop Suite for tickets, time tracking, and monitoring.',
+    'fields' => array(
+      'pid' => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+        'default'  => '',
+        'description' => 'Project name.',
+      ),
+      'color' => array(
+        'type'     => 'varchar',
+        'length'   => 7,
+        'not null' => TRUE,
+        'default'  => '#1565c0',
+        'description' => 'Display color as a CSS hex value.',
+      ),
+      'active' => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'not null' => TRUE,
+        'default'  => 1,
+        'description' => '1 = active, 0 = archived.',
+      ),
+      'cid' => array(
+        'description' => 'Optional linked CRM contact ID.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'prefix' => array(
+        'description' => 'Short prefix for ticket numbers, e.g. TRIP for TRIP-42.',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'ticket_counter' => array(
+        'description' => 'Auto-incrementing counter for ticket labels within this project.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'site_url' => array(
+        'description' => 'Website URL for the project (used by uptime monitoring).',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'platform' => array(
+        'description' => 'CMS platform: backdrop, drupal, wordpress, or other.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'health_url' => array(
+        'description' => 'Custom health check URL. If empty, auto-calculated from site_url + platform.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'gentle_monitor' => array(
+        'description' => 'Use gentle monitoring: homepage check, browser-like User-Agent, HEAD request.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'check_interval' => array(
+        'description' => 'Uptime check interval in minutes. Default 5.',
+        'type'        => 'int',
+        'size'        => 'small',
+        'not null'    => TRUE,
+        'default'     => 5,
+      ),
+      'uid' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
+      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+      'changed' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
+    ),
+    'primary key' => array('pid'),
+    'indexes' => array(
+      'uid'    => array('uid'),
+      'active' => array('active'),
+      'cid'    => array('cid'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function drop_base_install() {
+  // Rebuild the menu router first so that drop/settings (defined in
+  // drop_base_menu()) is a known path. Without this, menu_link_save()
+  // silently fails because it can't find a matching router_path.
+  menu_rebuild();
+
+  // Create a "Drop Suite" link in the primary navigation menu.
+  $item = array(
+    'link_title' => 'Drop Suite',
+    'link_path'  => 'drop/settings',
+    'weight'     => 50,
+  );
+  $mlid = menu_link_save($item);
+
+  if ($mlid) {
+    backdrop_set_message(t('Drop Suite menu link created in primary navigation (mlid: @mlid).', array('@mlid' => $mlid)));
+  }
+  else {
+    backdrop_set_message(t('Failed to create Drop Suite menu link. The path drop/settings may not be registered yet.'), 'warning');
+  }
+
+  // Switch the default layout to the Drop Suite layout template, then add
+  // Drop Suite blocks to the TOP region.
+  _drop_base_setup_default_layout();
+}
+
+/**
+ * Switches the default layout to the Drop Suite template and sets up the
+ * TOP region with Drop Suite blocks.
+ *
+ * - Changes the layout template to drop_suite
+ * - Removes the "Page title combo" block
+ * - Adds: Page title, Drop Navigation, Drop Pin Action, Drop Section Navigation
+ */
+function _drop_base_setup_default_layout() {
+  $layout = layout_load('default');
+  if (!$layout) {
+    backdrop_set_message(t('Could not load the default layout to add Drop Suite blocks.'), 'warning');
+    return;
+  }
+
+  // Switch to the Drop Suite layout template.
+  $layout->layout_template = 'drop_suite';
+
+  // Ensure the positions array has all Drop Suite regions.
+  foreach (array('header', 'navigation', 'messages', 'top', 'content', 'sidebar', 'bottom', 'footer') as $region) {
+    if (!isset($layout->positions[$region])) {
+      $layout->positions[$region] = array();
+    }
+  }
+
+  // Remove the "Page title combo" block if present.
+  foreach ($layout->content as $uuid => $block) {
+    if (isset($block->plugin) && $block->plugin === 'system:page_components:title_combo') {
+      $layout->removeBlock($uuid);
+      break;
+    }
+  }
+
+  // Add blocks to the TOP region. They'll appear after the breadcrumb.
+  $layout->addBlock('system', 'page_components:title', 'top');
+  $layout->addBlock('drop_base', 'drop_nav', 'top');
+  $layout->addBlock('drop_base', 'drop_pin_action', 'top');
+  $layout->addBlock('drop_base', 'drop_section_nav', 'top');
+
+  $layout->save();
+  backdrop_set_message(t('Drop Suite layout and blocks configured.'));
+}
+
+/**
+ * Establish schema version baseline for Drop Base.
+ *
+ * The drop_project table already exists (created by dropcrm). This update
+ * registers Drop Base as the schema owner going forward.
+ */
+function drop_base_update_1000() {
+  return t('Drop Base now owns the drop_project table schema.');
+}
+
+/**
+ * Schema version bump (menu link now created in hook_install only).
+ */
+function drop_base_update_1100() {
+  // No-op. Drop Suite menu link is only created on fresh installs.
+}
+
+/**
+ * Add platform and health_url columns to drop_project.
+ */
+function drop_base_update_1200() {
+  if (!db_field_exists('drop_project', 'platform')) {
+    db_add_field('drop_project', 'platform', array(
+      'description' => 'CMS platform: backdrop, drupal, wordpress, or other.',
+      'type'        => 'varchar',
+      'length'      => 20,
+      'not null'    => TRUE,
+      'default'     => '',
+    ));
+  }
+  if (!db_field_exists('drop_project', 'health_url')) {
+    db_add_field('drop_project', 'health_url', array(
+      'description' => 'Custom health check URL. If empty, auto-calculated from site_url + platform.',
+      'type'        => 'varchar',
+      'length'      => 255,
+      'not null'    => TRUE,
+      'default'     => '',
+    ));
+  }
+  if (!db_field_exists('drop_project', 'gentle_monitor')) {
+    db_add_field('drop_project', 'gentle_monitor', array(
+      'type'    => 'int',
+      'size'    => 'tiny',
+      'not null' => TRUE,
+      'default' => 0,
+    ));
+  }
+  if (!db_field_exists('drop_project', 'check_interval')) {
+    db_add_field('drop_project', 'check_interval', array(
+      'type'    => 'int',
+      'size'    => 'small',
+      'not null' => TRUE,
+      'default' => 5,
+    ));
+  }
+}
+
+/**
+ * Import the drop_projects view if it doesn't exist.
+ */
+function drop_base_update_1201() {
+  $view = views_get_view('drop_projects');
+  if (!$view) {
+    $module_path = backdrop_get_path('module', 'drop_base');
+    $config_path = $module_path . '/config/views.view.drop_projects.json';
+    if (file_exists($config_path)) {
+      $data = json_decode(file_get_contents($config_path), TRUE);
+      $config = config('views.view.drop_projects');
+      $config->setData($data);
+      $config->save();
+      return t('Imported the drop_projects view.');
+    }
+  }
+  return t('drop_projects view already exists.');
+}

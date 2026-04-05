@@ -6,5 +6,6 @@
   "flag_soft_limit": 10,
   "default_watchers": null,
   "reactions_enabled": true,
-  "slack_webhook_url": ""
+  "slack_webhook_url": "",
+  "kanban_modals": true
 }

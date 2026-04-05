@@ -74,6 +74,29 @@ function _droptickets_assignee_field(DropTicket $ticket) {
   return $select;
 }
 
+/**
+ * Returns inline priority select for editors, or static label for viewers.
+ */
+function _droptickets_priority_field(DropTicket $ticket) {
+  $priority_labels = drop_base_priority_labels();
+
+  if (!droptickets_ticket_access('update', $ticket)) {
+    $label = isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '—';
+    return check_plain($label);
+  }
+
+  $select = '<select class="droptickets-priority-select drop-priority-' . check_plain(drop_base_priority_class($ticket->priority)) . '"'
+    . ' data-endpoint="' . url('drop/tickets/' . $ticket->tid . '/inline-priority') . '"'
+    . ' data-token="' . backdrop_get_token('droptickets_inline_priority') . '"'
+    . ' data-current="' . (int) $ticket->priority . '">';
+  foreach ($priority_labels as $key => $label) {
+    $select .= '<option value="' . (int) $key . '"' . ($key == $ticket->priority ? ' selected' : '') . '>' . check_plain($label) . '</option>';
+  }
+  $select .= '</select>';
+
+  return $select;
+}
+
 // ---------------------------------------------------------------------------
 // Ticket list
 // ---------------------------------------------------------------------------
@@ -401,8 +424,8 @@ function droptickets_list_page() {
     if (!$project) {
       $proj_name = t('—');
     }
-    elseif (module_exists('dropcrm') && dropcrm_project_access('view', $project)) {
-      $proj_name = l($project->name, 'drop/crm/projects/' . $project->pid);
+    elseif (module_exists('dropcrm') && drop_base_project_access('view', $project)) {
+      $proj_name = l($project->name, 'drop/projects/' . $project->pid);
     }
     else {
       $proj_name = check_plain($project->name);
@@ -582,31 +605,90 @@ function droptickets_member_page($account) {
 function droptickets_kanban_page() {
   backdrop_set_title(t('Kanban'));
 
-  // Verify the Kanban board field exists before attempting queries.
+  // Ensure the Kanban board field exists, creating it if missing.
   if (!db_table_exists('field_data_field_drop_board')) {
-    watchdog('droptickets', 'Kanban board failed to load: field_data_field_drop_board table is missing. Run database updates or reinstall the field.', array(), WATCHDOG_ERROR);
-    return '<div class="messages error">'
-      . '<h2>' . t('Kanban board is not available') . '</h2>'
-      . '<p>' . t('The Kanban Boards field has not been set up on this site. Please run <a href="@update_url">database updates</a> or contact your site administrator.', array(
-          '@update_url' => url('core/update.php'),
-        )) . '</p>'
-      . '</div>';
+    module_load_install('droptickets');
+    _droptickets_ensure_boards_field();
+
+    // Check again after attempting to create it.
+    if (!db_table_exists('field_data_field_drop_board')) {
+      watchdog('droptickets', 'Kanban board failed to load: field_data_field_drop_board table could not be created.', array(), WATCHDOG_ERROR);
+      return '<div class="messages error">'
+        . '<h2>' . t('Kanban board is not available') . '</h2>'
+        . '<p>' . t('The Kanban Boards field could not be set up. Please contact your site administrator.') . '</p>'
+        . '</div>';
+    }
   }
 
   $module_path = backdrop_get_path('module', 'droptickets');
+  $kanban_modals = (bool) config_get('droptickets.settings', 'kanban_modals');
+
+  $js_settings = array(
+    'kanbanStatusUrl' => url('drop/tickets/'),
+    'kanbanToken'     => backdrop_get_token('droptickets_kanban'),
+    'kanbanModals'    => $kanban_modals,
+  );
+
+  $js_files = array($module_path . '/droptickets.kanban.js');
+
+  if ($kanban_modals) {
+    $js_files[] = $module_path . '/droptickets.modal.js';
+
+    // Assignee options for modal selects.
+    $team = droptickets_assignee_options();
+    $assignee_list = array();
+    foreach ($team as $uid => $name) {
+      $assignee_list[] = array('value' => (string) $uid, 'label' => $name);
+    }
+
+    // Project options.
+    $all_projects_raw = db_select('drop_project', 'p')
+      ->fields('p', array('pid', 'name'))
+      ->condition('p.active', 1)
+      ->orderBy('p.name')
+      ->execute()->fetchAllKeyed();
+    $project_list = array();
+    foreach ($all_projects_raw as $pid => $name) {
+      $project_list[] = array('value' => (string) $pid, 'label' => $name);
+    }
+
+    $js_settings['modalAssignees']      = $assignee_list;
+    $js_settings['modalProjects']       = $project_list;
+    $js_settings['modalTypes']          = droptickets_type_options();
+    $js_settings['modalPriorities']     = drop_base_priority_labels();
+    $js_settings['modalQuickAddUrl']    = url('drop/tickets/kanban/quick-add');
+    $js_settings['tokenAssignee']       = backdrop_get_token('droptickets_inline_assignee');
+    $js_settings['tokenPriority']       = backdrop_get_token('droptickets_inline_priority');
+
+    // Board options for modal (only if taxonomy and field exist).
+    // Exclude "General" — tickets appear on General by default.
+    $board_list = array();
+    if (field_info_field('field_drop_board') && taxonomy_vocabulary_load('drop_boards')) {
+      $modal_boards = db_select('taxonomy_term_data', 'd')
+        ->fields('d', array('tid', 'name'))
+        ->condition('d.vocabulary', 'drop_boards')
+        ->orderBy('d.weight')
+        ->orderBy('d.name')
+        ->execute()->fetchAllKeyed();
+      foreach ($modal_boards as $tid => $name) {
+        if (strtolower(trim($name)) === 'general') {
+          continue;
+        }
+        $board_list[] = array('value' => (string) $tid, 'label' => $name);
+      }
+    }
+    $js_settings['modalBoards'] = $board_list;
+  }
+
   $output = array(
     '#attached' => array(
       'css' => array($module_path . '/droptickets.css'),
-      'js'  => array(
-        $module_path . '/droptickets.kanban.js',
+      'js'  => array_merge($js_files, array(
         array(
-          'data' => array('droptickets' => array(
-            'kanbanStatusUrl' => url('drop/tickets/'),
-            'kanbanToken'     => backdrop_get_token('droptickets_kanban'),
-          )),
+          'data' => array('droptickets' => $js_settings),
           'type' => 'setting',
         ),
-      ),
+      )),
     ),
   );
 
@@ -840,6 +922,9 @@ function droptickets_kanban_page() {
     $board .= '<div class="droptickets-kanban-col-header">';
     $board .= '<span class="droptickets-status droptickets-status--' . check_plain($status_key) . ' droptickets-kanban-status-label">' . check_plain($status_label) . '</span>';
     $board .= '<span class="droptickets-kanban-col-count' . ($over_limit ? ' droptickets-kanban-col-count--over' : '') . '">' . $count . ($limit ? '/' . $limit : '') . '</span>';
+    if ($kanban_modals) {
+      $board .= '<button type="button" class="droptickets-kanban-quick-add" data-status="' . check_plain($status_key) . '" title="' . t('Quick add ticket') . '">+</button>';
+    }
     $board .= '</div>';
     if ($over_limit) {
       $board .= '<div class="droptickets-kanban-limit-warning">' . icon('warning', array('attributes' => array('width' => 13, 'height' => 13))) . ' ' . t('Limit exceeded') . '</div>';
@@ -884,7 +969,12 @@ function droptickets_kanban_page() {
 
         $board .= '<div class="droptickets-kanban-card ' . $priority_class . '" draggable="true" data-tid="' . (int) $ticket->tid . '">';
         $board .= '<div class="droptickets-kanban-card-id"><span class="droptickets-ticket-id">' . check_plain($label) . '</span>' . $flag_html . '</div>';
-        $board .= '<div class="droptickets-kanban-card-title">' . l($ticket->title, 'drop/tickets/' . $ticket->tid) . '</div>';
+        if ($kanban_modals) {
+          $board .= '<div class="droptickets-kanban-card-title"><a href="' . url('drop/tickets/' . $ticket->tid) . '" class="droptickets-modal-open" data-tid="' . (int) $ticket->tid . '">' . check_plain($ticket->title) . '</a></div>';
+        }
+        else {
+          $board .= '<div class="droptickets-kanban-card-title">' . l($ticket->title, 'drop/tickets/' . $ticket->tid) . '</div>';
+        }
         $board .= $parent_html;
         $board .= '<div class="droptickets-kanban-card-meta">';
         $board .= '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>';
@@ -1004,6 +1094,41 @@ function droptickets_inline_set_assignee(DropTicket $ticket) {
 }
 
 /**
+ * AJAX callback: inline priority update from the ticket view page.
+ *
+ * Expects POST fields: priority (0-4), token.
+ * Returns JSON: {ok: true, priority: N} or {ok: false, message: '...'}.
+ */
+function droptickets_inline_set_priority(DropTicket $ticket) {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'POST required.'));
+    exit();
+  }
+
+  $priority = isset($_POST['priority']) ? (int) $_POST['priority'] : -1;
+  $token    = isset($_POST['token'])  ? $_POST['token'] : '';
+
+  if (!backdrop_valid_token($token, 'droptickets_inline_priority')) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid token.'));
+    exit();
+  }
+
+  $valid = array_keys(drop_base_priority_labels());
+  if (!in_array($priority, $valid)) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid priority.'));
+    exit();
+  }
+
+  $ticket->priority = $priority;
+  $ticket->save();
+
+  print backdrop_json_encode(array('ok' => TRUE, 'priority' => $priority));
+  exit();
+}
+
+/**
  * AJAX callback: update a ticket's status from the Kanban drag-and-drop.
  *
  * Expects POST fields: status, token.
@@ -1040,6 +1165,289 @@ function droptickets_kanban_set_status(DropTicket $ticket) {
   $ticket->save();
 
   print backdrop_json_encode(array('ok' => TRUE));
+  exit();
+}
+
+/**
+ * AJAX callback: return ticket details for the Kanban modal.
+ *
+ * Returns JSON with body HTML, assignee, priority, comment count, and
+ * whether the current user has edit access.
+ */
+function droptickets_modal_data(DropTicket $ticket) {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  $loaded  = !empty($ticket->pid) ? entity_load('drop_project', array($ticket->pid)) : array();
+  $project = $loaded ? reset($loaded) : NULL;
+  $label   = droptickets_ticket_label($ticket, $project);
+
+  // Render body through the text format.
+  $body_html = '';
+  if (!empty($ticket->body)) {
+    $body_html = check_markup($ticket->body, $ticket->body_format);
+  }
+
+  // Comment count.
+  $comment_count = (int) db_select('drop_ticket_comment', 'c')
+    ->condition('c.tid', $ticket->tid)
+    ->countQuery()->execute()->fetchField();
+
+  // Assignee info.
+  $assignee_value = '';
+  if ($ticket->assignee_mode === 'team') {
+    $assignee_value = 'team';
+  }
+  elseif ($ticket->assignee_mode === 'on_hold') {
+    $assignee_value = 'on_hold';
+  }
+  elseif (!empty($ticket->assignee_uid)) {
+    $assignee_value = (string) $ticket->assignee_uid;
+  }
+
+  $can_edit = droptickets_ticket_access('update', $ticket);
+
+  // Current board assignments.
+  $board_tids = db_select('field_data_field_drop_board', 'fb')
+    ->fields('fb', array('field_drop_board_tid'))
+    ->condition('fb.entity_type', 'drop_ticket')
+    ->condition('fb.entity_id', $ticket->tid)
+    ->condition('fb.deleted', 0)
+    ->execute()->fetchCol();
+  $boards = array_map('strval', $board_tids);
+
+  $data = array(
+    'ok'            => TRUE,
+    'tid'           => (int) $ticket->tid,
+    'label'         => $label,
+    'title'         => $ticket->title,
+    'body_html'     => $body_html,
+    'body_raw'      => $ticket->body,
+    'body_format'   => $ticket->body_format,
+    'assignee'      => $assignee_value,
+    'priority'      => (int) $ticket->priority,
+    'boards'        => $boards,
+    'comment_count' => $comment_count,
+    'can_edit'      => $can_edit,
+    'view_url'      => url('drop/tickets/' . $ticket->tid),
+  );
+
+  print backdrop_json_encode($data);
+  exit();
+}
+
+/**
+ * AJAX callback: save ticket body from the Kanban modal.
+ *
+ * Expects POST fields: body, token.
+ * Returns JSON: {ok: true} or {ok: false, message: '...'}.
+ */
+function droptickets_inline_set_body(DropTicket $ticket) {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'POST required.'));
+    exit();
+  }
+
+  $token = isset($_POST['token']) ? $_POST['token'] : '';
+  if (!backdrop_valid_token($token, 'droptickets_kanban')) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid token.'));
+    exit();
+  }
+
+  $body = isset($_POST['body']) ? $_POST['body'] : '';
+  $ticket->body = $body;
+  $ticket->save();
+
+  // Return re-rendered HTML so the modal can update the preview.
+  $body_html = !empty($body) ? check_markup($body, $ticket->body_format) : '';
+
+  print backdrop_json_encode(array('ok' => TRUE, 'body_html' => $body_html));
+  exit();
+}
+
+/**
+ * AJAX callback: save ticket board assignments from the Kanban modal.
+ *
+ * Expects POST fields: boards (comma-separated TIDs or empty), token.
+ * Returns JSON: {ok: true, boards: [...]} or {ok: false, message: '...'}.
+ */
+function droptickets_inline_set_boards(DropTicket $ticket) {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'POST required.'));
+    exit();
+  }
+
+  $token = isset($_POST['token']) ? $_POST['token'] : '';
+  if (!backdrop_valid_token($token, 'droptickets_kanban')) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid token.'));
+    exit();
+  }
+
+  // Validate that the field and vocabulary exist.
+  if (!field_info_field('field_drop_board') || !taxonomy_vocabulary_load('drop_boards')) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Board field not available.'));
+    exit();
+  }
+
+  $raw = isset($_POST['boards']) ? trim($_POST['boards']) : '';
+  $tids = array();
+  if ($raw !== '') {
+    $tids = array_filter(array_map('intval', explode(',', $raw)));
+  }
+
+  // Validate TIDs belong to the drop_boards vocabulary.
+  if (!empty($tids)) {
+    $valid_tids = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid'))
+      ->condition('d.vocabulary', 'drop_boards')
+      ->condition('d.tid', $tids, 'IN')
+      ->execute()->fetchCol();
+    $tids = array_values(array_intersect($tids, $valid_tids));
+  }
+
+  // Build the field value array.
+  $field_values = array();
+  foreach ($tids as $tid) {
+    $field_values[] = array('tid' => $tid);
+  }
+  $ticket->field_drop_board = array(LANGUAGE_NONE => $field_values);
+  $ticket->save();
+
+  print backdrop_json_encode(array('ok' => TRUE, 'boards' => array_map('strval', $tids)));
+  exit();
+}
+
+/**
+ * AJAX callback: express ticket creation from the Kanban board.
+ *
+ * Expects POST fields: title, status, token, and optionally pid, type,
+ * assignee, priority.
+ * Returns JSON with the new ticket's data for inserting a card.
+ */
+function droptickets_kanban_quick_add() {
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'POST required.'));
+    exit();
+  }
+
+  $token = isset($_POST['token']) ? $_POST['token'] : '';
+  if (!backdrop_valid_token($token, 'droptickets_kanban')) {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid token.'));
+    exit();
+  }
+
+  $title = isset($_POST['title']) ? trim($_POST['title']) : '';
+  if ($title === '') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Title is required.'));
+    exit();
+  }
+
+  $status = isset($_POST['status']) ? check_plain($_POST['status']) : 'open';
+  $pid    = isset($_POST['pid']) ? (int) $_POST['pid'] : 0;
+  $type   = isset($_POST['type']) ? check_plain($_POST['type']) : 'task';
+  $priority = isset($_POST['priority']) ? (int) $_POST['priority'] : 1;
+
+  // Validate type.
+  $valid_types = array_keys(droptickets_type_options());
+  if (!in_array($type, $valid_types)) {
+    $type = 'task';
+  }
+
+  // Validate priority.
+  if ($priority < 0 || $priority > 4) {
+    $priority = 1;
+  }
+
+  // Body (optional description).
+  $body = isset($_POST['body']) ? trim($_POST['body']) : '';
+
+  // Create the ticket entity.
+  global $user;
+  $values = array(
+    'title'    => check_plain($title),
+    'body'     => $body,
+    'status'   => $status,
+    'type'     => $type,
+    'priority' => $priority,
+    'uid'      => $user->uid,
+  );
+
+  if ($pid > 0) {
+    $values['pid'] = $pid;
+  }
+
+  // Assignee.
+  $assignee = isset($_POST['assignee']) ? $_POST['assignee'] : '';
+  if ($assignee === 'team') {
+    $values['assignee_mode'] = 'team';
+  }
+  elseif ($assignee === 'on_hold') {
+    $values['assignee_mode'] = 'on_hold';
+  }
+  elseif (is_numeric($assignee) && (int) $assignee > 0) {
+    $values['assignee_mode'] = 'user';
+    $values['assignee_uid']  = (int) $assignee;
+  }
+
+  $ticket = entity_create('drop_ticket', $values);
+
+  // Board assignments (optional).
+  $boards_raw = isset($_POST['boards']) ? trim($_POST['boards']) : '';
+  if ($boards_raw !== '' && field_info_field('field_drop_board') && taxonomy_vocabulary_load('drop_boards')) {
+    $board_tids = array_filter(array_map('intval', explode(',', $boards_raw)));
+    if (!empty($board_tids)) {
+      $valid_tids = db_select('taxonomy_term_data', 'd')
+        ->fields('d', array('tid'))
+        ->condition('d.vocabulary', 'drop_boards')
+        ->condition('d.tid', $board_tids, 'IN')
+        ->execute()->fetchCol();
+      $field_values = array();
+      foreach ($valid_tids as $tid) {
+        $field_values[] = array('tid' => $tid);
+      }
+      $ticket->field_drop_board = array(LANGUAGE_NONE => $field_values);
+    }
+  }
+
+  $ticket->save();
+
+  // Build response data for the JS to create a card.
+  $loaded  = !empty($ticket->pid) ? entity_load('drop_project', array($ticket->pid)) : array();
+  $project = $loaded ? reset($loaded) : NULL;
+  $label   = droptickets_ticket_label($ticket, $project);
+  $type_options = droptickets_type_options();
+
+  $assignee_name = '—';
+  if (!empty($ticket->assignee_uid) && $ticket->assignee_mode === 'user') {
+    $account = user_load($ticket->assignee_uid);
+    if ($account) {
+      $assignee_name = $account->name;
+    }
+  }
+  elseif ($ticket->assignee_mode === 'team') {
+    $assignee_name = t('Team');
+  }
+  elseif ($ticket->assignee_mode === 'on_hold') {
+    $assignee_name = t('On Hold');
+  }
+
+  print backdrop_json_encode(array(
+    'ok'            => TRUE,
+    'tid'           => (int) $ticket->tid,
+    'label'         => $label,
+    'title'         => $ticket->title,
+    'type'          => $ticket->type,
+    'type_label'    => isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type,
+    'priority'      => (int) $ticket->priority,
+    'assignee_name' => $assignee_name,
+    'status'        => $ticket->status,
+    'view_url'      => url('drop/tickets/' . $ticket->tid),
+  ));
   exit();
 }
 
@@ -1094,7 +1502,7 @@ function droptickets_ticket_view(DropTicket $ticket) {
   // Owner field hidden from UI — see ticket #436 on simplo.
 
   $due       = $ticket->due_date ? format_date($ticket->due_date, 'custom', 'M j, Y') : '—';
-  $proj_name = $project ? l($project->name, 'drop/crm/projects/' . $project->pid) : '—';
+  $proj_name = $project ? l($project->name, 'drop/projects/' . $project->pid) : '—';
   $type_label   = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
   $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
   $priority_label = isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '—';
@@ -1201,7 +1609,7 @@ function droptickets_ticket_view(DropTicket $ticket) {
     ($is_discussion ? t('Facilitator') : t('Assignee')) => _droptickets_assignee_field($ticket),
     t('Type')                                      => '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>',
     ($is_discussion ? t('Decision by') : t('Due')) => $due,
-    t('Priority')                                  => check_plain($priority_label),
+    t('Priority')                                  => _droptickets_priority_field($ticket),
   );
   if ($tag_html) {
     $meta_items[t('Tags')] = $tag_html;
@@ -2366,8 +2774,8 @@ function droptickets_recent_page() {
 
     $proj_name = '—';
     if ($project) {
-      $proj_name = module_exists('dropcrm') && dropcrm_project_access('view', $project)
-        ? l($project->name, 'drop/crm/projects/' . $project->pid)
+      $proj_name = module_exists('dropcrm') && drop_base_project_access('view', $project)
+        ? l($project->name, 'drop/projects/' . $project->pid)
         : check_plain($project->name);
     }
 
@@ -2483,7 +2891,7 @@ function droptickets_flagged_page() {
   foreach ($ordered as $ticket) {
     $project   = isset($projects[$ticket->pid]) ? $projects[$ticket->pid] : NULL;
     $label     = droptickets_ticket_label($ticket, $project);
-    $proj_name = $project ? l($project->name, 'drop/crm/projects/' . $project->pid) : '—';
+    $proj_name = $project ? l($project->name, 'drop/projects/' . $project->pid) : '—';
     $assignee  = droptickets_assignee_label($ticket, $accounts);
     $type_label   = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
     $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
@@ -2746,7 +3154,7 @@ function droptickets_stale_report_page() {
   foreach ($tickets as $ticket) {
     $project   = isset($projects[$ticket->pid]) ? $projects[$ticket->pid] : NULL;
     $label     = droptickets_ticket_label($ticket, $project);
-    $proj_name = $project ? l($project->name, 'drop/crm/projects/' . $project->pid) : '—';
+    $proj_name = $project ? l($project->name, 'drop/projects/' . $project->pid) : '—';
     $assignee  = droptickets_assignee_label($ticket, $accounts);
     $type_label   = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
     $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;

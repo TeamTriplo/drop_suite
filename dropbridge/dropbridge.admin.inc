@@ -248,34 +248,28 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
     '#description'   => t('When enabled, the webhook endpoint accepts POSTs from SendGrid and creates or updates tickets.'),
   );
 
-  // Auto-generate and immediately persist a token if none exists yet.
   $token = $config->get('webhook_token');
-  if (empty($token)) {
-    $token = backdrop_random_key(32);
-    $config->set('webhook_token', $token);
-    $config->save();
-  }
-
-  $webhook_url = url('dropbridge/inbound-email', array(
-    'absolute' => TRUE,
-    'query'    => array('token' => $token),
-  ));
 
   $form['webhook_token'] = array(
     '#type'          => 'textfield',
     '#title'         => t('Webhook token'),
-    '#default_value' => $token,
-    '#description'   => t('Shared secret appended as <code>?token=…</code> to the webhook URL. Regenerate by clearing this field and saving.'),
-    '#required'      => TRUE,
+    '#default_value' => $token ? $token : '',
+    '#description'   => t('Shared secret appended as <code>?token=…</code> to the webhook URL. Leave empty to disable the inbound email webhook.'),
     '#attributes'    => array('autocomplete' => 'off'),
   );
 
-  $form['webhook_url_display'] = array(
-    '#type'   => 'item',
-    '#title'  => t('Webhook URL'),
-    '#markup' => '<code>' . check_plain($webhook_url) . '</code>',
-    '#description' => t('Enter this URL in the SendGrid Inbound Parse settings. Configure an MX record for the inbound subdomain first.'),
-  );
+  if (!empty($token)) {
+    $webhook_url = url('dropbridge/inbound-email', array(
+      'absolute' => TRUE,
+      'query'    => array('token' => $token),
+    ));
+    $form['webhook_url_display'] = array(
+      '#type'   => 'item',
+      '#title'  => t('Webhook URL'),
+      '#markup' => '<code>' . check_plain($webhook_url) . '</code>',
+      '#description' => t('Enter this URL in the SendGrid Inbound Parse settings. Configure an MX record for the inbound subdomain first.'),
+    );
+  }
 
   $form['forward_to'] = array(
     '#type'          => 'textfield',

@@ -42,6 +42,28 @@ class CrmContact extends Entity {
 
   /**
    * {@inheritdoc}
+   *
+   * Returns a display label. For persons, combines first + last name fields.
+   * For organizations/households, uses the name column.
+   */
+  public function label() {
+    if ($this->bundle() === 'crm_person') {
+      $first = '';
+      $last = '';
+      if (isset($this->field_crm_first_name[LANGUAGE_NONE][0]['value'])) {
+        $first = $this->field_crm_first_name[LANGUAGE_NONE][0]['value'];
+      }
+      if (isset($this->field_crm_last_name[LANGUAGE_NONE][0]['value'])) {
+        $last = $this->field_crm_last_name[LANGUAGE_NONE][0]['value'];
+      }
+      $full = trim($first . ' ' . $last);
+      return $full !== '' ? $full : (isset($this->name) ? $this->name : '');
+    }
+    return isset($this->name) ? $this->name : '';
+  }
+
+  /**
+   * {@inheritdoc}
    */
   public function uri() {
     return array('path' => 'drop/crm/contact/' . $this->id(), 'options' => array());
@@ -353,63 +375,7 @@ class CrmContactMethodUIController extends EntityBundleableUIController {
 // DropProject entity
 // ---------------------------------------------------------------------------
 
-/**
- * Entity class for a project.
- */
-class DropProject extends Entity {
-  public $pid;
-  public $name    = '';
-  public $color   = '#1565c0';
-  public $active  = 1;
-  public $cid     = NULL;
-  public $uid     = 0;
-  public $created = 0;
-  public $changed = 0;
-
-  /** {@inheritdoc} */
-  public function id() {
-    return $this->pid;
-  }
-
-  /** {@inheritdoc} */
-  public function entityType() {
-    return 'drop_project';
-  }
-
-  /** {@inheritdoc} */
-  protected function defaultLabel() {
-    return $this->name;
-  }
-
-  /** {@inheritdoc} */
-  public function uri() {
-    return array('path' => 'drop/crm/projects/' . $this->pid . '/edit', 'options' => array());
-  }
-
-  /** {@inheritdoc} */
-  protected function defaultUri() {
-    return $this->uri();
-  }
-}
-
-/**
- * Controller for DropProject entities.
- */
-class DropProjectController extends EntityDatabaseStorageController {
-
-  /** {@inheritdoc} */
-  public function save($entity) {
-    global $user;
-    if (empty($entity->created)) {
-      $entity->created = REQUEST_TIME;
-    }
-    $entity->changed = REQUEST_TIME;
-    if (empty($entity->uid)) {
-      $entity->uid = $user->uid;
-    }
-    return parent::save($entity);
-  }
-}
+// Note: DropProject and DropProjectController have moved to drop_base.entity.inc.
 
 /**
  * UI controller for crm_activity entities.

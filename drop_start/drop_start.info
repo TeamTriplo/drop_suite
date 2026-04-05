@@ -1,0 +1,7 @@
+name = Drop Start
+description = Sample content generation and onboarding for Drop Suite.
+type = module
+backdrop = 1.x
+dependencies[] = drop_base
+version = 1.x-1.0-dev
+package = Drop Suite

@@ -172,8 +172,8 @@ function dropbridge_menu() {
     'weight'           => 5,
   );
 
-  // Inbound email settings — in the admin menu under Drop Suite.
-  $items['admin/drop/inbound-email'] = array(
+  // Inbound email settings.
+  $items['drop/settings/inbound'] = array(
     'title'            => 'Inbound Email',
     'description'      => 'Configure SendGrid inbound email processing and allowlist.',
     'page callback'    => 'backdrop_get_form',
@@ -181,7 +181,13 @@ function dropbridge_menu() {
     'access callback'  => 'user_access',
     'access arguments' => array('administer site configuration'),
     'file'             => 'dropbridge.admin.inc',
-    'type'             => MENU_NORMAL_ITEM,
+  );
+  // Redirect old path.
+  $items['admin/drop/inbound-email'] = array(
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/settings/inbound'),
+    'access callback'  => TRUE,
+    'type'             => MENU_CALLBACK,
   );
 
   // Unverified tickets report.

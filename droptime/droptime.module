@@ -27,7 +27,7 @@ function droptime_autoload_info() {
  */
 function droptime_entity_info() {
   return array(
-    // Note: drop_project entity is now declared in dropcrm_entity_info().
+    // Note: drop_project entity is declared in drop_base_entity_info().
     'drop_time_entry' => array(
       'label'            => t('Time entry'),
       'plural label'     => t('Time entries'),
@@ -185,7 +185,7 @@ function droptime_menu() {
   $items['drop/time/projects'] = array(
     'title'            => 'Projects',
     'page callback'    => 'backdrop_goto',
-    'page arguments'   => array('drop/crm/projects'),
+    'page arguments'   => array('drop/projects'),
     'access callback'  => 'user_access',
     'access arguments' => array('access droptime'),
     'type'             => MENU_CALLBACK,
@@ -360,8 +360,7 @@ function droptime_color_options() {
 /**
  * Returns active projects as pid => name options array.
  *
- * Delegates to dropcrm_project_options(). Kept for backward compatibility
- * with any callers within DropTime.
+ * Delegates to drop_base_project_options().
  *
  * @param int $uid
  *   Optional user ID to filter by owner. Pass 0 for all projects.
@@ -369,7 +368,7 @@ function droptime_color_options() {
  * @return array
  */
 function droptime_project_options($uid = 0) {
-  return dropcrm_project_options($uid);
+  return drop_base_project_options($uid);
 }
 
 /**
@@ -473,7 +472,7 @@ function droptime_dropcrm_contact_view_alter(&$output, $contact) {
   $rows = array();
   foreach ($projects as $project) {
     $rows[] = array(
-      l(check_plain($project->name), 'drop/crm/projects/' . $project->pid),
+      l(check_plain($project->name), 'drop/projects/' . $project->pid),
       $project->active ? t('Active') : t('Inactive'),
     );
   }

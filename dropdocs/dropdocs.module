@@ -9,6 +9,49 @@
  */
 
 // ---------------------------------------------------------------------------
+// Display name helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the configured display name for the docs section.
+ *
+ * Defaults to "Docs". Site architects can change this to "Notes",
+ * "Knowledge Base", "Wiki", etc. via the settings form.
+ *
+ * @param string $variant
+ *   Optional variant: 'singular' (e.g. "Doc"), 'plural' (e.g. "Docs"),
+ *   'full' (e.g. "Documentation"). Defaults to 'plural'.
+ *
+ * @return string
+ */
+function dropdocs_display_name($variant = 'plural') {
+  $name = config_get('dropdocs.settings', 'display_name');
+  if (empty($name)) {
+    $name = 'Docs';
+  }
+
+  switch ($variant) {
+    case 'singular':
+      // Strip trailing 's' for simple singular form.
+      return preg_match('/s$/i', $name) ? rtrim($name, 'sS') : $name;
+
+    case 'full':
+      // Longer form for headings like sidebar title.
+      $map = array(
+        'Docs' => t('Documentation'),
+        'Notes' => t('Notebook'),
+        'Wiki' => t('Wiki'),
+        'Knowledge Base' => t('Knowledge Base'),
+        'Resources' => t('Resources'),
+      );
+      return isset($map[$name]) ? $map[$name] : $name;
+
+    default:
+      return $name;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Menu
 // ---------------------------------------------------------------------------
 
@@ -29,7 +72,8 @@ function dropdocs_menu() {
 
   // Default local task on the index so the Reorder tab has a sibling.
   $items['drop/docs/list'] = array(
-    'title'  => 'All docs',
+    'title callback'  => 'dropdocs_tab_title',
+    'title arguments' => array('all'),
     'type'   => MENU_DEFAULT_LOCAL_TASK,
     'weight' => -10,
   );
@@ -77,6 +121,18 @@ function dropdocs_menu() {
     'file'             => 'node.pages.inc',
   );
 
+  // Settings.
+  $items['drop/docs/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropdocs_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer dropdocs'),
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 20,
+    'file'             => 'dropdocs.pages.inc',
+  );
+
   // Add child local task.
   $items['drop/doc/%node/add-child'] = array(
     'title'            => 'Add child page',
@@ -102,6 +158,24 @@ function dropdocs_menu() {
  */
 function dropdocs_page_title($node) {
   return $node->title;
+}
+
+/**
+ * Title callback for local task tabs.
+ *
+ * @param string $variant
+ *   'all' for the listing tab.
+ *
+ * @return string
+ */
+function dropdocs_tab_title($variant = 'all') {
+  switch ($variant) {
+    case 'all':
+      return t('All @name', array('@name' => strtolower(dropdocs_display_name())));
+
+    default:
+      return dropdocs_display_name();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +224,7 @@ function dropdocs_theme() {
 function dropdocs_drop_nav_links() {
   return array(
     array(
-      'title'      => t('Docs'),
+      'title'      => dropdocs_display_name(),
       'path'       => 'drop/docs',
       'permission' => 'access dropdocs',
       'weight'     => 50,
@@ -169,13 +243,32 @@ function dropdocs_drop_section_links($section) {
   $links = array();
 
   $links['all'] = array(
-    'title'        => t('All Docs'),
+    'title'        => t('All @name', array('@name' => dropdocs_display_name())),
     'href'         => 'drop/docs',
     'weight'       => -10,
     'active_paths' => array('drop/docs', 'drop/docs/list', 'drop/doc'),
   );
 
   return $links;
+}
+
+// ---------------------------------------------------------------------------
+// Settings dashboard integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function dropdocs_drop_settings_info() {
+  return array(
+    'dropdocs' => array(
+      'title' => t('DropDocs'),
+      'description' => t('Display name and other settings.'),
+      'path' => 'drop/docs/settings',
+      'permission' => 'administer dropdocs',
+      'weight' => 40,
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +290,7 @@ function dropdocs_form_doc_node_form_alter(&$form, &$form_state, $form_id) {
     $crumb = array(
       l(t('Home'), '<front>'),
       l(t('Drop Suite'), 'drop'),
-      l(t('Docs'), 'drop/docs'),
+      l(dropdocs_display_name(), 'drop/docs'),
     );
     $parents = dropdocs_get_ancestors($node->nid);
     foreach ($parents as $ancestor) {
@@ -210,7 +303,7 @@ function dropdocs_form_doc_node_form_alter(&$form, &$form_state, $form_id) {
     $crumb = array(
       l(t('Home'), '<front>'),
       l(t('Drop Suite'), 'drop'),
-      l(t('Docs'), 'drop/docs'),
+      l(dropdocs_display_name(), 'drop/docs'),
     );
     // Pre-fill parent field when arriving from "Add child page" tab.
     if (isset($_GET['parent'])) {

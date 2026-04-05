@@ -29,8 +29,6 @@ function dropcrm_autoload_info() {
     'CrmActivityUIController'       => 'dropcrm.entity.inc',
     'CrmContactInlineEntityFormController'                   => 'dropcrm.inline_entity_form.inc',
     'EntityReferenceSelectionHandlerGeneric_crm_contact'     => 'dropcrm.entity.inc',
-    'DropProject'           => 'dropcrm.entity.inc',
-    'DropProjectController' => 'dropcrm.entity.inc',
   );
 }
 
@@ -161,39 +159,26 @@ function dropcrm_entity_info() {
     ),
   );
 
-  // --- drop_project ---
-  $info['drop_project'] = array(
-    'label'            => t('Project'),
-    'plural label'     => t('Projects'),
-    'description'      => t('A project that can be linked to contacts and used for time tracking.'),
-    'entity class'     => 'DropProject',
-    'controller class' => 'DropProjectController',
-    'base table'       => 'drop_project',
-    'fieldable'        => TRUE,
-    'entity keys'      => array(
-      'id'    => 'pid',
-      'label' => 'name',
-    ),
-    'uri callback'    => 'entity_class_uri',
-    'access callback' => 'dropcrm_project_access',
-    'module'          => 'dropcrm',
-    'bundles'         => array(
-      'drop_project' => array(
-        'label' => t('Project'),
-        'admin' => array(
-          'path'             => 'drop/crm/projects/manage',
-          'access arguments' => array('administer crm'),
-        ),
-      ),
-    ),
-  );
-
   return $info;
 }
 
 // ---------------------------------------------------------------------------
 // Entity property info (drives Views, metadata wrappers, tokens)
 // ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_property_info_alter().
+ *
+ * Upgrades the project cid property to a crm_contact entity reference so
+ * Views can create a relationship from projects to contacts.
+ */
+function dropcrm_entity_property_info_alter(&$info) {
+  if (isset($info['drop_project']['properties']['cid'])) {
+    $info['drop_project']['properties']['cid']['type'] = 'crm_contact';
+    $info['drop_project']['properties']['cid']['label'] = t('Contact');
+    $info['drop_project']['properties']['cid']['description'] = t('The CRM contact linked to this project.');
+  }
+}
 
 /**
  * Implements hook_entity_property_info().
@@ -440,10 +425,6 @@ function dropcrm_permission() {
       'title'       => t('Access CRM'),
       'description' => t('View contacts, activities, and contact methods.'),
     ),
-    'access crm projects' => array(
-      'title'       => t('Access CRM Projects'),
-      'description' => t('View the project list and individual project pages (without full CRM access). Useful for team members who only need to see which tickets belong to a project.'),
-    ),
     'create crm contacts' => array(
       'title'       => t('Create CRM contacts'),
     ),
@@ -631,88 +612,22 @@ function crm_relationship_load($rid) {
     ->fetchObject();
 }
 
-/**
- * Menu loader: load a project by pid.
- */
-function drop_project_load($pid) {
-  $projects = entity_load('drop_project', array((int) $pid));
-  return $projects ? reset($projects) : FALSE;
-}
+// ---------------------------------------------------------------------------
+// Backward-compat wrappers for project functions (now in drop_base)
+// ---------------------------------------------------------------------------
 
 /**
- * Access callback: view/list project pages.
- *
- * Grants access to users with either 'access crm' or 'access crm projects'.
- */
-function dropcrm_project_view_access() {
-  return user_access('administer crm')
-    || user_access('access crm')
-    || user_access('access crm projects');
-}
-
-/**
- * Access callback for drop_project entities.
- */
-function dropcrm_project_access($op, $project = NULL, $account = NULL) {
-  global $user;
-  if (!$account) {
-    $account = $user;
-  }
-  if (user_access('administer crm', $account)) {
-    return TRUE;
-  }
-  // View access: either full CRM access or the lighter projects-only permission.
-  if ($op === 'view') {
-    return user_access('access crm', $account)
-      || user_access('access crm projects', $account);
-  }
-  if (!user_access('access crm', $account)) {
-    return FALSE;
-  }
-  if ($op === 'create') {
-    return TRUE;
-  }
-  return $project && $project->uid == $account->uid;
-}
-
-/**
- * Returns the available project color options.
- *
- * @return array
- *   Hex code => label.
+ * @deprecated Use drop_base_color_options() instead.
  */
 function dropcrm_color_options() {
-  return array(
-    '#1565c0' => t('Blue'),
-    '#2e7d32' => t('Green'),
-    '#e65100' => t('Orange'),
-    '#7b1fa2' => t('Purple'),
-    '#c62828' => t('Red'),
-    '#00838f' => t('Teal'),
-    '#f57c00' => t('Amber'),
-    '#37474f' => t('Slate'),
-    '#558b2f' => t('Olive'),
-    '#ad1457' => t('Pink'),
-  );
+  return drop_base_color_options();
 }
 
 /**
- * Returns active projects as pid => name options array.
- *
- * @param int $uid
- *   Optional user ID to filter by owner. Pass 0 for all projects.
- *
- * @return array
+ * @deprecated Use drop_base_project_options() instead.
  */
 function dropcrm_project_options($uid = 0) {
-  $query = db_select('drop_project', 'p')
-    ->fields('p', array('pid', 'name'))
-    ->condition('p.active', 1)
-    ->orderBy('p.name', 'ASC');
-  if ($uid) {
-    $query->condition('p.uid', $uid);
-  }
-  return $query->execute()->fetchAllKeyed();
+  return drop_base_project_options($uid);
 }
 
 // ---------------------------------------------------------------------------
@@ -1121,60 +1036,17 @@ function dropcrm_menu() {
     'weight'           => 20,
   );
 
-  // ---- Projects ----
+  // ---- Project redirects (projects now live in drop_base at drop/projects) ----
   $items['drop/crm/projects'] = array(
-    'title'            => 'Projects',
-    'page callback'    => 'dropcrm_project_list',
-    'access callback'  => 'dropcrm_project_view_access',
-    'access arguments' => array(),
-    'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
-  // Field UI parent path for drop_project bundle admin.
-  $items['drop/crm/projects/manage'] = array(
-    'title'            => 'Manage project fields',
     'page callback'    => 'backdrop_goto',
-    'page arguments'   => array('drop/crm/projects/manage/fields'),
-    'access arguments' => array('administer crm'),
+    'page arguments'   => array('drop/projects'),
+    'access callback'  => TRUE,
     'type'             => MENU_CALLBACK,
   );
-
   $items['drop/crm/projects/add'] = array(
-    'title'            => 'Add project',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('dropcrm_project_form', NULL),
-    'access callback'  => 'user_access',
-    'access arguments' => array('access crm'),
-    'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_LOCAL_ACTION,
-  );
-  $items['drop/crm/projects/%drop_project/edit'] = array(
-    'title'            => 'Edit project',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('dropcrm_project_form', 3),
-    'access callback'  => 'dropcrm_project_access',
-    'access arguments' => array('update', 3),
-    'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
-  $items['drop/crm/projects/%drop_project/delete'] = array(
-    'title'            => 'Delete project',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('dropcrm_project_delete_form', 3),
-    'access callback'  => 'dropcrm_project_access',
-    'access arguments' => array('delete', 3),
-    'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
-
-  // Project view — ticket list for a single project.
-  $items['drop/crm/projects/%drop_project'] = array(
-    'title'            => 'Project',
-    'page callback'    => 'dropcrm_project_view',
-    'page arguments'   => array(3),
-    'access callback'  => 'dropcrm_project_view_access',
-    'access arguments' => array(),
-    'file'             => 'dropcrm.admin.inc',
+    'page callback'    => 'backdrop_goto',
+    'page arguments'   => array('drop/projects/add'),
+    'access callback'  => TRUE,
     'type'             => MENU_CALLBACK,
   );
 
@@ -1799,15 +1671,6 @@ function dropcrm_drop_section_links($section) {
     'weight'       => 0,
     'active_paths' => array('drop/crm/activities', 'drop/crm/activity'),
   );
-
-  if (user_access('access crm') || user_access('access crm projects')) {
-    $links['projects'] = array(
-      'title'        => t('Projects'),
-      'href'         => 'drop/crm/projects',
-      'weight'       => 10,
-      'active_paths' => array('drop/crm/projects'),
-    );
-  }
 
   // Reports — flat links rather than a navigating "Reports" parent.
   $links['last_contact'] = array(

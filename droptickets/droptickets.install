@@ -550,6 +550,62 @@ function _droptickets_ensure_tags_field() {
 }
 
 /**
+ * Creates the drop_boards vocabulary, default "General" term, and
+ * field_drop_board field + instance on drop_ticket if they don't exist.
+ */
+function _droptickets_ensure_boards_field() {
+  if (!taxonomy_vocabulary_load('drop_boards')) {
+    $vocab = new TaxonomyVocabulary(array(
+      'machine_name' => 'drop_boards',
+      'name'         => 'Kanban Boards',
+      'description'  => 'Defines which Kanban board(s) a ticket appears on.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+
+    $term = new TaxonomyTerm(array(
+      'name'       => 'General',
+      'vocabulary' => 'drop_boards',
+    ));
+    taxonomy_term_save($term);
+  }
+
+  if (!field_info_field('field_drop_board')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_board',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_boards', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  if (!field_info_instance('drop_ticket', 'field_drop_board', 'drop_ticket')) {
+    field_create_instance(array(
+      'field_name'  => 'field_drop_board',
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'label'       => 'Kanban Boards',
+      'required'    => FALSE,
+      'description' => 'Select which Kanban board(s) this ticket appears on. Leave empty to show on the General board by default.',
+      'widget'      => array(
+        'type'   => 'options_buttons',
+        'weight' => 22,
+      ),
+      'display' => array(
+        'default' => array(
+          'label'  => 'hidden',
+          'type'   => 'hidden',
+          'weight' => 22,
+        ),
+      ),
+    ));
+  }
+}
+
+/**
  * Implements hook_install().
  *
  * Adds prefix and ticket_counter columns to drop_project, and creates the
@@ -581,6 +637,9 @@ function droptickets_install() {
   // Ensure the shared drop_tags vocabulary and field_drop_tags field exist,
   // then attach the field to drop_ticket entities.
   _droptickets_ensure_tags_field();
+
+  // Create the Kanban boards vocabulary, default "General" term, and field.
+  _droptickets_ensure_boards_field();
 
   // Create the Team Member role if it doesn't already exist.
   $role = user_role_load_by_name('team_member');

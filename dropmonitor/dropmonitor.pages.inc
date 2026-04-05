@@ -376,7 +376,7 @@ function dropmonitor_uptime_dashboard() {
 
   // Get all active projects with site URLs.
   $projects = db_select('drop_project', 'p')
-    ->fields('p', array('pid', 'name', 'site_url'))
+    ->fields('p')
     ->condition('p.active', 1)
     ->condition('p.site_url', '', '!=')
     ->orderBy('p.name')
@@ -388,6 +388,14 @@ function dropmonitor_uptime_dashboard() {
   }
 
   $latest = dropmonitor_uptime_latest();
+
+  // Check for projects with incomplete monitoring settings.
+  $incomplete = array();
+  foreach ($projects as $project) {
+    if (empty($project->platform)) {
+      $incomplete[] = l(check_plain($project->name), 'drop/projects/' . $project->pid . '/edit');
+    }
+  }
 
   $header = array(
     t('Project'),
@@ -428,28 +436,55 @@ function dropmonitor_uptime_dashboard() {
       $pct_html = '<span class="' . $pct_class . '">' . $pct . '%</span>';
     }
 
-    $check_link = '';
+    $actions = '';
     if (user_access('administer dropmonitor')) {
-      $check_link = l(t('Check now'), 'drop/monitor/uptime/' . $pid . '/check', array(
+      $actions = l(t('Check now'), 'drop/monitor/uptime/' . $pid . '/check', array(
         'query' => array('token' => backdrop_get_token('dropmonitor_check')),
         'attributes' => array('class' => array('dropmonitor-check-now')),
       ));
+      $actions .= ' ' . l(icon('gear', array('attributes' => array('width' => 13, 'height' => 13))), 'drop/projects/' . $pid . '/edit', array(
+        'html' => TRUE,
+        'attributes' => array('title' => t('Edit project settings')),
+        'query' => array('destination' => 'drop/monitor/uptime'),
+      ));
+    }
+
+    // Platform/mode indicator.
+    $platform_labels = drop_base_platform_options();
+    $platform_text = '';
+    if (!empty($project->platform) && isset($platform_labels[$project->platform])) {
+      $platform_text = '<span class="dropmonitor-metric-detail">' . check_plain($platform_labels[$project->platform]);
+      if (!empty($project->gentle_monitor)) {
+        $platform_text .= ' · ' . t('Gentle');
+      }
+      $platform_text .= '</span>';
     }
 
     $rows[] = array(
-      l(check_plain($project->name), 'drop/monitor/uptime/' . $pid),
+      l(check_plain($project->name), 'drop/monitor/uptime/' . $pid) . ($platform_text ? '<br>' . $platform_text : ''),
       '<span class="dropmonitor-metric-detail">' . l(check_plain($project->site_url), $project->site_url, array('external' => TRUE)) . '</span>',
       $status_html,
       $response,
       $pct_html,
       '<span class="dropmonitor-metric-detail">' . $checked . '</span>',
-      $check_link,
+      $actions,
     );
   }
 
   $header[] = '';
 
-  $output = theme('table', array(
+  $output = '';
+
+  if (!empty($incomplete) && user_access('administer dropmonitor')) {
+    $output .= '<div class="messages warning">'
+      . '<strong>' . t('Incomplete monitoring settings') . '</strong><br>'
+      . t('The following projects have no platform set. Monitoring will use a basic homepage check until configured: !list', array(
+          '!list' => implode(', ', $incomplete),
+        ))
+      . '</div>';
+  }
+
+  $output .= theme('table', array(
     'header' => $header,
     'rows' => $rows,
     'attributes' => array('class' => array('dropmonitor-uptime-table')),

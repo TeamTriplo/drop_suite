@@ -4,5 +4,4 @@ type = module
 backdrop = 1.x
 version = 1.x-1.0-dev
 dependencies[] = drop_base
-dependencies[] = dropcrm
 package = Drop Suite

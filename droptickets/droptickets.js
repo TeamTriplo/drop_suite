@@ -213,6 +213,56 @@
   };
 
   /**
+   * Inline priority select on the ticket view page.
+   *
+   * On change, POSTs the new priority to the inline-priority endpoint.
+   * Updates the color class on success; reverts on failure.
+   */
+  Backdrop.behaviors.dropticketsInlinePriority = {
+    attach: function (context, settings) {
+      $('.droptickets-priority-select', context).once('droptickets-inline-priority').on('change', function () {
+        var $select  = $(this);
+        var newVal   = $select.val();
+        var prevVal  = $select.data('current');
+        var endpoint = $select.data('endpoint');
+        var token    = $select.data('token');
+
+        $select.prop('disabled', true).addClass('droptickets-saving');
+
+        $.ajax({
+          url:      endpoint,
+          type:     'POST',
+          data:     { priority: newVal, token: token },
+          dataType: 'json',
+          success: function (resp) {
+            if (resp.ok) {
+              $select.data('current', newVal);
+              // Update priority color class.
+              $select.removeClass(function (i, cls) {
+                return (cls.match(/drop-priority-\S+/) || []).join(' ');
+              });
+              var classMap = {0: 'none', 1: 'low', 2: 'normal', 3: 'high', 4: 'critical'};
+              if (classMap[newVal]) {
+                $select.addClass('drop-priority-' + classMap[newVal]);
+              }
+            }
+            else {
+              $select.val(prevVal);
+              if (resp.message) { alert(resp.message); }
+            }
+          },
+          error: function () {
+            $select.val(prevVal);
+          },
+          complete: function () {
+            $select.prop('disabled', false).removeClass('droptickets-saving');
+          }
+        });
+      });
+    }
+  };
+
+  /**
    * Review / triage toggle buttons.
    *
    * POSTs to the toggle endpoint and updates the button + row class in place

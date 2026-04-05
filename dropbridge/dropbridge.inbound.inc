@@ -35,10 +35,15 @@ function dropbridge_inbound_email_webhook() {
     backdrop_exit();
   }
 
-  // Validate the shared-secret token.
+  // Validate the shared-secret token. No token configured = webhook disabled.
   $expected_token = (string) $config->get('webhook_token');
-  $given_token    = isset($_GET['token']) ? (string) $_GET['token'] : '';
-  if (!empty($expected_token) && !hash_equals($expected_token, $given_token)) {
+  if (empty($expected_token)) {
+    backdrop_add_http_header('Status', '200 OK');
+    print 'Webhook token not configured.';
+    backdrop_exit();
+  }
+  $given_token = isset($_GET['token']) ? (string) $_GET['token'] : '';
+  if (!hash_equals($expected_token, $given_token)) {
     watchdog('dropbridge', 'Inbound email: invalid or missing token from @ip.',
       array('@ip' => ip_address()), WATCHDOG_WARNING);
     backdrop_add_http_header('Status', '200 OK');

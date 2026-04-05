@@ -3,11 +3,15 @@
  * @file
  * Uptime monitoring for project websites.
  *
- * Checks all projects with a site_url via HEAD request and logs results.
+ * Checks all projects with a site_url and respects per-project intervals,
+ * gentle monitoring mode, and consecutive failure thresholds.
  */
 
 /**
  * Runs uptime checks for all active projects with a site_url.
+ *
+ * Respects each project's check_interval — only checks projects whose
+ * interval has elapsed since their last check.
  */
 function dropmonitor_run_uptime_checks() {
   if (!db_table_exists('drop_project')) {
@@ -15,7 +19,7 @@ function dropmonitor_run_uptime_checks() {
   }
 
   $projects = db_select('drop_project', 'p')
-    ->fields('p', array('pid', 'name', 'site_url'))
+    ->fields('p')
     ->condition('p.active', 1)
     ->condition('p.site_url', '', '!=')
     ->execute()
@@ -27,51 +31,134 @@ function dropmonitor_run_uptime_checks() {
 
   $checked = 0;
   foreach ($projects as $project) {
+    // Check per-project interval.
+    $interval = !empty($project->check_interval) ? (int) $project->check_interval : 5;
+    $interval_seconds = $interval * 60;
+    $last_check = state_get('dropmonitor.uptime_last_check.' . $project->pid, 0);
+
+    if ((REQUEST_TIME - $last_check) < ($interval_seconds - 30)) {
+      // Not time yet (30-second buffer for cron timing variance).
+      continue;
+    }
+
     _dropmonitor_check_uptime($project);
+    state_set('dropmonitor.uptime_last_check.' . $project->pid, REQUEST_TIME);
     $checked++;
   }
 
-  watchdog('dropmonitor', 'Uptime check complete: @count projects checked.', array(
-    '@count' => $checked,
-  ), WATCHDOG_INFO);
+  if ($checked > 0) {
+    watchdog('dropmonitor', 'Uptime check complete: @count projects checked.', array(
+      '@count' => $checked,
+    ), WATCHDOG_INFO);
+  }
 }
 
 /**
  * Checks a single project's uptime and logs the result.
+ *
+ * Handles gentle vs normal monitoring mode and applies the consecutive
+ * failure threshold before triggering state changes.
  */
 function _dropmonitor_check_uptime($project) {
-  $url = $project->site_url;
+  $gentle = !empty($project->gentle_monitor);
+
+  // Determine the URL to check.
+  if ($gentle) {
+    // Gentle mode: always check the homepage.
+    $url = $project->site_url;
+  }
+  else {
+    // Normal mode: use platform-aware health URL.
+    $url = drop_base_project_health_url($project);
+    if (empty($url)) {
+      $url = $project->site_url;
+    }
+  }
+
+  if (empty($url)) {
+    return;
+  }
 
   // Ensure URL has a scheme.
   if (strpos($url, '://') === FALSE) {
     $url = 'https://' . $url;
   }
 
+  // Configure request based on monitoring mode.
+  if ($gentle) {
+    $options = array(
+      'method' => 'HEAD',
+      'timeout' => 10,
+      'max_redirects' => 3,
+      'headers' => array(
+        'User-Agent' => 'Mozilla/5.0 (compatible; DropMonitor/1.0; +https://simplo.site)',
+      ),
+    );
+  }
+  else {
+    $options = array(
+      'method' => 'GET',
+      'timeout' => 10,
+      'max_redirects' => 3,
+      'headers' => array(
+        'User-Agent' => 'DropMonitor/1.0',
+      ),
+    );
+  }
+
   $start = microtime(TRUE);
-  @$response = backdrop_http_request($url, array(
-    'method' => 'HEAD',
-    'timeout' => 10,
-    'max_redirects' => 3,
-  ));
+  @$response = backdrop_http_request($url, $options);
   $elapsed_ms = (int) round((microtime(TRUE) - $start) * 1000);
 
   $code = isset($response->code) ? (int) $response->code : 0;
   // Consider 2xx and 3xx as "up".
-  $is_up = ($code >= 200 && $code < 400) ? 1 : 0;
+  $check_passed = ($code >= 200 && $code < 400) ? 1 : 0;
 
-  // Log the check.
+  // Log the raw check result.
   db_insert('dropmonitor_uptime')
     ->fields(array(
       'pid' => $project->pid,
-      'status' => $is_up,
+      'status' => $check_passed,
       'response_code' => $code,
       'response_ms' => $elapsed_ms,
       'checked' => REQUEST_TIME,
     ))
     ->execute();
 
-  // Detect state change for notifications.
-  _dropmonitor_uptime_state_change($project, $is_up, $code, $elapsed_ms);
+  // Apply consecutive failure threshold before changing state.
+  _dropmonitor_apply_threshold($project, $check_passed, $code, $elapsed_ms);
+}
+
+/**
+ * Applies the consecutive failure threshold before triggering state changes.
+ *
+ * A site is only marked DOWN after N consecutive failed checks (configurable).
+ * A single successful check immediately marks the site as UP.
+ */
+function _dropmonitor_apply_threshold($project, $check_passed, $code, $response_ms) {
+  $threshold = (int) config_get('dropmonitor.settings', 'failure_threshold');
+  if ($threshold < 1) {
+    $threshold = 3;
+  }
+
+  $fail_count_key = 'dropmonitor.uptime_fail_count.' . $project->pid;
+
+  if ($check_passed) {
+    // Success — reset failure count and report UP.
+    state_set($fail_count_key, 0);
+    _dropmonitor_uptime_state_change($project, 1, $code, $response_ms);
+  }
+  else {
+    // Failure — increment count.
+    $fail_count = (int) state_get($fail_count_key, 0) + 1;
+    state_set($fail_count_key, $fail_count);
+
+    if ($fail_count >= $threshold) {
+      // Threshold reached — report DOWN.
+      _dropmonitor_uptime_state_change($project, 0, $code, $response_ms);
+    }
+    // Below threshold — log it but don't change state yet.
+  }
 }
 
 /**
@@ -100,7 +187,9 @@ function _dropmonitor_uptime_state_change($project, $is_up, $code, $response_ms)
   state_set($state_key, $is_up);
 
   if ($is_up) {
-    // Site came back up.
+    // Site came back up — reset failure counter.
+    state_del('dropmonitor.uptime_fail_count.' . $project->pid);
+
     $down_since = state_get('dropmonitor.uptime_down_since.' . $project->pid, 0);
     $downtime = $down_since ? format_interval(REQUEST_TIME - $down_since) : t('unknown');
     state_del('dropmonitor.uptime_down_since.' . $project->pid);

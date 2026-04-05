@@ -565,11 +565,351 @@ function drop_base_page_actions(array $links) {
   return '<div class="drop-page-actions">' . implode('', $links) . '</div>';
 }
 
+// ---------------------------------------------------------------------------
+// Project entity infrastructure
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function drop_base_autoload_info() {
+  return array(
+    'DropProject'           => 'drop_base.entity.inc',
+    'DropProjectController' => 'drop_base.entity.inc',
+  );
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ *
+ * Exposes hard-coded project properties to the Field UI "Manage display" and
+ * "Manage form" interfaces so they can be reordered and toggled.
+ */
+function drop_base_field_extra_fields() {
+  $extra = array();
+
+  // Form pseudo-fields.
+  $extra['drop_project']['drop_project']['form']['name'] = array(
+    'label' => t('Project name'),
+    'description' => t('The project name (required).'),
+    'weight' => -10,
+  );
+  $extra['drop_project']['drop_project']['form']['site_url'] = array(
+    'label' => t('Website URL'),
+    'description' => t('Primary URL for the project.'),
+    'weight' => 0,
+  );
+  $extra['drop_project']['drop_project']['form']['active'] = array(
+    'label' => t('Active'),
+    'description' => t('Whether the project is active or archived.'),
+    'weight' => 5,
+  );
+
+  // Display pseudo-fields.
+  $extra['drop_project']['drop_project']['display']['prefix'] = array(
+    'label' => t('Ticket prefix'),
+    'description' => t('The ticket numbering prefix.'),
+    'weight' => -5,
+  );
+  $extra['drop_project']['drop_project']['display']['contact'] = array(
+    'label' => t('Contact'),
+    'description' => t('Linked CRM contact (when CRM is enabled).'),
+    'weight' => 0,
+  );
+  $extra['drop_project']['drop_project']['display']['site_url'] = array(
+    'label' => t('Website URL'),
+    'description' => t('Project website link.'),
+    'weight' => 5,
+  );
+  $extra['drop_project']['drop_project']['display']['status'] = array(
+    'label' => t('Status'),
+    'description' => t('Active or archived status.'),
+    'weight' => 10,
+  );
+  $extra['drop_project']['drop_project']['display']['tickets'] = array(
+    'label' => t('Tickets'),
+    'description' => t('Ticket list for this project (when DropTickets is enabled).'),
+    'weight' => 20,
+  );
+
+  return $extra;
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function drop_base_entity_property_info() {
+  $info = array();
+  $project = &$info['drop_project']['properties'];
+
+  $project['pid'] = array(
+    'label'           => t('Project ID'),
+    'type'            => 'integer',
+    'description'     => t('The unique project ID.'),
+    'schema field'    => 'pid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $project['name'] = array(
+    'label'           => t('Name'),
+    'type'            => 'text',
+    'description'     => t('The project name.'),
+    'schema field'    => 'name',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['color'] = array(
+    'label'           => t('Color'),
+    'type'            => 'text',
+    'description'     => t('Display color as a CSS hex value.'),
+    'schema field'    => 'color',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['active'] = array(
+    'label'           => t('Active'),
+    'type'            => 'boolean',
+    'description'     => t('Whether the project is active.'),
+    'schema field'    => 'active',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['cid'] = array(
+    'label'           => t('Contact'),
+    'type'            => 'integer',
+    'description'     => t('Linked CRM contact ID (optional).'),
+    'schema field'    => 'cid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['prefix'] = array(
+    'label'           => t('Ticket prefix'),
+    'type'            => 'text',
+    'description'     => t('Short prefix for ticket numbers.'),
+    'schema field'    => 'prefix',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['ticket_counter'] = array(
+    'label'           => t('Ticket counter'),
+    'type'            => 'integer',
+    'description'     => t('Auto-incrementing counter for ticket labels.'),
+    'schema field'    => 'ticket_counter',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $project['site_url'] = array(
+    'label'           => t('Website URL'),
+    'type'            => 'uri',
+    'description'     => t('Primary URL for the project.'),
+    'schema field'    => 'site_url',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['uid'] = array(
+    'label'           => t('Owner'),
+    'type'            => 'user',
+    'description'     => t('The user who created this project.'),
+    'schema field'    => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['created'] = array(
+    'label'           => t('Date created'),
+    'type'            => 'date',
+    'description'     => t('When the project was created.'),
+    'schema field'    => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $project['changed'] = array(
+    'label'           => t('Date modified'),
+    'type'            => 'date',
+    'description'     => t('When the project was last modified.'),
+    'schema field'    => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function drop_base_entity_info() {
+  $info = array();
+
+  $info['drop_project'] = array(
+    'label'            => t('Project'),
+    'plural label'     => t('Projects'),
+    'description'      => t('A project used for tickets, time tracking, and monitoring.'),
+    'entity class'     => 'DropProject',
+    'controller class' => 'DropProjectController',
+    'base table'       => 'drop_project',
+    'fieldable'        => TRUE,
+    'entity keys'      => array(
+      'id'    => 'pid',
+      'label' => 'name',
+    ),
+    'uri callback'    => 'entity_class_uri',
+    'access callback' => 'drop_base_project_access',
+    'module'          => 'drop_base',
+    'bundles'         => array(
+      'drop_project' => array(
+        'label' => t('Project'),
+        'admin' => array(
+          'path'             => 'drop/projects/manage',
+          'access arguments' => array('administer drop entities'),
+        ),
+      ),
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Loads a single project entity by pid.
+ *
+ * Used as a menu wildcard loader for %drop_project.
+ */
+function drop_project_load($pid) {
+  $projects = entity_load('drop_project', array((int) $pid));
+  return $projects ? reset($projects) : FALSE;
+}
+
+/**
+ * Title callback for project view pages.
+ */
+function drop_base_project_title($project) {
+  return $project->name;
+}
+
+/**
+ * View access callback for project listing pages.
+ */
+function drop_base_project_view_access() {
+  return user_access('administer projects')
+    || user_access('access projects');
+}
+
+/**
+ * Access callback for drop_project entities.
+ */
+function drop_base_project_access($op, $project = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+
+  if (user_access('administer projects', $account)) {
+    return TRUE;
+  }
+
+  // View access.
+  if ($op === 'view') {
+    return user_access('access projects', $account);
+  }
+
+  if (!user_access('access projects', $account)) {
+    return FALSE;
+  }
+
+  // Create access for anyone with project access.
+  if ($op === 'create') {
+    return TRUE;
+  }
+
+  // Update/delete: owner or admin only.
+  return $project && $project->uid == $account->uid;
+}
+
+/**
+ * Returns active projects as pid => name options array.
+ *
+ * @param int $uid
+ *   Optional user ID to filter by owner. Pass 0 for all projects.
+ *
+ * @return array
+ */
+function drop_base_project_options($uid = 0) {
+  $query = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name'))
+    ->condition('p.active', 1)
+    ->orderBy('p.name', 'ASC');
+  if ($uid) {
+    $query->condition('p.uid', $uid);
+  }
+  return $query->execute()->fetchAllKeyed();
+}
+
+/**
+ * Returns available project color options.
+ *
+ * @return array
+ *   Hex value => label pairs.
+ */
+function drop_base_color_options() {
+  return array(
+    '#1565c0' => t('Blue'),
+    '#2e7d32' => t('Green'),
+    '#e65100' => t('Orange'),
+    '#7b1fa2' => t('Purple'),
+    '#c62828' => t('Red'),
+    '#00838f' => t('Teal'),
+    '#f57c00' => t('Amber'),
+    '#37474f' => t('Slate'),
+    '#558b2f' => t('Olive'),
+    '#ad1457' => t('Pink'),
+  );
+}
 
 /**
  * Implements hook_menu().
  */
 function drop_base_menu() {
+  // --- Projects ---
+  // List page at drop/projects is provided by the drop_projects view.
+  $items['drop/projects/add'] = array(
+    'title'            => 'Add project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_base_project_form'),
+    'access callback'  => 'drop_base_project_access',
+    'access arguments' => array('create'),
+    'file'             => 'drop_base.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+  $items['drop/projects/manage'] = array(
+    'title'            => 'Project settings',
+    'page callback'    => 'drop_base_project_manage_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop entities'),
+    'file'             => 'drop_base.admin.inc',
+  );
+  $items['drop/projects/%drop_project'] = array(
+    'title callback'   => 'drop_base_project_title',
+    'title arguments'  => array(2),
+    'page callback'    => 'drop_base_project_view',
+    'page arguments'   => array(2),
+    'access callback'  => 'drop_base_project_access',
+    'access arguments' => array('view', 2),
+    'file'             => 'drop_base.admin.inc',
+  );
+  $items['drop/projects/%drop_project/edit'] = array(
+    'title'            => 'Edit project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_base_project_form', 2),
+    'access callback'  => 'drop_base_project_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'drop_base.admin.inc',
+  );
+  $items['drop/projects/%drop_project/delete'] = array(
+    'title'            => 'Delete project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_base_project_delete_form', 2),
+    'access callback'  => 'drop_base_project_access',
+    'access arguments' => array('delete', 2),
+    'file'             => 'drop_base.admin.inc',
+  );
+
+  // --- Team ---
   $items['drop/team'] = array(
     'title'            => 'Team',
     'page callback'    => 'drop_base_team_page',
@@ -762,6 +1102,20 @@ function drop_base_pin_report_toggle($report_id) {
  */
 function drop_base_permission() {
   return array(
+    'access projects' => array(
+      'title'       => t('Access projects'),
+      'description' => t('View the project list and individual project pages.'),
+    ),
+    'administer drop entities' => array(
+      'title'       => t('Manage Drop Suite entities'),
+      'description' => t('Manage fields and display settings for Drop Suite entity types (projects, tickets, contacts, etc.).'),
+      'restrict access' => TRUE,
+    ),
+    'administer projects' => array(
+      'title'       => t('Administer projects'),
+      'description' => t('Full administrative access to all projects.'),
+      'restrict access' => TRUE,
+    ),
     'access drop team' => array(
       'title'       => t('Access team directory'),
       'description' => t('View the team directory showing team members and last online time.'),
@@ -775,11 +1129,102 @@ function drop_base_permission() {
 function drop_base_drop_nav_links() {
   return array(
     array(
+      'title'      => t('Projects'),
+      'path'       => 'drop/projects',
+      'permission' => 'access projects',
+      'weight'     => 15,
+    ),
+    array(
       'title'      => t('Team'),
       'path'       => 'drop/team',
       'permission' => 'access drop team',
       'weight'     => 90,
     ),
+  );
+}
+
+/**
+ * Implements hook_layout_info().
+ *
+ * Registers the Drop Suite layout so it ships with the module and doesn't
+ * need to be installed separately.
+ */
+function drop_base_layout_info() {
+  $layouts['drop_suite'] = array(
+    'title' => t('Drop Suite'),
+    'path' => 'layouts/drop_suite',
+    'regions' => array(
+      'header'     => t('Header'),
+      'navigation' => t('Navigation'),
+      'messages'   => t('Messages'),
+      'top'        => t('Top'),
+      'content'    => t('Content'),
+      'sidebar'    => t('Sidebar'),
+      'bottom'     => t('Bottom'),
+      'footer'     => t('Footer'),
+    ),
+    'default region' => 'content',
+    'preview' => 'drop_suite.png',
+    'stylesheets' => array(
+      'all' => array('drop_suite.css'),
+    ),
+    'template' => 'layout--drop-suite',
+    'libraries' => array('bootstrap4-gs'),
+  );
+  return $layouts;
+}
+
+/**
+ * Returns the effective health check URL for a project.
+ *
+ * If health_url is set, returns it directly. Otherwise calculates a
+ * platform-appropriate URL from site_url that bypasses caching.
+ *
+ * @param object $project
+ *   A project entity with site_url, platform, and health_url properties.
+ *
+ * @return string
+ *   The URL to check, or empty string if no site_url is set.
+ */
+function drop_base_project_health_url($project) {
+  // Manual override takes precedence.
+  if (!empty($project->health_url)) {
+    return $project->health_url;
+  }
+
+  if (empty($project->site_url)) {
+    return '';
+  }
+
+  $base = rtrim($project->site_url, '/');
+  $platform = isset($project->platform) ? $project->platform : '';
+
+  switch ($platform) {
+    case 'backdrop':
+    case 'drupal':
+      return $base . '/user/login';
+
+    case 'wordpress':
+      return $base . '/wp-login.php';
+
+    default:
+      // Cache-busting query parameter for unknown platforms.
+      return $base . '?_monitor=' . time();
+  }
+}
+
+/**
+ * Returns platform options for select lists.
+ *
+ * @return array
+ */
+function drop_base_platform_options() {
+  return array(
+    ''          => t('— Select —'),
+    'backdrop'  => t('Backdrop CMS'),
+    'drupal'    => t('Drupal'),
+    'wordpress' => t('WordPress'),
+    'other'     => t('Other'),
   );
 }
 

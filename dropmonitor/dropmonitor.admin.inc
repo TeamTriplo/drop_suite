@@ -22,7 +22,7 @@ function dropmonitor_settings_form($form, &$form_state) {
   $form['uptime_token'] = array(
     '#type' => 'textfield',
     '#title' => t('Uptime check token'),
-    '#description' => t('Shared secret for the uptime check endpoint. Add this to your system crontab: <code>*/10 * * * * curl -s "@url?token=YOUR_TOKEN"</code>', array(
+    '#description' => t('Shared secret for the uptime check endpoint. Add this to your system crontab: <code>*/5 * * * * curl -s "@url?token=YOUR_TOKEN"</code>', array(
       '@url' => url('drop/monitor/uptime-check', array('absolute' => TRUE)),
     )),
     '#default_value' => $uptime_token,
@@ -95,6 +95,20 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#min' => 500,
     '#max' => 30000,
     '#field_suffix' => 'ms',
+  );
+
+  $form['thresholds']['failure_threshold'] = array(
+    '#type' => 'select',
+    '#title' => t('Consecutive failures before DOWN'),
+    '#description' => t('How many consecutive failed checks are required before a site is marked DOWN and alerts are sent. Prevents false alarms from transient blips.'),
+    '#options' => array(
+      1 => t('1 (immediate)'),
+      2 => t('2 consecutive'),
+      3 => t('3 consecutive (recommended)'),
+      4 => t('4 consecutive'),
+      5 => t('5 consecutive'),
+    ),
+    '#default_value' => $config->get('failure_threshold') ?: 3,
   );
 
   $form['actions'] = array('#type' => 'actions');

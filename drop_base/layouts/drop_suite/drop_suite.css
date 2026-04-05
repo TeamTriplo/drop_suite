@@ -1,0 +1,64 @@
+/**
+ * @file
+ * Drop Suite layout styles.
+ */
+
+/* Navigation region */
+.l-navigation {
+  width: 100%;
+}
+
+.l-navigation-inner {
+  max-width: 100%;
+}
+
+/* Main wrapper — centered with max-width */
+.layout--drop-suite .l-wrapper {
+  width: 100%;
+}
+
+.layout--drop-suite .l-wrapper-inner {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* Kanban pages — the board itself may exceed the default 1600px wrapper */
+.layout-kanban-wide .droptickets-kanban {
+  max-width: 95vw;
+  margin-left: auto;
+  margin-right: auto;
+  justify-content: center;
+}
+
+/* Messages */
+.layout--drop-suite .l-messages {
+  margin-bottom: 1rem;
+}
+
+/* Page title */
+.layout--drop-suite .l-page-title {
+  margin-bottom: 0.5rem;
+}
+
+/* Tabs — prevent floated tab items from pushing content right */
+.layout--drop-suite .l-tabs {
+  clear: both;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+/* Content — full width when no sidebar */
+.layout--drop-suite .l-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.layout--drop-suite .l-sidebar {
+  min-width: 0;
+}
+
+/* Footer */
+.layout--drop-suite .l-footer-inner {
+  padding: 1rem;
+}

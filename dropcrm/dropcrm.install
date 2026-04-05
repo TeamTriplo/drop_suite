@@ -10,79 +10,7 @@
 function dropcrm_schema() {
   $schema = array();
 
-  $schema['drop_project'] = array(
-    'description' => 'Projects that can be linked to contacts and used for time tracking.',
-    'fields' => array(
-      'pid' => array(
-        'type'     => 'serial',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-      ),
-      'name' => array(
-        'type'     => 'varchar',
-        'length'   => 255,
-        'not null' => TRUE,
-        'default'  => '',
-        'description' => 'Project name.',
-      ),
-      'color' => array(
-        'type'     => 'varchar',
-        'length'   => 7,
-        'not null' => TRUE,
-        'default'  => '#1565c0',
-        'description' => 'Display color as a CSS hex value.',
-      ),
-      'active' => array(
-        'type'     => 'int',
-        'size'     => 'tiny',
-        'not null' => TRUE,
-        'default'  => 1,
-        'description' => '1 = active, 0 = archived.',
-      ),
-      'cid' => array(
-        'description' => 'Optional linked DropCRM contact ID.',
-        'type'        => 'int',
-        'unsigned'    => TRUE,
-        'not null'    => FALSE,
-        'default'     => NULL,
-      ),
-      'prefix' => array(
-        'description' => 'Short prefix for ticket numbers, e.g. TRIP for TRIP-42.',
-        'type'        => 'varchar',
-        'length'      => 10,
-        'not null'    => FALSE,
-        'default'     => NULL,
-      ),
-      'ticket_counter' => array(
-        'description' => 'Auto-incrementing counter for ticket labels within this project.',
-        'type'        => 'int',
-        'unsigned'    => TRUE,
-        'not null'    => TRUE,
-        'default'     => 0,
-      ),
-      'site_url' => array(
-        'description' => 'Website URL for the project (used by uptime monitoring).',
-        'type'        => 'varchar',
-        'length'      => 255,
-        'not null'    => TRUE,
-        'default'     => '',
-      ),
-      'uid' => array(
-        'type'     => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default'  => 0,
-      ),
-      'created' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
-      'changed' => array('type' => 'int', 'not null' => TRUE, 'default' => 0),
-    ),
-    'primary key' => array('pid'),
-    'indexes' => array(
-      'uid'    => array('uid'),
-      'active' => array('active'),
-      'cid'    => array('cid'),
-    ),
-  );
+  // Note: drop_project table schema has moved to drop_base.install.
 
   $schema['crm_contact'] = array(
     'description' => 'Base table for CRM contacts (persons, organizations, households).',
@@ -363,12 +291,86 @@ function dropcrm_schema() {
  */
 function dropcrm_install() {
   _dropcrm_create_fields();
+  _dropcrm_ensure_contact_tags();
 
   module_load_include('inc', 'dropcrm', 'dropcrm.admin');
   $config = config('dropcrm.settings');
   if (!$config->get('relationship_types')) {
     $config->set('relationship_types', _dropcrm_default_relationship_types());
     $config->save();
+  }
+}
+
+/**
+ * Creates the drop_tags vocabulary (if needed) and attaches field_drop_tags
+ * to all CRM contact bundles with default seed tags.
+ */
+function _dropcrm_ensure_contact_tags() {
+  // Ensure the drop_tags vocabulary exists.
+  $vocab = taxonomy_vocabulary_machine_name_load('drop_tags');
+  if (!$vocab) {
+    $vocab = new TaxonomyVocabulary(array(
+      'name'         => 'Drop Tags',
+      'machine_name' => 'drop_tags',
+      'description'  => 'Shared tags used across the Drop module suite.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  // Ensure the field_drop_tags field exists.
+  if (!field_info_field('field_drop_tags')) {
+    field_create_field(array(
+      'field_name'  => 'field_drop_tags',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'drop_tags', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  // Attach to each crm_contact bundle.
+  $bundles = array('crm_person', 'crm_organization', 'crm_household');
+  foreach ($bundles as $bundle) {
+    if (!field_info_instance('crm_contact', 'field_drop_tags', $bundle)) {
+      field_create_instance(array(
+        'field_name'  => 'field_drop_tags',
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => 'Tags',
+        'required'    => FALSE,
+        'description' => 'Tags for this contact, e.g. Client, Prospect, Partner.',
+        'widget'      => array(
+          'type'     => 'taxonomy_autocomplete',
+          'settings' => array('size' => 60),
+        ),
+        'display' => array(
+          'default' => array(
+            'label'  => 'above',
+            'type'   => 'taxonomy_term_reference_link',
+            'weight' => 5,
+          ),
+        ),
+      ));
+    }
+  }
+
+  // Seed default tags.
+  $default_tags = array('Client', 'Past Client', 'Prospect', 'Partner', 'Vendor');
+  foreach ($default_tags as $tag_name) {
+    $existing = taxonomy_term_load_multiple(array(), array(
+      'name'       => $tag_name,
+      'vocabulary' => $vocab->machine_name,
+    ));
+    if (empty($existing)) {
+      $term = new TaxonomyTerm(array(
+        'name'       => $tag_name,
+        'vocabulary' => $vocab->machine_name,
+      ));
+      taxonomy_term_save($term);
+    }
   }
 }
 
@@ -477,6 +479,40 @@ function _dropcrm_create_fields() {
       'field_name' => 'field_crm_country',
       'type' => 'text',
       'cardinality' => 1,
+    ),
+    // Contact: status (free-text note).
+    array(
+      'field_name' => 'field_crm_status',
+      'type' => 'text_long',
+      'cardinality' => 1,
+    ),
+    // Contact: rating (1-5 stars).
+    array(
+      'field_name'  => 'field_crm_rating',
+      'type'        => 'list_integer',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          1 => '★',
+          2 => '★★',
+          3 => '★★★',
+          4 => '★★★★',
+          5 => '★★★★★',
+        ),
+      ),
+    ),
+    // Organization: warmth (Hot/Warm/Cold).
+    array(
+      'field_name'  => 'field_crm_warmth',
+      'type'        => 'list_text',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          'hot'  => 'Hot',
+          'warm' => 'Warm',
+          'cold' => 'Cold',
+        ),
+      ),
     ),
   );
 
@@ -603,6 +639,64 @@ function _dropcrm_create_fields() {
       'label' => t('Country'),
       'required' => FALSE,
       'widget' => array('type' => 'text_textfield'),
+    ),
+    // Rating on person and organization.
+    array(
+      'field_name'  => 'field_crm_rating',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_person',
+      'label'       => t('Rating'),
+      'required'    => FALSE,
+      'widget'      => array('type' => 'options_buttons'),
+    ),
+    array(
+      'field_name'  => 'field_crm_rating',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_organization',
+      'label'       => t('Rating'),
+      'required'    => FALSE,
+      'widget'      => array('type' => 'options_buttons'),
+    ),
+    // Status on person, organization, and household.
+    array(
+      'field_name'  => 'field_crm_status',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_person',
+      'label'       => t('Status'),
+      'required'    => FALSE,
+      'description' => t('A short note on this contact\'s current status.'),
+      'widget'      => array('type' => 'text_textarea', 'settings' => array('rows' => 3)),
+      'display'     => array('default' => array('label' => 'above', 'type' => 'text_default', 'weight' => 6)),
+    ),
+    array(
+      'field_name'  => 'field_crm_status',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_organization',
+      'label'       => t('Status'),
+      'required'    => FALSE,
+      'description' => t('A short note on this contact\'s current status.'),
+      'widget'      => array('type' => 'text_textarea', 'settings' => array('rows' => 3)),
+      'display'     => array('default' => array('label' => 'above', 'type' => 'text_default', 'weight' => 6)),
+    ),
+    array(
+      'field_name'  => 'field_crm_status',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_household',
+      'label'       => t('Status'),
+      'required'    => FALSE,
+      'description' => t('A short note on this contact\'s current status.'),
+      'widget'      => array('type' => 'text_textarea', 'settings' => array('rows' => 3)),
+      'display'     => array('default' => array('label' => 'above', 'type' => 'text_default', 'weight' => 6)),
+    ),
+    // Warmth on organization.
+    array(
+      'field_name'  => 'field_crm_warmth',
+      'entity_type' => 'crm_contact',
+      'bundle'      => 'crm_organization',
+      'label'       => t('Warmth'),
+      'description' => t('Client engagement level.'),
+      'widget'      => array('type' => 'options_select', 'weight' => 3),
+      'display'     => array('default' => array('label' => 'inline', 'type' => 'list_default', 'weight' => 3)),
     ),
   );
 
@@ -1254,4 +1348,30 @@ function dropcrm_update_1022() {
     ));
   }
   return t('Added site_url column to drop_project.');
+}
+
+/**
+ * Migrate project permissions from CRM to Drop Base.
+ */
+function dropcrm_update_1023() {
+  // Grant 'access projects' to roles that had 'access crm projects'.
+  $roles = user_roles(FALSE, 'access crm projects');
+  foreach (array_keys($roles) as $role_name) {
+    user_role_grant_permissions($role_name, array('access projects'));
+  }
+
+  // Grant 'administer projects' to roles with 'administer crm'.
+  $admin_roles = user_roles(FALSE, 'administer crm');
+  foreach (array_keys($admin_roles) as $role_name) {
+    user_role_grant_permissions($role_name, array('administer projects'));
+  }
+
+  // Grant 'access projects' to roles with 'access crm' (they had implicit
+  // project access before).
+  $crm_roles = user_roles(FALSE, 'access crm');
+  foreach (array_keys($crm_roles) as $role_name) {
+    user_role_grant_permissions($role_name, array('access projects'));
+  }
+
+  return t('Project permissions migrated from CRM to Drop Base.');
 }

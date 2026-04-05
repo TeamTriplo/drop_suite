@@ -963,6 +963,12 @@ function droptickets_settings_form($form, &$form_state) {
     ),
     '#default_value' => $config->get('comment_order') ?: 'asc',
   );
+  $form['display']['kanban_modals'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Enable Kanban card modals'),
+    '#description'   => t('Click a Kanban card to open a quick-view modal with description, assignee, and priority editing. Also adds an express "Add ticket" button to each column.'),
+    '#default_value' => $config->get('kanban_modals'),
+  );
   $form['display']['flag_soft_limit'] = array(
     '#type'          => 'select',
     '#title'         => t('Flagged tickets soft limit'),
@@ -1319,11 +1325,7 @@ function droptickets_import_delete_form_submit($form, &$form_state) {
 function droptickets_statuses_form($form, &$form_state) {
   $form['#theme'] = 'droptickets_statuses_form';
 
-  $config = config('droptickets.statuses');
-  $statuses = $config->get('statuses');
-  if (empty($statuses) || !is_array($statuses)) {
-    $statuses = array();
-  }
+  $statuses = _droptickets_load_statuses();
 
   // Sort by weight for display.
   uasort($statuses, function($a, $b) {

@@ -12,7 +12,7 @@
  * @return array  Backdrop render array.
  */
 function dropdocs_index_page() {
-  backdrop_set_title(t('Docs'));
+  backdrop_set_title(dropdocs_display_name());
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
@@ -24,7 +24,7 @@ function dropdocs_index_page() {
   if (node_access('create', 'doc')) {
     $output['actions'] = array(
       '#markup' => drop_base_page_actions(array(
-        l(t('Add doc'), 'node/add/doc', array('attributes' => array('class' => array('button', 'button-primary')))),
+        l(t('Add @name', array('@name' => strtolower(dropdocs_display_name('singular')))), 'node/add/doc', array('attributes' => array('class' => array('button', 'button-primary')))),
       )),
     );
   }
@@ -33,7 +33,7 @@ function dropdocs_index_page() {
 
   if (empty($docs)) {
     $output['empty'] = array(
-      '#markup' => '<p class="dropdocs-empty">' . t('No documentation yet.') . '</p>',
+      '#markup' => '<p class="dropdocs-empty">' . t('No @name yet.', array('@name' => strtolower(dropdocs_display_name()))) . '</p>',
     );
     return $output;
   }
@@ -69,7 +69,7 @@ function dropdocs_doc_view($node) {
   $crumb = array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(t('Docs'), 'drop/docs'),
+    l(dropdocs_display_name(), 'drop/docs'),
   );
   $ancestors = dropdocs_get_ancestors($node->nid);
   foreach ($ancestors as $ancestor) {
@@ -81,7 +81,7 @@ function dropdocs_doc_view($node) {
   $docs    = dropdocs_load_all();
   $tree    = dropdocs_build_tree($docs);
   $sidebar = '<aside class="dropdocs-sidebar">'
-    . '<h3 class="dropdocs-sidebar-title">' . t('Documentation') . '</h3>'
+    . '<h3 class="dropdocs-sidebar-title">' . dropdocs_display_name('full') . '</h3>'
     . dropdocs_render_tree($tree, $node->nid)
     . '</aside>';
 
@@ -119,17 +119,17 @@ function dropdocs_add_child_redirect($node) {
  * dropdocs_weight table.
  */
 function dropdocs_reorder_form($form, &$form_state) {
-  backdrop_set_title(t('Reorder docs'));
+  backdrop_set_title(t('Reorder @name', array('@name' => strtolower(dropdocs_display_name()))));
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(t('Docs'), 'drop/docs'),
+    l(dropdocs_display_name(), 'drop/docs'),
   ));
 
   $docs = dropdocs_load_all();
 
   if (empty($docs)) {
-    $form['empty'] = array('#markup' => '<p>' . t('No docs to reorder.') . '</p>');
+    $form['empty'] = array('#markup' => '<p>' . t('No @name to reorder.', array('@name' => strtolower(dropdocs_display_name()))) . '</p>');
     return $form;
   }
 
@@ -280,6 +280,57 @@ function dropdocs_reorder_form_submit($form, &$form_state) {
         ->execute();
     }
   }
-  backdrop_set_message(t('Doc order saved.'));
+  backdrop_set_message(t('@name order saved.', array('@name' => dropdocs_display_name('singular'))));
+  $form_state['redirect'] = 'drop/docs';
+}
+
+// ---------------------------------------------------------------------------
+// Settings form
+// ---------------------------------------------------------------------------
+
+/**
+ * Settings form for DropDocs.
+ */
+function dropdocs_settings_form($form, &$form_state) {
+  backdrop_set_title(t('Settings'));
+  backdrop_set_breadcrumb(array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(dropdocs_display_name(), 'drop/docs'),
+  ));
+
+  $config = config('dropdocs.settings');
+
+  $form['display_name'] = array(
+    '#type' => 'select',
+    '#title' => t('Display name'),
+    '#description' => t('Choose what this section is called in navigation, breadcrumbs, and page titles. The internal module name and URLs are unchanged.'),
+    '#options' => array(
+      'Docs' => t('Docs'),
+      'Notes' => t('Notes'),
+      'Wiki' => t('Wiki'),
+      'Knowledge Base' => t('Knowledge Base'),
+      'Resources' => t('Resources'),
+    ),
+    '#default_value' => $config->get('display_name'),
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save settings'),
+  );
+
+  return $form;
+}
+
+/**
+ * Settings form submit.
+ */
+function dropdocs_settings_form_submit($form, &$form_state) {
+  $config = config('dropdocs.settings');
+  $config->set('display_name', $form_state['values']['display_name']);
+  $config->save();
+  backdrop_set_message(t('Settings saved.'));
   $form_state['redirect'] = 'drop/docs';
 }

@@ -328,6 +328,21 @@ function dropgoals_drop_nav_links() {
 }
 
 /**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Suppresses layout-level local task tabs on Goals pages — navigation is
+ * handled by the Drop Section Navigation block instead.
+ */
+function dropgoals_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/goals') {
+    return;
+  }
+  if (!empty($data['tabs'][0]['output'])) {
+    $data['tabs'][0]['output'] = array();
+  }
+}
+
+/**
  * Implements hook_drop_section_links().
  */
 function dropgoals_drop_section_links($section) {

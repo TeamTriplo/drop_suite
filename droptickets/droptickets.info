@@ -5,5 +5,4 @@ version = 1.x-1.0.0
 backdrop = 1.x
 
 dependencies[] = drop_base
-dependencies[] = dropcrm
 dependencies[] = entity_plus
