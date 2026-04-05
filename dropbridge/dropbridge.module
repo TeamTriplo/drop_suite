@@ -152,6 +152,15 @@ function dropbridge_menu() {
   );
 
   // Settings page (moved from drop/settings to drop/settings/bridge).
+  // --- Calendar ---
+  $items['drop/calendar'] = array(
+    'title'            => 'Calendar',
+    'page callback'    => 'dropbridge_calendar_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access dropbridge'),
+    'file'             => 'dropbridge.pages.inc',
+  );
+
   $items['drop/settings/bridge'] = array(
     'title'            => 'DropBridge Settings',
     'page callback'    => 'backdrop_get_form',
@@ -801,6 +810,12 @@ function dropbridge_drop_nav_links() {
       'path'       => 'drop',
       'permission' => 'access dropbridge',
       'weight'     => 0,
+    ),
+    array(
+      'title'      => t('Calendar'),
+      'path'       => 'drop/calendar',
+      'permission' => 'access dropbridge',
+      'weight'     => 75,
     ),
     array(
       'title'      => t('Settings'),

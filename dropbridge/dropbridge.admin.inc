@@ -39,6 +39,14 @@ function dropbridge_settings_form($form, &$form_state) {
     '#description'   => t('How often to re-fetch each calendar feed.'),
   );
 
+  $form['calendar']['calendar_full_url'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Full calendar URL'),
+    '#default_value' => $config->get('calendar_full_url'),
+    '#description'   => t('Link to your full calendar for a longer-range view (e.g. a Google Calendar URL). Shown at the bottom of the weekly calendar page.'),
+    '#placeholder'   => 'https://calendar.google.com/…',
+  );
+
   $form['slack'] = array(
     '#type'        => 'fieldset',
     '#title'       => t('Slack Integration'),
@@ -101,6 +109,7 @@ function dropbridge_settings_form_submit($form, &$form_state) {
   $config = config('dropbridge.settings');
   $config->set('calendar_ics_url', trim($form_state['values']['calendar_ics_url']));
   $config->set('calendar_cache_seconds', (int) $form_state['values']['calendar_cache_seconds']);
+  $config->set('calendar_full_url', trim($form_state['values']['calendar_full_url']));
   $config->set('announcement_text', trim($form_state['values']['announcement_text']));
   $config->set('slack_bot_token', trim($form_state['values']['slack_bot_token']));
   $config->set('slack_debug_mode', !empty($form_state['values']['slack_debug_mode']));

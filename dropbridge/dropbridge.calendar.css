@@ -1,0 +1,105 @@
+/**
+ * @file
+ * Weekly calendar page styles.
+ */
+
+.dropbridge-calendar-week {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Day container */
+.dropbridge-calendar-day {
+  border-bottom: 1px solid #e0e0e0;
+  padding: 0.6em 0;
+}
+
+.dropbridge-calendar-day:last-child {
+  border-bottom: none;
+}
+
+.dropbridge-calendar-day--today {
+  background: #f8fafe;
+}
+
+/* Day header */
+.dropbridge-calendar-day-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  margin-bottom: 0.3em;
+  padding: 0 0.4em;
+}
+
+.dropbridge-calendar-day-name {
+  font-weight: 700;
+  font-size: 0.95em;
+  color: #333;
+}
+
+.dropbridge-calendar-day--today .dropbridge-calendar-day-name {
+  color: var(--drop-primary, #1565c0);
+}
+
+.dropbridge-calendar-day-date {
+  font-size: 0.85em;
+  color: #757575;
+}
+
+/* Events list */
+.dropbridge-calendar-events {
+  padding: 0 0.4em;
+}
+
+.dropbridge-calendar-event {
+  padding: 0.25em 0.4em;
+  border-radius: 3px;
+  line-height: 1.5;
+}
+
+.dropbridge-calendar-event:hover {
+  background: #f0f0f0;
+}
+
+.dropbridge-calendar-time {
+  display: inline-block;
+  font-size: 0.8em;
+  color: #555;
+  min-width: 10em;
+}
+
+.dropbridge-calendar-allday {
+  font-style: italic;
+  color: #999;
+}
+
+.dropbridge-calendar-summary {
+  font-size: 0.9em;
+  color: #333;
+}
+
+.dropbridge-calendar-source {
+  display: inline-block;
+  font-size: 0.7em;
+  background: #e8eaf6;
+  color: #3949ab;
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.dropbridge-calendar-empty {
+  padding: 0.2em 0.4em;
+  font-size: 0.85em;
+  color: #bdbdbd;
+  font-style: italic;
+}
+
+/* Link to full calendar */
+.dropbridge-calendar-link {
+  margin-top: 1em;
+  padding-top: 0.8em;
+  border-top: 1px solid #e0e0e0;
+  font-size: 0.9em;
+}

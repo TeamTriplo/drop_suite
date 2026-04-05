@@ -2,6 +2,7 @@
   "_config_name": "dropbridge.settings",
   "calendar_ics_url": "",
   "calendar_cache_seconds": 1800,
+  "calendar_full_url": "",
   "announcement_text": "",
   "slack_bot_token": "",
   "slack_debug_mode": false

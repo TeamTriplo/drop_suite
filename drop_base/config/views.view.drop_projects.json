@@ -64,7 +64,8 @@
                         "table": "drop_project",
                         "field": "name",
                         "label": "Project",
-                        "element_label_colon": true
+                        "element_label_colon": true,
+                        "link_to_project": true
                     },
                     "prefix": {
                         "id": "prefix",

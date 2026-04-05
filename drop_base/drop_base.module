@@ -90,6 +90,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/doc/\d+$#',
     // Project view: drop/projects/{pid}
     '#^drop/projects/\d+$#',
+    // Calendar.
+    '#^drop/calendar$#',
     // Meeting agenda.
     '#^drop/meeting$#',
     // Settings pages.
@@ -633,7 +635,20 @@ function drop_base_autoload_info() {
   return array(
     'DropProject'           => 'drop_base.entity.inc',
     'DropProjectController' => 'drop_base.entity.inc',
+    'drop_base_handler_field_project_name' => 'views/drop_base_handler_field_project_name.inc',
   );
+}
+
+/**
+ * Implements hook_views_data_alter().
+ *
+ * Swaps the project name field handler to one that supports linking to the
+ * project page.
+ */
+function drop_base_views_data_alter(&$data) {
+  if (isset($data['drop_project']['name'])) {
+    $data['drop_project']['name']['field']['handler'] = 'drop_base_handler_field_project_name';
+  }
 }
 
 /**

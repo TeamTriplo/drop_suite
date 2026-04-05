@@ -1098,3 +1098,370 @@ function dropbridge_activity_done(CrmActivity $activity) {
   backdrop_set_message(t('!link marked as done.', array('!link' => $link)));
   backdrop_goto('drop');
 }
+
+// ---------------------------------------------------------------------------
+// Weekly calendar page
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback for drop/calendar.
+ *
+ * Shows the next 7 days of calendar events from configured iCal feeds.
+ */
+function dropbridge_calendar_page() {
+  backdrop_set_title(t('Calendar'));
+  backdrop_add_css(backdrop_get_path('module', 'dropbridge') . '/dropbridge.calendar.css');
+
+  // Build 7-day range starting today.
+  $today = new DateTime('today');
+  $days = array();
+  for ($i = 0; $i < 7; $i++) {
+    $day = clone $today;
+    $day->modify("+$i days");
+    $days[] = $day;
+  }
+  $range_end = clone $today;
+  $range_end->modify('+7 days');
+
+  // Fetch events for the entire week.
+  $events_by_day = _dropbridge_fetch_week_events($today, $range_end);
+
+  $output = '<div class="dropbridge-calendar-week">';
+
+  foreach ($days as $day) {
+    $date_str = $day->format('Y-m-d');
+    $is_today = $date_str === $today->format('Y-m-d');
+    $day_class = 'dropbridge-calendar-day';
+    if ($is_today) {
+      $day_class .= ' dropbridge-calendar-day--today';
+    }
+
+    $day_label = $day->format('l'); // "Monday", "Tuesday", etc.
+    $date_label = $day->format('M j'); // "Apr 5"
+
+    $output .= '<div class="' . $day_class . '">';
+    $output .= '<div class="dropbridge-calendar-day-header">';
+    $output .= '<span class="dropbridge-calendar-day-name">' . $day_label . '</span>';
+    $output .= '<span class="dropbridge-calendar-day-date">' . $date_label . '</span>';
+    $output .= '</div>';
+
+    if (!empty($events_by_day[$date_str])) {
+      $output .= '<div class="dropbridge-calendar-events">';
+      foreach ($events_by_day[$date_str] as $event) {
+        $output .= '<div class="dropbridge-calendar-event">';
+        if (!empty($event['time_label'])) {
+          $output .= '<span class="dropbridge-calendar-time">' . check_plain($event['time_label']) . '</span> ';
+        }
+        else {
+          $output .= '<span class="dropbridge-calendar-time dropbridge-calendar-allday">' . t('All day') . '</span> ';
+        }
+        $output .= '<span class="dropbridge-calendar-summary">' . check_plain($event['label']) . '</span>';
+        if (!empty($event['calendar_label'])) {
+          $output .= ' <span class="dropbridge-calendar-source">' . check_plain($event['calendar_label']) . '</span>';
+        }
+        $output .= '</div>';
+      }
+      $output .= '</div>';
+    }
+    else {
+      $output .= '<div class="dropbridge-calendar-empty">' . t('No events') . '</div>';
+    }
+
+    $output .= '</div>';
+  }
+
+  $output .= '</div>';
+
+  // Link to full calendar if configured.
+  $full_url = config_get('dropbridge.settings', 'calendar_full_url');
+  if (!empty($full_url)) {
+    $output .= '<div class="dropbridge-calendar-link">'
+      . l(t('View full calendar'), $full_url, array('attributes' => array('target' => '_blank', 'rel' => 'noopener')))
+      . '</div>';
+  }
+
+  return $output;
+}
+
+/**
+ * Fetches calendar events for a date range from all configured iCal feeds.
+ *
+ * @param DateTime $range_start
+ *   Start of the range (midnight).
+ * @param DateTime $range_end
+ *   End of the range (midnight, exclusive).
+ *
+ * @return array
+ *   Keyed by 'Y-m-d' date string, each value an array of event items sorted
+ *   by start time.
+ */
+function _dropbridge_fetch_week_events(DateTime $range_start, DateTime $range_end) {
+  global $user;
+
+  $url_lines = array();
+  $global = config_get('dropbridge.settings', 'calendar_ics_url');
+  if (!empty(trim($global))) {
+    $url_lines = array_merge($url_lines, array_filter(array_map('trim', explode("\n", $global))));
+  }
+  $personal_map = state_get('dropbridge.personal_calendars', array());
+  if (!empty($personal_map[$user->uid])) {
+    $url_lines = array_merge($url_lines, array_filter(array_map('trim', explode("\n", $personal_map[$user->uid]))));
+  }
+
+  $events_by_day = array();
+  $seen = array();
+
+  foreach ($url_lines as $url_line) {
+    $parts = array_map('trim', explode('|', $url_line, 2));
+    $url = $parts[0];
+    $calendar_label = (isset($parts[1]) && $parts[1] !== '') ? $parts[1] : NULL;
+
+    if (empty($url) || isset($seen[$url])) {
+      continue;
+    }
+    $seen[$url] = TRUE;
+
+    $stored = state_get('dropbridge.ical_' . md5($url));
+    if (empty($stored['ics'])) {
+      continue;
+    }
+
+    $label = $calendar_label ?: (isset($stored['label']) ? $stored['label'] : NULL);
+    $events = _dropbridge_parse_ics_range($stored['ics'], $range_start, $range_end, $label);
+    foreach ($events as $event) {
+      $events_by_day[$event['date']][] = $event;
+    }
+  }
+
+  // Sort each day's events by start time.
+  foreach ($events_by_day as &$day_events) {
+    usort($day_events, function($a, $b) { return $a['sort_date'] - $b['sort_date']; });
+  }
+
+  return $events_by_day;
+}
+
+/**
+ * Parses an ICS string and returns events occurring within a date range.
+ *
+ * @param string $ics
+ *   Raw ICS content.
+ * @param DateTime $range_start
+ *   Start of range (midnight).
+ * @param DateTime $range_end
+ *   End of range (midnight, exclusive).
+ * @param string|null $calendar_label
+ *   Optional label for this calendar source.
+ *
+ * @return array
+ *   Array of event items, each with a 'date' key ('Y-m-d').
+ */
+function _dropbridge_parse_ics_range($ics, DateTime $range_start, DateTime $range_end, $calendar_label = NULL) {
+  // Unfold long lines (RFC 5545).
+  $ics = preg_replace("/\r\n[ \t]/", '', $ics);
+  $ics = preg_replace("/\n[ \t]/", '', $ics);
+
+  $items = array();
+  $seen_uid = array();
+
+  if (!preg_match_all('/BEGIN:VEVENT\r?\n(.+?)END:VEVENT/s', $ics, $matches)) {
+    return array();
+  }
+
+  foreach ($matches[1] as $block) {
+    $day_items = _dropbridge_parse_vevent_range($block, $range_start, $range_end);
+    foreach ($day_items as $item) {
+      // Deduplicate by UID + date.
+      $dedup_key = (!empty($item['uid']) ? $item['uid'] : md5($item['label'])) . '_' . $item['date'];
+      if (isset($seen_uid[$dedup_key])) {
+        continue;
+      }
+      $seen_uid[$dedup_key] = TRUE;
+
+      if ($calendar_label !== NULL) {
+        $item['calendar_label'] = $calendar_label;
+      }
+      $items[] = $item;
+    }
+  }
+
+  return $items;
+}
+
+/**
+ * Parses a single VEVENT block and returns items for each day it occurs within
+ * the given range.
+ *
+ * @param string $block
+ *   The VEVENT property lines.
+ * @param DateTime $range_start
+ *   Start of range (midnight).
+ * @param DateTime $range_end
+ *   End of range (midnight, exclusive).
+ *
+ * @return array
+ *   Array of event items, each with a 'date' key.
+ */
+function _dropbridge_parse_vevent_range($block, DateTime $range_start, DateTime $range_end) {
+  // Parse properties.
+  $props = array();
+  foreach (preg_split('/\r?\n/', trim($block)) as $line) {
+    if (strpos($line, ':') === FALSE) {
+      continue;
+    }
+    list($key, $value) = explode(':', $line, 2);
+    $props[strtoupper($key)] = trim($value);
+  }
+
+  if (isset($props['STATUS']) && strtoupper($props['STATUS']) === 'CANCELLED') {
+    return array();
+  }
+
+  $summary = isset($props['SUMMARY']) ? $props['SUMMARY'] : t('(no title)');
+  $summary = str_replace(array('\\,', '\\;', '\\n', '\\N'), array(',', ';', "\n", "\n"), $summary);
+  $summary = trim($summary);
+  $uid = isset($props['UID']) ? trim($props['UID']) : NULL;
+
+  // Parse DTSTART/DTEND from raw lines (preserves parameter info).
+  $dtstart_raw = NULL;
+  $dtend_raw = NULL;
+  foreach (preg_split('/\r?\n/', trim($block)) as $line) {
+    if (preg_match('/^DTSTART(;[^:]*)?:(.+)$/i', $line)) {
+      $dtstart_raw = $line;
+    }
+    if (preg_match('/^DTEND(;[^:]*)?:(.+)$/i', $line)) {
+      $dtend_raw = $line;
+    }
+  }
+
+  if (!$dtstart_raw) {
+    return array();
+  }
+
+  $is_allday = FALSE;
+  $start_ts = _dropbridge_parse_dt($dtstart_raw, $is_allday);
+  if ($start_ts === NULL) {
+    return array();
+  }
+
+  $dummy = FALSE;
+  $end_ts = $dtend_raw ? _dropbridge_parse_dt($dtend_raw, $dummy) : NULL;
+
+  // Determine duration for multi-day events.
+  if ($is_allday) {
+    $end_ts = $end_ts ?: ($start_ts + 86400);
+  }
+  else {
+    $end_ts = $end_ts ?: ($start_ts + 3600);
+  }
+
+  $items = array();
+  $range_start_ts = $range_start->getTimestamp();
+  $range_end_ts = $range_end->getTimestamp();
+
+  if (isset($props['RRULE'])) {
+    // Recurring event: check each day in the range.
+    $check = clone $range_start;
+    while ($check < $range_end) {
+      $check_str = $check->format('Y-m-d');
+      $check_tomorrow = clone $check;
+      $check_tomorrow->modify('+1 day');
+      if (_dropbridge_rrule_occurs_today($props['RRULE'], $start_ts, $check, $check_str)) {
+        $items[] = _dropbridge_build_week_event($summary, $uid, $start_ts, $end_ts, $is_allday, $check_str);
+      }
+      $check->modify('+1 day');
+    }
+  }
+  else {
+    // Non-recurring: find all days this event spans within the range.
+    // Event window: [start_ts, end_ts).
+    $event_start = max($start_ts, $range_start_ts);
+    $event_end = min($end_ts, $range_end_ts);
+
+    if ($start_ts >= $range_end_ts || $end_ts <= $range_start_ts) {
+      return array();
+    }
+
+    $day = new DateTime(date('Y-m-d', $event_start));
+    $last_day = new DateTime(date('Y-m-d', $event_end - 1));
+    // For all-day events ending at midnight, the last day is end - 1 second.
+    while ($day <= $last_day) {
+      $items[] = _dropbridge_build_week_event($summary, $uid, $start_ts, $end_ts, $is_allday, $day->format('Y-m-d'));
+      $day->modify('+1 day');
+    }
+  }
+
+  return $items;
+}
+
+/**
+ * Parses a DTSTART or DTEND line into a Unix timestamp.
+ *
+ * @param string $line
+ *   The raw ICS line (e.g. "DTSTART;TZID=America/Chicago:20260405T090000").
+ * @param bool &$is_allday
+ *   Set to TRUE if the date is VALUE=DATE (all-day).
+ *
+ * @return int|null
+ *   Unix timestamp, or NULL on parse failure.
+ */
+function _dropbridge_parse_dt($line, &$is_allday) {
+  if (preg_match('/;VALUE=DATE:(\d{8})/i', $line, $m)) {
+    $is_allday = TRUE;
+    $dt = DateTime::createFromFormat('Ymd', $m[1]);
+    return $dt ? $dt->setTime(0, 0, 0)->getTimestamp() : NULL;
+  }
+  if (preg_match('/;TZID=([^:]+):(\d{8}T\d{6})/i', $line, $m)) {
+    try {
+      $tz = new DateTimeZone($m[1]);
+      $dt = DateTime::createFromFormat('Ymd\THis', $m[2], $tz);
+      return $dt ? $dt->getTimestamp() : NULL;
+    }
+    catch (Exception $e) {
+      return NULL;
+    }
+  }
+  if (preg_match('/:(\d{8}T\d{6})(Z)?/i', $line, $m)) {
+    $tz = !empty($m[2]) ? new DateTimeZone('UTC') : new DateTimeZone(date_default_timezone_get());
+    $dt = DateTime::createFromFormat('Ymd\THis', $m[1], $tz);
+    return $dt ? $dt->getTimestamp() : NULL;
+  }
+  return NULL;
+}
+
+/**
+ * Builds a calendar event item for the week view.
+ *
+ * @param string $summary
+ *   Event title.
+ * @param string|null $uid
+ *   ICS UID for deduplication.
+ * @param int $start_ts
+ *   Original event start timestamp.
+ * @param int $end_ts
+ *   Original event end timestamp.
+ * @param bool $is_allday
+ *   Whether this is an all-day event.
+ * @param string $date_str
+ *   The specific date this event instance falls on ('Y-m-d').
+ *
+ * @return array
+ */
+function _dropbridge_build_week_event($summary, $uid, $start_ts, $end_ts, $is_allday, $date_str) {
+  $time_label = NULL;
+  if (!$is_allday) {
+    $time_label = format_date($start_ts, 'custom', 'g:i A');
+    if ($end_ts) {
+      $time_label .= ' – ' . format_date($end_ts, 'custom', 'g:i A');
+    }
+  }
+
+  return array(
+    'label'      => $summary,
+    'uid'        => $uid,
+    'date'       => $date_str,
+    'time_label' => $time_label,
+    'is_allday'  => $is_allday,
+    'sort_date'  => $is_allday ? 0 : $start_ts,
+  );
+}
