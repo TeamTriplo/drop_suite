@@ -92,8 +92,12 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/projects/\d+$#',
     // Meeting agenda.
     '#^drop/meeting$#',
-    // Settings pages.
+    // Settings pages (main dashboard and per-module).
     '#^drop/settings#',
+    '#^drop/tickets/settings#',
+    '#^drop/crm/settings#',
+    '#^drop/monitor/settings#',
+    '#^drop/docs/settings#',
   );
 
   foreach ($patterns as $pattern) {

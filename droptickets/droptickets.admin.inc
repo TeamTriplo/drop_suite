@@ -860,6 +860,8 @@ function droptickets_settings_form($form, &$form_state) {
   $form['notifications'] = array(
     '#type' => 'fieldset',
     '#title' => t('Notifications'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   $form['notifications']['notification_lifetime'] = array(
     '#type'          => 'select',
@@ -894,6 +896,8 @@ function droptickets_settings_form($form, &$form_state) {
   $form['automation'] = array(
     '#type' => 'fieldset',
     '#title' => t('Automation'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
 
   // Build status options from config for auto-close source/target.
@@ -948,6 +952,8 @@ function droptickets_settings_form($form, &$form_state) {
   $form['display'] = array(
     '#type' => 'fieldset',
     '#title' => t('Display'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   $form['display']['comment_order'] = array(
     '#type'          => 'radios',
@@ -979,6 +985,8 @@ function droptickets_settings_form($form, &$form_state) {
   $form['team'] = array(
     '#type' => 'fieldset',
     '#title' => t('Team'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   $team = droptickets_assignee_options();
   $saved_defaults = $config->get('default_watchers');
@@ -1010,6 +1018,8 @@ function droptickets_settings_form($form, &$form_state) {
   $form['review'] = array(
     '#type' => 'fieldset',
     '#title' => t('Review mode'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   $form['review']['review_enabled'] = array(
     '#type'          => 'checkbox',

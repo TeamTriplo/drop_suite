@@ -10,7 +10,14 @@
 function dropmonitor_settings_form($form, &$form_state) {
   $config = config('dropmonitor.settings');
 
-  $form['linode_api_token'] = array(
+  $form['api'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('API & Tokens'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['api']['linode_api_token'] = array(
     '#type' => 'textfield',
     '#title' => t('Linode API token'),
     '#description' => t('Read-only API token from cloud.linode.com. Leave empty to skip Linode API checks.'),
@@ -19,7 +26,7 @@ function dropmonitor_settings_form($form, &$form_state) {
   );
 
   $uptime_token = $config->get('uptime_token');
-  $form['uptime_token'] = array(
+  $form['api']['uptime_token'] = array(
     '#type' => 'textfield',
     '#title' => t('Uptime check token'),
     '#description' => t('Shared secret for the uptime check endpoint. Add this to your system crontab: <code>*/5 * * * * curl -s "@url?token=YOUR_TOKEN"</code>', array(
@@ -29,7 +36,14 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#maxlength' => 128,
   );
 
-  $form['slack_alert_channel'] = array(
+  $form['notifications'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Slack Notifications'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['notifications']['slack_alert_channel'] = array(
     '#type' => 'textfield',
     '#title' => t('Slack alert channel ID'),
     '#description' => t('Channel for immediate outage notifications (e.g. #support-notifications). Find the ID in channel details.'),
@@ -38,7 +52,7 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#placeholder' => 'C0123ABC456',
   );
 
-  $form['slack_escalation_channel'] = array(
+  $form['notifications']['slack_escalation_channel'] = array(
     '#type' => 'textfield',
     '#title' => t('Slack escalation channel ID'),
     '#description' => t('Channel for sustained outage alerts after 30 minutes (e.g. #escalated-notifications). Set audio notifications on this channel.'),
@@ -47,7 +61,14 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#placeholder' => 'C0123ABC456',
   );
 
-  $form['check_interval'] = array(
+  $form['monitoring'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Monitoring'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['monitoring']['check_interval'] = array(
     '#type' => 'select',
     '#title' => t('Check interval'),
     '#description' => t('How often to run automated checks via cron.'),
@@ -66,6 +87,7 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#type' => 'fieldset',
     '#title' => t('Alert thresholds'),
     '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
 
   $form['thresholds']['alert_disk_percent'] = array(

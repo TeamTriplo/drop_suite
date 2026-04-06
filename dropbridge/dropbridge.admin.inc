@@ -14,6 +14,8 @@ function dropbridge_settings_form($form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('Global Calendars'),
     '#description' => t('These iCal feeds appear on <strong>everyone\'s</strong> dashboard. For personal calendars that only appear on one person\'s dashboard, each person can add them under their own account settings. Both private and public iCal URLs are supported.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
   );
 
   $form['calendar']['calendar_ics_url'] = array(
@@ -51,6 +53,8 @@ function dropbridge_settings_form($form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('Slack Integration'),
     '#description' => t('Used for direct-message notifications to individual team members. Create a Slack app at <a href="https://api.slack.com/apps" target="_blank">api.slack.com/apps</a>, add the <code>chat:write</code> scope under Bot Token Scopes, install it to your workspace, and paste the bot token here. Each person sets their own Slack member ID in their account settings.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
   );
 
   $form['slack']['slack_bot_token'] = array(
@@ -73,6 +77,8 @@ function dropbridge_settings_form($form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('Site Announcement'),
     '#description' => t('Displays a dismissible banner at the top of every page for all team members. Clear the message to remove the banner. Each new message resets dismissals — everyone will see it again.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
   );
 
   $form['announcement']['announcement_text'] = array(
@@ -250,7 +256,14 @@ function dropbridge_permissions_form_submit($form, &$form_state) {
 function dropbridge_inbound_settings_form($form, &$form_state) {
   $config = config('dropbridge.inbound');
 
-  $form['enabled'] = array(
+  $form['webhook'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Webhook'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+  );
+
+  $form['webhook']['enabled'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Enable inbound email processing'),
     '#default_value' => $config->get('enabled'),
@@ -259,7 +272,7 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
 
   $token = $config->get('webhook_token');
 
-  $form['webhook_token'] = array(
+  $form['webhook']['webhook_token'] = array(
     '#type'          => 'textfield',
     '#title'         => t('Webhook token'),
     '#default_value' => $token ? $token : '',
@@ -272,7 +285,7 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
       'absolute' => TRUE,
       'query'    => array('token' => $token),
     ));
-    $form['webhook_url_display'] = array(
+    $form['webhook']['webhook_url_display'] = array(
       '#type'   => 'item',
       '#title'  => t('Webhook URL'),
       '#markup' => '<code>' . check_plain($webhook_url) . '</code>',
@@ -280,7 +293,14 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
     );
   }
 
-  $form['forward_to'] = array(
+  $form['routing'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Routing'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+  );
+
+  $form['routing']['forward_to'] = array(
     '#type'          => 'textfield',
     '#title'         => t('Forward copy to'),
     '#default_value' => $config->get('forward_to'),
@@ -300,7 +320,7 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
     $project_options += $projects;
   }
 
-  $form['default_pid'] = array(
+  $form['routing']['default_pid'] = array(
     '#type'          => 'select',
     '#title'         => t('Default project'),
     '#default_value' => (int) $config->get('default_pid'),
@@ -308,7 +328,14 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
     '#description'   => t('New tickets created from inbound email are assigned to this project. Choose "None" to leave unassigned.'),
   );
 
-  $form['drop_unverified'] = array(
+  $form['verification'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Sender Verification'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+  );
+
+  $form['verification']['drop_unverified'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Drop emails from unverified senders'),
     '#default_value' => $config->get('drop_unverified'),
@@ -316,7 +343,7 @@ function dropbridge_inbound_settings_form($form, &$form_state) {
   );
 
   $allowlist = $config->get('allowlist') ?: array();
-  $form['allowlist'] = array(
+  $form['verification']['allowlist'] = array(
     '#type'          => 'textarea',
     '#title'         => t('Sender allowlist'),
     '#default_value' => implode("\n", $allowlist),

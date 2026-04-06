@@ -535,6 +535,14 @@ function droptickets_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  $items['drop/notifications/count'] = array(
+    'title'            => 'Notification count',
+    'page callback'    => 'droptickets_notification_count_json',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access droptickets'),
+    'type'             => MENU_CALLBACK,
+  );
+
   // Delete an import batch.
   $items['drop/tickets/import/%/delete'] = array(
     'title'            => 'Delete import',
@@ -1028,6 +1036,15 @@ function droptickets_unread_count($uid) {
     'SELECT COUNT(DISTINCT tid) FROM {drop_notification} WHERE uid = :uid AND is_read = 0',
     array(':uid' => $uid)
   )->fetchField();
+}
+
+/**
+ * AJAX callback: returns unread notification count as JSON.
+ */
+function droptickets_notification_count_json() {
+  global $user;
+  backdrop_json_output(array('count' => droptickets_unread_count($user->uid)));
+  exit();
 }
 
 // ---------------------------------------------------------------------------
@@ -1634,6 +1651,16 @@ function droptickets_drop_nav_extras() {
     ? ' <span class="drop-nav-bell-count">' . (int) $count . '</span>'
     : '';
   $class = 'drop-nav-bell' . ($count > 0 ? ' drop-nav-bell--active' : '');
+
+  // Attach polling JS for live notification updates.
+  $path = backdrop_get_path('module', 'droptickets');
+  backdrop_add_js($path . '/droptickets.notify.js');
+  backdrop_add_js(array(
+    'droptickets' => array(
+      'notifyUrl' => url('drop/notifications/count'),
+    ),
+  ), 'setting');
+
   return array(
     '<a href="' . url('drop/notifications') . '" class="' . $class . '" title="' . t('Notifications') . '">' . $bell . $badge . '</a>',
   );

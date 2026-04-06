@@ -1473,6 +1473,8 @@ function dropcrm_settings_form($form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('Custom Fields'),
     '#description' => t('Add or remove fields on contact types.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
     '#weight'      => -20,
   );
   $bundles = array(
@@ -1495,9 +1497,11 @@ function dropcrm_settings_form($form, &$form_state) {
   );
 
   $form['features'] = array(
-    '#type'   => 'fieldset',
-    '#title'  => t('Features'),
-    '#weight' => -10,
+    '#type'        => 'fieldset',
+    '#title'       => t('Features'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => -10,
   );
   $form['features']['enable_households'] = array(
     '#type'          => 'checkbox',
@@ -1511,6 +1515,8 @@ function dropcrm_settings_form($form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('Outreach Goal'),
     '#description' => t('Track your outreach pace. Any completed activity with the "Count as outreach" checkbox ticked contributes to this goal. View progress at <a href="@url">Reports → Outreach Goal</a>.', array('@url' => url('drop/crm/reports/outreach-goal'))),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
     '#weight'      => -5,
   );
   $form['outreach_goal']['outreach_goal_amount'] = array(
@@ -1645,9 +1651,11 @@ function dropcrm_settings_form($form, &$form_state) {
 
   // --- Review mode ---
   $form['review'] = array(
-    '#type'   => 'fieldset',
-    '#title'  => t('Review mode'),
-    '#weight' => $w + 5,
+    '#type'        => 'fieldset',
+    '#title'       => t('Review mode'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => $w + 5,
   );
   $form['review']['review_enabled'] = array(
     '#type'          => 'checkbox',
