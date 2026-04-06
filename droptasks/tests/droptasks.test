@@ -146,6 +146,17 @@ class DropTasksCRUDTest extends DropTasksTestBase {
   }
 
   /**
+   * The task list page shows a Delete link for each task.
+   */
+  public function testDeleteLinkOnListPage() {
+    $task = $this->createTestTask($this->regularUser->uid, array('title' => 'Listed task'));
+
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/tasks');
+    $this->assertLink('Delete', 0, 'Delete link is present on the task list page.');
+  }
+
+  /**
    * The add task form creates a task that shows on the list.
    */
   public function testAddTaskViaForm() {

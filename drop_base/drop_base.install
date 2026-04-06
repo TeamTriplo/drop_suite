@@ -177,7 +177,31 @@ function _drop_base_setup_default_layout() {
     }
   }
 
-  // Add blocks to the TOP region. They'll appear after the breadcrumb.
+  // Ensure essential PageComponents blocks are present. Check each one and
+  // add it if missing — the core default layout may not include all of them.
+  $essential_blocks = array(
+    'system:page_components:tabs',
+    'system:page_components:messages',
+    'system:page_components:action_links',
+  );
+  foreach ($essential_blocks as $plugin) {
+    $found = FALSE;
+    foreach ($layout->content as $block) {
+      if (isset($block->plugin) && $block->plugin === $plugin) {
+        $found = TRUE;
+        break;
+      }
+    }
+    if (!$found) {
+      // Plugin format is "module:delta" where delta may contain colons.
+      $colon = strpos($plugin, ':');
+      $module = substr($plugin, 0, $colon);
+      $delta = substr($plugin, $colon + 1);
+      $layout->addBlock($module, $delta, 'top');
+    }
+  }
+
+  // Add Drop Suite blocks to the TOP region.
   $layout->addBlock('system', 'page_components:title', 'top');
   $layout->addBlock('drop_base', 'drop_nav', 'top');
   $layout->addBlock('drop_base', 'drop_pin_action', 'top');

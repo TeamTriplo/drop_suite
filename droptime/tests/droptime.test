@@ -194,6 +194,20 @@ class DropTimeCRUDTest extends DropTimeTestBase {
     $this->assertEqual('Persisted notes', $loaded->notes);
     $this->assertEqual(1, (int) $loaded->billable);
   }
+
+  /**
+   * The timesheet page shows a Delete link for time entries.
+   */
+  public function testDeleteLinkOnTimesheet() {
+    $today = date('Y-m-d');
+    $this->createTestEntry($this->regularUser->uid, array(
+      'entry_date' => $today,
+    ));
+
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time', array('query' => array('date' => $today)));
+    $this->assertLink('Delete', 0, 'Delete link is present on the timesheet page.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -524,5 +538,95 @@ class DropTimeReassignTest extends DropTimeTestBase {
     $this->backdropLogin($this->adminUser);
     $this->backdropGet('drop/time/reassign');
     $this->assertText('No time entries found.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Owner reassignment tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests for admin reassignment of individual time entries via the Owner field.
+ */
+class DropTimeOwnerReassignTest extends DropTimeTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTime Owner Reassignment',
+      'description' => 'Admin can reassign individual time entries via the Owner field on the edit form.',
+      'group'       => 'DropTime',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'droptime');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer droptime',
+      'access droptime',
+    ));
+    $this->regularUser = $this->backdropCreateUser(array(
+      'access droptime',
+    ));
+    $this->project = $this->createTestProject();
+  }
+
+  /**
+   * Admin sees the Owner field on the entry edit form.
+   */
+  public function testAdminSeesOwnerField() {
+    $entry = $this->createTestEntry($this->regularUser->uid);
+
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet('drop/time/entry/' . $entry->eid . '/edit');
+    $this->assertResponse(200);
+    $this->assertText('Owner', 'Owner field is visible to admin on the edit form.');
+  }
+
+  /**
+   * Non-admin does not see the Owner field on the entry edit form.
+   */
+  public function testNonAdminDoesNotSeeOwnerField() {
+    $entry = $this->createTestEntry($this->regularUser->uid);
+
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time/entry/' . $entry->eid . '/edit');
+    $this->assertResponse(200);
+    $this->assertNoText('Reassign this time entry', 'Owner field is not visible to regular users.');
+  }
+
+  /**
+   * Admin can reassign a single entry to a different person.
+   */
+  public function testAdminCanReassignEntry() {
+    $other = $this->backdropCreateUser(array('access droptime'));
+    $entry = $this->createTestEntry($this->regularUser->uid, array(
+      'start_time' => '09:00',
+      'end_time'   => '10:00',
+    ));
+
+    $this->backdropLogin($this->adminUser);
+    $this->backdropPost('drop/time/entry/' . $entry->eid . '/edit', array(
+      'uid' => $other->uid,
+    ), t('Update entry'));
+
+    // Verify the entry now belongs to the other user.
+    $saved = db_select('drop_time_entry', 'e')
+      ->fields('e', array('uid'))
+      ->condition('e.eid', $entry->eid)
+      ->execute()->fetchField();
+    $this->assertEqual((int) $other->uid, (int) $saved, 'Entry was reassigned to the other user.');
+  }
+
+  /**
+   * Team reports table includes an Edit link for each entry.
+   */
+  public function testTeamReportsShowEditLink() {
+    $entry = $this->createTestEntry($this->regularUser->uid);
+
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet('drop/time/reports/team');
+    $this->assertLink('Edit', 0, 'Edit link appears in team reports entry table.');
+    $this->assertLinkByHref('drop/time/entry/' . $entry->eid . '/edit');
   }
 }

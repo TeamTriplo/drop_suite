@@ -1,0 +1,11 @@
+[DropBaseLayoutSetupTest]
+name = Drop Base Layout Setup
+description = Verifies that enabling Drop Base places all essential blocks in the default layout.
+group = Drop Base
+file = drop_base.test
+
+[DropBaseSettingsDashboardTest]
+name = Settings Dashboard
+description = Verifies settings cards appear for enabled modules and access is restricted.
+group = Drop Base
+file = drop_base.test

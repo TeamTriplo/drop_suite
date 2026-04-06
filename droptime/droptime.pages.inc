@@ -335,6 +335,19 @@ function droptime_entry_form($form, &$form_state, $entry = NULL, $date = NULL) {
     );
   }
 
+  // Owner — admin only, shown when editing an existing entry.
+  if ($is_edit && user_access('administer droptime')) {
+    $all_users = db_query("SELECT uid, name FROM {users} WHERE uid > 0 AND status = 1 ORDER BY name")->fetchAllKeyed();
+    $form['uid'] = array(
+      '#type'          => 'select',
+      '#title'         => t('Owner'),
+      '#options'       => $all_users,
+      '#default_value' => $entry->uid,
+      '#description'   => t('Reassign this time entry to a different person.'),
+      '#weight'        => 50,
+    );
+  }
+
   if ($is_edit) {
     $form['eid'] = array('#type' => 'hidden', '#value' => $entry->eid);
   }
@@ -407,6 +420,11 @@ function droptime_entry_form_submit($form, &$form_state) {
   $entry->end_time   = trim($values['end_time']);
   $entry->billable   = (int) $values['billable'];
   $entry->notes      = trim($values['notes']);
+
+  // Admin can reassign ownership.
+  if (!empty($values['uid']) && user_access('administer droptime')) {
+    $entry->uid = (int) $values['uid'];
+  }
 
   $entry->save();
 
@@ -1055,6 +1073,7 @@ function _droptime_team_entries_table($entries, $projects, $users, $show_col) {
     $row[] = ($show_col === 'project') ? $swatch . ' ' . $proj_name : $person;
     $row[] = check_plain($entry->notes);
     $row[] = $bill . ' ' . droptime_format_duration($entry->duration);
+    $row[] = l(t('Edit'), 'drop/time/entry/' . $entry->eid . '/edit');
     $rows[] = $row;
   }
 
@@ -1062,6 +1081,7 @@ function _droptime_team_entries_table($entries, $projects, $users, $show_col) {
   $header[] = $show_col === 'project' ? t('Project') : t('Person');
   $header[] = t('Note');
   $header[] = t('Duration');
+  $header[] = '';
 
   return theme('table', array(
     'header'     => $header,

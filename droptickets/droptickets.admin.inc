@@ -337,11 +337,6 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
  * Validation handler for droptickets_ticket_form().
  */
 function droptickets_ticket_form_validate($form, &$form_state) {
-  // Project is required for all ticket types except discussion.
-  if ($form_state['values']['type'] !== 'discussion' && empty($form_state['values']['pid'])) {
-    form_set_error('pid', t('Project is required.'));
-  }
-
   $due = trim($form_state['values']['due_date']);
   if ($due && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
     form_set_error('due_date', t('Due date must be in YYYY-MM-DD format.'));

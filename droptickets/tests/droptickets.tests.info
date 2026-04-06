@@ -51,3 +51,9 @@ name = DropTickets Notifications
 description = Notification count reflects distinct tickets; last-used project persists.
 group = DropTickets
 file = droptickets.test
+
+[DropTicketsInlinePriorityTest]
+name = DropTickets Inline Priority
+description = Changing priority from the ticket view page saves correctly via AJAX.
+group = DropTickets
+file = droptickets.test

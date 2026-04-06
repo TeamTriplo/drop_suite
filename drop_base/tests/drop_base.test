@@ -1,0 +1,173 @@
+<?php
+/**
+ * @file
+ * Tests for the Drop Base module.
+ */
+
+/**
+ * Tests that Drop Base install correctly sets up the default layout.
+ *
+ * Verifies that essential blocks (messages, tabs, action links, nav, title)
+ * are placed in the layout after drop_base is enabled.
+ */
+class DropBaseLayoutSetupTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop Base Layout Setup',
+      'description' => 'Verifies that enabling Drop Base places all essential blocks in the default layout.',
+      'group'       => 'Drop Base',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base');
+  }
+
+  /**
+   * The default layout uses the drop_suite template after install.
+   */
+  public function testLayoutUsesDropSuiteTemplate() {
+    $layout = layout_load('default');
+    $this->assertEqual('drop_suite', $layout->layout_template, 'Default layout uses the drop_suite template.');
+  }
+
+  /**
+   * A messages block is present in the layout.
+   */
+  public function testMessagesBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:messages');
+    $this->assertTrue($found, 'Messages block is placed in the layout.');
+  }
+
+  /**
+   * A page title block is present in the layout.
+   */
+  public function testTitleBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:title');
+    $this->assertTrue($found, 'Page title block is placed in the layout.');
+  }
+
+  /**
+   * A tabs block is present in the layout.
+   */
+  public function testTabsBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:tabs');
+    $this->assertTrue($found, 'Tabs block is placed in the layout.');
+  }
+
+  /**
+   * An action links block is present in the layout.
+   */
+  public function testActionLinksBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:action_links');
+    $this->assertTrue($found, 'Action links block is placed in the layout.');
+  }
+
+  /**
+   * The Drop Nav block is present in the layout.
+   */
+  public function testDropNavBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'drop_base:drop_nav');
+    $this->assertTrue($found, 'Drop Nav block is placed in the layout.');
+  }
+
+  /**
+   * The Drop Section Nav block is present in the layout.
+   */
+  public function testDropSectionNavBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'drop_base:drop_section_nav');
+    $this->assertTrue($found, 'Drop Section Nav block is placed in the layout.');
+  }
+
+  /**
+   * Status messages render on the page after a form submission.
+   */
+  public function testStatusMessagesRender() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+
+    // Save the site name form to trigger a status message.
+    $this->backdropPost('admin/config/system/site-information', array(
+      'site_name' => 'Test Site',
+    ), t('Save configuration'));
+
+    $this->assertText('saved', 'Status message is visible after form submission.');
+  }
+
+  /**
+   * Helper: checks whether a layout has a block with a given plugin name.
+   *
+   * @param Layout $layout
+   * @param string $plugin
+   *
+   * @return bool
+   */
+  protected function layoutHasPlugin($layout, $plugin) {
+    foreach ($layout->content as $block) {
+      if (isset($block->plugin) && $block->plugin === $plugin) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+}
+
+/**
+ * Tests the settings dashboard at drop/settings.
+ *
+ * Verifies that enabled modules with hook_drop_settings_info() show cards,
+ * and that the dashboard is access-controlled.
+ */
+class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Settings Dashboard',
+      'description' => 'Verifies settings cards appear for enabled modules and access is restricted.',
+      'group'       => 'Drop Base',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base');
+  }
+
+  /**
+   * Admin sees the Drop Base settings card on the dashboard.
+   */
+  public function testAdminSeesDropBaseCard() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+    $this->backdropGet('drop/settings');
+    $this->assertResponse(200, 'Admin can access the settings dashboard.');
+    $this->assertText('Drop Base', 'Drop Base settings card is displayed.');
+    $this->assertText('Page width and other base settings.', 'Drop Base description is shown.');
+  }
+
+  /**
+   * Anonymous users cannot access the settings dashboard.
+   */
+  public function testAnonymousCannotAccessSettings() {
+    $this->backdropGet('drop/settings');
+    $this->assertResponse(403, 'Anonymous users cannot access settings dashboard.');
+  }
+
+  /**
+   * A module that is not enabled does not show a settings card.
+   *
+   * DropTickets is not enabled in this test, so its card should not appear.
+   */
+  public function testDisabledModuleHasNoCard() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+    $this->backdropGet('drop/settings');
+    $this->assertNoText('DropTickets', 'Disabled module does not show a settings card.');
+  }
+}

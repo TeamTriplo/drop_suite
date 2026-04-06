@@ -272,6 +272,17 @@ class DropCRMContactCRUDTest extends DropCRMTestBase {
     $this->assertResponse(200);
     $this->assertText('The Smith Household');
   }
+
+  /**
+   * The contact list page shows a Delete link for contacts with permission.
+   */
+  public function testDeleteLinkOnContactList() {
+    $this->createTestOrg('Delete Corp');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations');
+    $this->assertLink('Delete', 0, 'Delete link is present on the organization list page.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -740,5 +751,62 @@ class DropCRMProjectFieldUITest extends DropCRMTestBase {
     $this->backdropLogin($regularUser);
     $this->backdropGet('drop/projects/manage/fields');
     $this->assertResponse(403, 'Non-admin user is denied access to the project Field UI page.');
+  }
+}
+
+/**
+ * Tests for primary email change notification and duplicate warnings.
+ */
+class DropCRMContactMethodTest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Contact Methods',
+      'description' => 'Primary email replacement notification and contact method operations.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('dropcrm');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer crm',
+      'access crm',
+      'create crm contacts',
+      'edit crm contacts',
+      'delete crm contacts',
+    ));
+  }
+
+  /**
+   * Setting a new primary email reports which email was replaced.
+   */
+  public function testPrimaryEmailChangeNotification() {
+    $contact = $this->createTestOrg('Acme Corp');
+
+    // Create the first email as primary directly in DB.
+    $method1 = entity_create('crm_contact_method', array(
+      'type'       => 'email',
+      'cid'        => $contact->cid,
+      'label'      => 'Work',
+      'value'      => 'old@acme.com',
+      'is_primary' => 1,
+    ));
+    $method1->save();
+
+    // Now submit the form to add a second email as primary.
+    $this->backdropLogin($this->adminUser);
+    $cid_value = 'Acme Corp [cid:' . $contact->cid . ']';
+    $edit = array(
+      'cid'        => $cid_value,
+      'label'      => 'Work',
+      'value'      => 'new@acme.com',
+      'is_primary' => TRUE,
+    );
+    $this->backdropPost('drop/crm/contact-methods/add/email', $edit, t('Add Contact Method'));
+
+    $this->assertText('Primary email changed from', 'Primary replacement notification is shown.');
+    $this->assertText('old@acme.com', 'Old email address appears in the notification.');
+    $this->assertText('new@acme.com', 'New email address appears in the notification.');
   }
 }

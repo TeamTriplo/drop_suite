@@ -21,3 +21,9 @@ name = DropCRM Project Field UI Access
 description = Verifies that a user with administer crm can manage fields on projects.
 group = DropCRM
 file = dropcrm.test
+
+[DropCRMContactMethodTest]
+name = DropCRM Contact Methods
+description = Primary email replacement notification and contact method operations.
+group = DropCRM
+file = dropcrm.test
