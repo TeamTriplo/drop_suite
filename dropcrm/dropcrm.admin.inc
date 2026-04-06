@@ -1643,10 +1643,23 @@ function dropcrm_settings_form($form, &$form_state) {
     '#default_value' => 0,
   );
 
+  // --- Review mode ---
+  $form['review'] = array(
+    '#type'   => 'fieldset',
+    '#title'  => t('Review mode'),
+    '#weight' => $w + 5,
+  );
+  $form['review']['review_enabled'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Enable review mode for organizations'),
+    '#description'   => t('Adds a Review tab for working through organizations with a temporary checklist (e.g. invoicing clients).'),
+    '#default_value' => $config->get('review_enabled'),
+  );
+
   $form['actions'] = array('#type' => 'actions', '#weight' => $w + 10);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
-    '#value' => t('Save activity types'),
+    '#value' => t('Save settings'),
   );
 
   return $form;
@@ -2048,6 +2061,7 @@ function dropcrm_settings_form_submit($form, &$form_state) {
   $config->set('outreach_goal_amount', (int) $values['outreach_goal_amount']);
   $config->set('outreach_goal_period', $values['outreach_goal_period']);
   $config->set('outreach_goal_window_weeks', (int) $values['outreach_goal_window_weeks']);
+  $config->set('review_enabled', !empty($values['review_enabled']));
   $config->save();
 
   // Rebuild the menu so the Households tab appears/disappears immediately.

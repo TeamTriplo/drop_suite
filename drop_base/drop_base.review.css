@@ -1,0 +1,68 @@
+/* ---------------------------------------------------------------------------
+   Shared review checklist styles
+   --------------------------------------------------------------------------- */
+
+.drop-review-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9em;
+  color: var(--drop-text-secondary, #666);
+}
+
+.drop-review-table {
+  width: 100%;
+}
+
+.drop-review-col-btn {
+  width: 2.2rem;
+  text-align: center;
+  padding-right: 0;
+}
+
+.drop-review-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.15rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* Show circle (off), hide checkmark (on) by default */
+.drop-review-icon-off {
+  display: inline-flex;
+  color: #bbb;
+}
+.drop-review-icon-on {
+  display: none;
+  color: var(--drop-success, #2e7d32);
+}
+
+.drop-review-btn:hover .drop-review-icon-off {
+  color: var(--drop-primary, #1565c0);
+}
+
+/* When reviewed: hide circle, show green checkmark */
+.drop-review-btn--done .drop-review-icon-off {
+  display: none;
+}
+.drop-review-btn--done .drop-review-icon-on {
+  display: inline-flex;
+}
+
+.drop-review-btn--done:hover .drop-review-icon-on {
+  color: #c62828;
+}
+
+/* Reviewed rows — clearly de-emphasised */
+tr.drop-review-row--done td {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+
+tr.drop-review-row--done .drop-review-btn {
+  text-decoration: none;
+  opacity: 1;
+}

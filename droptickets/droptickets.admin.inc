@@ -1006,6 +1006,18 @@ function droptickets_settings_form($form, &$form_state) {
     '#maxlength'     => 255,
   );
 
+  // --- Review mode ---
+  $form['review'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Review mode'),
+  );
+  $form['review']['review_enabled'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Enable review mode'),
+    '#description'   => t('Adds a Review tab for working through tickets with a temporary checklist.'),
+    '#default_value' => $config->get('review_enabled'),
+  );
+
   $form = system_settings_form($form);
   $form['#submit'][] = 'droptickets_settings_form_normalize_watchers';
   return $form;

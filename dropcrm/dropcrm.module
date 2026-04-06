@@ -966,6 +966,28 @@ function dropcrm_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Review / checklist page for organizations.
+  $items['drop/crm/review'] = array(
+    'title'            => 'Review',
+    'page callback'    => 'dropcrm_review_page',
+    'access callback'  => '_dropcrm_review_access',
+    'file'             => 'dropcrm.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/review/toggle/%'] = array(
+    'page callback'    => 'dropcrm_review_toggle',
+    'page arguments'   => array(4),
+    'access callback'  => '_dropcrm_review_access',
+    'file'             => 'dropcrm.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/crm/review/clear'] = array(
+    'page callback'    => 'dropcrm_review_clear',
+    'access callback'  => '_dropcrm_review_access',
+    'file'             => 'dropcrm.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   // Per-bundle contact tabs.
   $items['drop/crm/people'] = array(
     'title'            => 'People',
@@ -1631,6 +1653,13 @@ function dropcrm_drop_settings_info() {
 /**
  * Implements hook_drop_section_links().
  */
+/**
+ * Access callback for CRM review mode routes.
+ */
+function _dropcrm_review_access() {
+  return config_get('dropcrm.settings', 'review_enabled') && user_access('access crm');
+}
+
 function dropcrm_drop_section_links($section) {
   if ($section !== 'crm') {
     return array();
@@ -1690,6 +1719,14 @@ function dropcrm_drop_section_links($section) {
     'href'   => 'drop/crm/reports/clients',
     'weight' => 30,
   );
+
+  if (config_get('dropcrm.settings', 'review_enabled')) {
+    $links['review'] = array(
+      'title'        => t('Review'),
+      'href'         => 'drop/crm/review',
+      'weight'       => 35,
+    );
+  }
 
   $links['tag_filter'] = array(
     'title'  => t('Tag Filter'),

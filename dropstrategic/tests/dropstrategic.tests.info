@@ -9,3 +9,9 @@ name = Drop Strategic Access Control
 description = Verifies that the strategic goals dashboard and CRUD require correct permissions.
 group = Drop Strategic
 file = dropstrategic.test
+
+[DropStrategicPrivateNotesTest]
+name = Drop Strategic Private Notes
+description = Private notes are visible only to the goal owner and admins.
+group = Drop Strategic
+file = dropstrategic.test

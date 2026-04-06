@@ -1470,3 +1470,68 @@ function drop_base_form_user_admin_permissions_alter(&$form, &$form_state, $form
     ));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Review mode helpers (shared across modules)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the IDs a user has marked as reviewed in a given namespace.
+ *
+ * @param string $namespace
+ *   A module-specific key, e.g. 'tickets', 'organizations'.
+ * @param int $uid
+ *   The user ID.
+ *
+ * @return array
+ *   Flat array of integer entity IDs.
+ */
+function drop_base_review_get($namespace, $uid) {
+  $all = state_get('drop_review.' . $namespace, array());
+  return isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+}
+
+/**
+ * Toggles the reviewed state of an entity for a user.
+ *
+ * @param string $namespace
+ *   A module-specific key.
+ * @param int $uid
+ *   The user ID.
+ * @param int $id
+ *   The entity ID to toggle.
+ *
+ * @return bool
+ *   TRUE if the entity is now reviewed, FALSE if it was unmarked.
+ */
+function drop_base_review_toggle($namespace, $uid, $id) {
+  $state_key = 'drop_review.' . $namespace;
+  $all  = state_get($state_key, array());
+  $ids  = isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+  if (in_array($id, $ids)) {
+    $ids = array_values(array_diff($ids, array($id)));
+    $reviewed = FALSE;
+  }
+  else {
+    $ids[]    = $id;
+    $reviewed = TRUE;
+  }
+  $all[$uid] = $ids;
+  state_set($state_key, $all);
+  return $reviewed;
+}
+
+/**
+ * Clears all reviewed flags for a user in a given namespace.
+ *
+ * @param string $namespace
+ *   A module-specific key.
+ * @param int $uid
+ *   The user ID.
+ */
+function drop_base_review_clear($namespace, $uid) {
+  $state_key = 'drop_review.' . $namespace;
+  $all = state_get($state_key, array());
+  unset($all[$uid]);
+  state_set($state_key, $all);
+}

@@ -7,5 +7,6 @@
   "default_watchers": null,
   "reactions_enabled": true,
   "slack_webhook_url": "",
-  "kanban_modals": true
+  "kanban_modals": true,
+  "review_enabled": true
 }

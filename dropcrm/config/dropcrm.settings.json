@@ -27,5 +27,6 @@
     "telephone": ["Work", "Mobile", "Home", "Fax", "Other"],
     "address": ["Work", "Home", "Billing", "Shipping", "Other"],
     "url": ["LinkedIn", "Twitter", "GitHub", "Facebook", "Instagram", "Website", "Other"]
-  }
+  },
+  "review_enabled": false
 }

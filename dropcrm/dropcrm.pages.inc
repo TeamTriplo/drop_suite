@@ -877,3 +877,191 @@ function _dropcrm_load_contact_activities($cid) {
 
   return crm_activity_load_multiple(array_keys($result['crm_activity']));
 }
+
+// ---------------------------------------------------------------------------
+// Organization review checklist
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: organization review checklist.
+ *
+ * Lists organizations with a temporary checkbox for working through a list
+ * (e.g. invoicing clients). Supports tag filtering.
+ */
+function dropcrm_review_page() {
+  global $user;
+
+  backdrop_set_title(t('Review'));
+
+  $base_path = backdrop_get_path('module', 'drop_base');
+  $output = array(
+    '#attached' => array(
+      'css' => array(
+        $base_path . '/drop_base.review.css',
+        backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css',
+      ),
+      'js' => array($base_path . '/drop_base.review.js'),
+    ),
+  );
+
+  // Tag filter from URL.
+  $tag_filter = isset($_GET['tag']) ? (int) $_GET['tag'] : 0;
+
+  // Build tag dropdown from drop_tags vocabulary.
+  $tag_opts_html = '<option value="0"' . (!$tag_filter ? ' selected' : '') . '>' . t('— All tags —') . '</option>';
+  $vocab = taxonomy_vocabulary_machine_name_load('drop_tags');
+  if ($vocab) {
+    $all_terms = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid', 'name'))
+      ->condition('d.vocabulary', 'drop_tags')
+      ->orderBy('d.name')
+      ->execute()->fetchAllKeyed();
+    foreach ($all_terms as $tid => $tname) {
+      $tag_opts_html .= '<option value="' . (int) $tid . '"'
+        . ($tag_filter === (int) $tid ? ' selected' : '') . '>'
+        . check_plain($tname) . '</option>';
+    }
+  }
+
+  $filter_form = '<form method="get" action="' . url('drop/crm/review') . '" class="dropcrm-filter-form">'
+    . '<select name="tag" class="dropcrm-filter-select" onchange="this.form.submit()">' . $tag_opts_html . '</select>'
+    . '</form>';
+
+  $output['filters'] = array(
+    '#markup' => '<div class="dropcrm-filter-row">' . $filter_form . '</div>',
+    '#weight' => -20,
+  );
+
+  // Load active organizations.
+  $query = db_select('crm_contact', 'c')
+    ->fields('c', array('cid', 'name'))
+    ->condition('c.type', 'crm_organization')
+    ->condition('c.status', 1)
+    ->orderBy('c.name', 'ASC');
+
+  if ($tag_filter) {
+    $query->innerJoin('field_data_field_drop_tags', 'ft',
+      'ft.entity_id = c.cid AND ft.entity_type = :type',
+      array(':type' => 'crm_contact'));
+    $query->condition('ft.field_drop_tags_tid', $tag_filter);
+  }
+
+  $orgs = $query->execute()->fetchAll();
+
+  if (empty($orgs)) {
+    $output['empty'] = array(
+      '#markup' => '<p class="dropcrm-empty">' . t('No organizations to review.') . '</p>',
+    );
+    return $output;
+  }
+
+  $reviewed_cids = drop_base_review_get('organizations', $user->uid);
+  $reviewed_set  = array_flip($reviewed_cids);
+  $reviewed_count = count(array_intersect($reviewed_cids, array_column($orgs, 'cid')));
+
+  // Controls bar.
+  $clear_link = $reviewed_count
+    ? l(t('Clear @count reviewed flag(s)', array('@count' => $reviewed_count)),
+        'drop/crm/review/clear',
+        array('query' => array('token' => backdrop_get_token('crm-review-clear'))))
+    : '';
+  $output['controls'] = array(
+    '#markup' => '<div class="drop-review-controls">'
+      . '<span class="drop-review-summary">'
+      . format_plural(count($orgs), '1 organization', '@count organizations')
+      . ($reviewed_count ? ', ' . format_plural($reviewed_count, '1 reviewed', '@count reviewed') : '')
+      . '</span>'
+      . ($clear_link ? ' &nbsp;·&nbsp; ' . $clear_link : '')
+      . '</div>',
+    '#weight' => -10,
+  );
+
+  // Split into unreviewed (first) and reviewed (last).
+  $unreviewed = array();
+  $reviewed   = array();
+  foreach ($orgs as $org) {
+    if (isset($reviewed_set[$org->cid])) {
+      $reviewed[] = $org;
+    }
+    else {
+      $unreviewed[] = $org;
+    }
+  }
+  $ordered = array_merge($unreviewed, $reviewed);
+
+  $token = backdrop_get_token('crm-review-toggle');
+  $rows  = array();
+  foreach ($ordered as $org) {
+    $is_reviewed = isset($reviewed_set[$org->cid]);
+    $toggle_url = url('drop/crm/review/toggle/' . $org->cid,
+      array('query' => array('token' => $token)));
+
+    $icon_off = icon('circle',       array('attributes' => array('width' => 20, 'height' => 20)));
+    $icon_on  = icon('check-circle', array('attributes' => array('width' => 20, 'height' => 20)));
+    $btn_class = 'drop-review-btn' . ($is_reviewed ? ' drop-review-btn--done' : '');
+    $btn_title = $is_reviewed ? t('Reviewed — click to unmark') : t('Mark as reviewed');
+    $btn = '<button type="button" class="' . $btn_class . '" '
+      . 'data-url="' . check_plain($toggle_url) . '" '
+      . 'title="' . $btn_title . '">'
+      . '<span class="drop-review-icon-off">' . $icon_off . '</span>'
+      . '<span class="drop-review-icon-on">' . $icon_on . '</span>'
+      . '</button>';
+
+    $rows[] = array(
+      'data' => array(
+        array('data' => $btn, 'class' => array('drop-review-col-btn')),
+        array('data' => l(check_plain($org->name), 'drop/crm/contact/' . $org->cid)),
+      ),
+      'class' => array(
+        'drop-review-row',
+        $is_reviewed ? 'drop-review-row--done' : '',
+      ),
+    );
+  }
+
+  $output['table'] = array(
+    '#theme'      => 'table',
+    '#header'     => array('', t('Organization')),
+    '#rows'       => $rows,
+    '#attributes' => array('class' => array('drop-review-table')),
+    '#empty'      => t('No organizations.'),
+  );
+
+  return $output;
+}
+
+/**
+ * AJAX callback: toggles the review flag for an organization.
+ */
+function dropcrm_review_toggle($cid) {
+  global $user;
+
+  backdrop_add_http_header('Content-Type', 'application/json');
+
+  $token = isset($_GET['token']) ? $_GET['token'] : '';
+  if (!backdrop_valid_token($token, 'crm-review-toggle')) {
+    print backdrop_json_encode(array('error' => 'invalid token'));
+    exit();
+  }
+
+  $cid      = (int) $cid;
+  $reviewed = drop_base_review_toggle('organizations', $user->uid, $cid);
+  print backdrop_json_encode(array('id' => $cid, 'reviewed' => $reviewed));
+  exit();
+}
+
+/**
+ * Page callback: clears all organization review flags for the current user.
+ */
+function dropcrm_review_clear() {
+  global $user;
+
+  if (!backdrop_valid_token($_GET['token'], 'crm-review-clear')) {
+    backdrop_access_denied();
+    return;
+  }
+
+  drop_base_review_clear('organizations', $user->uid);
+  backdrop_set_message(t('Review flags cleared.'));
+  backdrop_goto('drop/crm/review');
+}

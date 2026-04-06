@@ -232,3 +232,97 @@ class DropStrategicAccessTest extends BackdropWebTestCase {
     $this->assertResponse(403);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Private notes access tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that private notes on strategic goals are only visible to the owner
+ * and site admins with 'administer dropstrategic'.
+ */
+class DropStrategicPrivateNotesTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop Strategic Private Notes',
+      'description' => 'Private notes are visible only to the goal owner and admins.',
+      'group'       => 'Drop Strategic',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'entity_plus', 'dropstrategic');
+  }
+
+  /**
+   * Creates a strategic goal with private notes.
+   */
+  protected function createGoalWithNotes($owner_uid) {
+    $goal = entity_create('drop_goal_strategic', array(
+      'title'                => 'Test Goal',
+      'owner_uid'            => $owner_uid,
+      'uid'                  => $owner_uid,
+      'status'               => 'active',
+      'body'                 => 'Goal body text.',
+      'body_format'          => 'plain_text',
+      'private_notes'        => 'Secret owner thoughts.',
+      'private_notes_format' => 'plain_text',
+    ));
+    $goal->save();
+    return $goal;
+  }
+
+  /**
+   * The goal owner can see their own private notes.
+   */
+  public function testOwnerSeesPrivateNotes() {
+    $owner = $this->backdropCreateUser(array(
+      'view strategic goals',
+      'create strategic goals',
+    ));
+    $goal = $this->createGoalWithNotes($owner->uid);
+
+    $this->backdropLogin($owner);
+    $this->backdropGet('drop/strategic/' . $goal->gid);
+    $this->assertText('Private notes', 'Owner sees the Private notes heading.');
+    $this->assertText('Secret owner thoughts', 'Owner sees the private notes content.');
+  }
+
+  /**
+   * A different user without admin permission cannot see private notes.
+   */
+  public function testNonOwnerCannotSeePrivateNotes() {
+    $owner = $this->backdropCreateUser(array(
+      'view strategic goals',
+      'create strategic goals',
+    ));
+    $other = $this->backdropCreateUser(array('view strategic goals'));
+    $goal = $this->createGoalWithNotes($owner->uid);
+
+    $this->backdropLogin($other);
+    $this->backdropGet('drop/strategic/' . $goal->gid);
+    $this->assertResponse(200, 'Non-owner can view the goal page.');
+    $this->assertNoText('Secret owner thoughts', 'Non-owner cannot see private notes content.');
+  }
+
+  /**
+   * An admin with 'administer dropstrategic' can see private notes on any goal.
+   */
+  public function testAdminSeesPrivateNotes() {
+    $owner = $this->backdropCreateUser(array(
+      'view strategic goals',
+      'create strategic goals',
+    ));
+    $admin = $this->backdropCreateUser(array(
+      'view strategic goals',
+      'administer dropstrategic',
+    ));
+    $goal = $this->createGoalWithNotes($owner->uid);
+
+    $this->backdropLogin($admin);
+    $this->backdropGet('drop/strategic/' . $goal->gid);
+    $this->assertText('Private notes', 'Admin sees the Private notes heading.');
+    $this->assertText('Secret owner thoughts', 'Admin sees the private notes content.');
+  }
+}
