@@ -1539,3 +1539,28 @@ function drop_base_review_clear($namespace, $uid) {
   unset($all[$uid]);
   state_set($state_key, $all);
 }
+
+/**
+ * Implements hook_form_field_ui_field_overview_form_alter().
+ *
+ * Attaches Drop Suite admin CSS to the Field UI manage fields page when it is
+ * displayed under a Drop entity admin path.
+ */
+function drop_base_form_field_ui_field_overview_form_alter(&$form, &$form_state) {
+  // Only attach on Drop admin pages (paths starting with drop/).
+  if (strpos(current_path(), 'drop/') === 0) {
+    $form['#attached']['css'][] = backdrop_get_path('module', 'drop_base') . '/drop_base.admin.css';
+  }
+}
+
+/**
+ * Implements hook_form_field_ui_display_overview_form_alter().
+ *
+ * Attaches Drop Suite admin CSS to the Field UI manage display page when it is
+ * displayed under a Drop entity admin path.
+ */
+function drop_base_form_field_ui_display_overview_form_alter(&$form, &$form_state) {
+  if (strpos(current_path(), 'drop/') === 0) {
+    $form['#attached']['css'][] = backdrop_get_path('module', 'drop_base') . '/drop_base.admin.css';
+  }
+}

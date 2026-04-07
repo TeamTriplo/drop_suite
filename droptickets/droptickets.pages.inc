@@ -1556,6 +1556,7 @@ function droptickets_ticket_view(DropTicket $ticket) {
     $sidebar .= '<div class="droptickets-sidebar-flag">'
       . l($flag_icon . ' ' . $flag_label, 'drop/tickets/' . $ticket->tid . '/flag', array(
           'html'       => TRUE,
+          'query'      => backdrop_get_destination(),
           'attributes' => array('class' => array($is_flagged ? 'droptickets-flag-on' : 'droptickets-flag-off')),
         ))
       . '</div>';
@@ -2596,7 +2597,7 @@ function droptickets_recent_page() {
   // Filters.
   $pid_filter      = (!empty($_GET['pid'])      && is_numeric($_GET['pid']))      ? (int) $_GET['pid']      : 0;
   $assignee_filter = (!empty($_GET['assignee']) && is_numeric($_GET['assignee'])) ? (int) $_GET['assignee'] : 0;
-  $valid_status_keys = array_merge(array('', 'all_tickets'), array_keys(droptickets_status_options()));
+  $valid_status_keys = array_merge(array('', 'all_tickets', 'imported'), array_keys(droptickets_status_options()));
   $status_filter   = (isset($_GET['status']) && in_array($_GET['status'], $valid_status_keys)) ? $_GET['status'] : '';
 
   // --- Project Mode ---
@@ -2706,14 +2707,19 @@ function droptickets_recent_page() {
   $query->leftJoin($last_comment_subquery, 'lc', 'lc.tid = t.tid');
   $query->addExpression('GREATEST(t.changed, COALESCE(lc.last_comment, 0))', 'last_activity');
   $query->addExpression('lc.last_comment', 'last_comment_ts');
-  $query->isNull('t.import_id');
+  if ($status_filter === 'imported') {
+    $query->isNotNull('t.import_id');
+  }
+  else {
+    $query->isNull('t.import_id');
+  }
   if ($pid_filter) {
     $query->condition('t.pid', $pid_filter);
   }
   if ($assignee_filter) {
     $query->condition('t.assignee_uid', $assignee_filter);
   }
-  if ($status_filter === 'all_tickets') {
+  if ($status_filter === 'imported' || $status_filter === 'all_tickets') {
     // No status condition — show everything.
   }
   elseif ($status_filter) {
@@ -3004,7 +3010,7 @@ function droptickets_stale_report_page() {
   // Filters.
   $pid_filter      = (!empty($_GET['pid'])      && is_numeric($_GET['pid']))      ? (int) $_GET['pid']      : 0;
   $assignee_filter = (!empty($_GET['assignee']) && is_numeric($_GET['assignee'])) ? (int) $_GET['assignee'] : 0;
-  $valid_status_keys = array_merge(array('', 'all_tickets'), array_keys(droptickets_status_options()));
+  $valid_status_keys = array_merge(array('', 'all_tickets', 'imported'), array_keys(droptickets_status_options()));
   $status_filter   = (isset($_GET['status']) && in_array($_GET['status'], $valid_status_keys)) ? $_GET['status'] : '';
 
   // --- Project Mode ---
@@ -3105,10 +3111,16 @@ function droptickets_stale_report_page() {
   $query = db_select('drop_ticket', 't')
     ->fields('t')
     ->condition('t.changed', $cutoff, '<')
-    ->isNull('t.import_id')
     ->orderBy('t.changed', 'ASC');
 
-  if ($status_filter === 'all_tickets') {
+  if ($status_filter === 'imported') {
+    $query->isNotNull('t.import_id');
+  }
+  else {
+    $query->isNull('t.import_id');
+  }
+
+  if ($status_filter === 'imported' || $status_filter === 'all_tickets') {
     // No status condition — show all stale tickets regardless of status.
   }
   elseif ($status_filter) {
@@ -3218,7 +3230,7 @@ function droptickets_review_page() {
   $review_mode_active = $project_mode && !empty($project_mode['report']) && $project_mode['report'] === 'review';
 
   // Parse filter params from URL.
-  $valid_status_keys = array_merge(array('', 'all_tickets'), array_keys(droptickets_status_options()));
+  $valid_status_keys = array_merge(array('', 'all_tickets', 'imported'), array_keys(droptickets_status_options()));
   $pid_filter    = (!empty($_GET['pid']) && is_numeric($_GET['pid'])) ? (int) $_GET['pid'] : 0;
   $tag_filter    = (!empty($_GET['tag']) && is_numeric($_GET['tag'])) ? (int) $_GET['tag'] : 0;
   $status_filter = (isset($_GET['status']) && in_array($_GET['status'], $valid_status_keys))
@@ -3331,14 +3343,21 @@ function droptickets_review_page() {
     ->orderBy('t.priority', 'DESC')
     ->orderBy('t.tid', 'ASC');
 
-  if ($status_filter === 'all_tickets') {
-    // No status condition — show everything.
+  if ($status_filter === 'imported') {
+    // Show only imported tickets.
+    $query->isNotNull('t.import_id');
+  }
+  elseif ($status_filter === 'all_tickets') {
+    // No status condition — show everything except imported.
+    $query->isNull('t.import_id');
   }
   elseif ($status_filter) {
     $query->condition('t.status', $status_filter);
+    $query->isNull('t.import_id');
   }
   else {
     $query->condition('t.status', droptickets_active_statuses(), 'IN');
+    $query->isNull('t.import_id');
   }
   if ($pid_filter) {
     $query->condition('t.pid', $pid_filter);

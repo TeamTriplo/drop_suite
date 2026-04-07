@@ -2106,7 +2106,10 @@ function _droptickets_status_select_html($selected) {
       . check_plain($slabel) . '</option>';
   }
   $html .= '</optgroup>';
+  $html .= '<optgroup label="' . t('Other') . '">';
   $html .= '<option value="all_tickets"' . ($selected === 'all_tickets' ? ' selected' : '') . '>' . t('All tickets') . '</option>';
+  $html .= '<option value="imported"' . ($selected === 'imported' ? ' selected' : '') . '>' . t('Imported') . '</option>';
+  $html .= '</optgroup>';
   return $html;
 }
 

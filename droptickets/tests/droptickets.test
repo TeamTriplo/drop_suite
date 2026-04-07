@@ -1421,7 +1421,7 @@ class DropTicketsActivityLogTest extends DropTicketsTestBase {
     ));
     $this->deleter = $this->backdropCreateUser(array(
       'access droptickets',
-      'delete own droptickets',
+      'delete droptickets',
     ));
   }
 
@@ -1561,7 +1561,7 @@ class DropTicketsReadUnreadTest extends DropTicketsTestBase {
     ));
     $this->deleter = $this->backdropCreateUser(array(
       'access droptickets',
-      'delete own droptickets',
+      'delete droptickets',
     ));
   }
 
@@ -1576,7 +1576,7 @@ class DropTicketsReadUnreadTest extends DropTicketsTestBase {
 
     // Simulate that the reader last visited the ticket one hour ago.
     db_merge('droptickets_comment_read')
-      ->keys(array('uid' => $reader->uid, 'tid' => $ticket->tid))
+      ->key(array('uid' => $reader->uid, 'tid' => $ticket->tid))
       ->fields(array('last_read' => $past))
       ->execute();
 
@@ -1616,7 +1616,7 @@ class DropTicketsReadUnreadTest extends DropTicketsTestBase {
 
     // Simulate that the reader last visited 30 minutes ago (after the comment).
     db_merge('droptickets_comment_read')
-      ->keys(array('uid' => $reader->uid, 'tid' => $ticket->tid))
+      ->key(array('uid' => $reader->uid, 'tid' => $ticket->tid))
       ->fields(array('last_read' => $past + 1800))
       ->execute();
 
@@ -1923,5 +1923,135 @@ class DropTicketsInlinePriorityTest extends DropTicketsTestBase {
     for ($i = 0; $i <= 4; $i++) {
       $this->assertTrue(isset($labels[$i]), format_string('Priority label exists for level @level.', array('@level' => $i)));
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Flag redirect tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that flagging/unflagging a ticket returns the user to the same page.
+ */
+class DropTicketsFlagRedirectTest extends DropTicketsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTickets flag redirect',
+      'description' => 'Flagging or unflagging a ticket from its view page returns the user to that page.',
+      'group'       => 'DropTickets',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('droptickets');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access droptickets',
+      'administer droptickets',
+      'flag droptickets',
+    ));
+  }
+
+  /**
+   * Tests that flagging a ticket from its view page redirects back to that page.
+   */
+  public function testFlagFromViewPageRedirectsBack() {
+    $this->backdropLogin($this->adminUser);
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Flag test ticket'));
+
+    // Visit the ticket view page.
+    $this->backdropGet('drop/tickets/' . $ticket->tid);
+    $this->assertResponse(200);
+
+    // Click the flag link. It should include a destination parameter.
+    $this->clickLink('Add flag');
+    $this->assertUrl('drop/tickets/' . $ticket->tid, array(), 'After flagging, user stays on the ticket view page.');
+
+    // Now unflag — should also stay on the ticket view page.
+    $this->clickLink('Remove flag');
+    $this->assertUrl('drop/tickets/' . $ticket->tid, array(), 'After unflagging, user stays on the ticket view page.');
+  }
+
+  /**
+   * Tests that flag toggle without destination defaults to flagged list.
+   */
+  public function testFlagWithoutDestinationGoesToFlaggedList() {
+    $this->backdropLogin($this->adminUser);
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Flag default redirect'));
+
+    // Hit the flag toggle URL directly (no destination parameter).
+    $this->backdropGet('drop/tickets/' . $ticket->tid . '/flag');
+    $this->assertUrl('drop/tickets/flagged', array(), 'Without destination, flag toggle redirects to flagged list.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Imported ticket exclusion tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that imported tickets are excluded from report pages by default.
+ */
+class DropTicketsImportedExclusionTest extends DropTicketsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTickets imported exclusion',
+      'description' => 'Imported tickets are hidden from Review, Recent, and Stale pages by default and visible with the Imported filter.',
+      'group'       => 'DropTickets',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('droptickets');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access droptickets',
+      'administer droptickets',
+    ));
+  }
+
+  /**
+   * Tests that imported tickets do not appear on the Review page by default.
+   */
+  public function testImportedTicketsExcludedFromReview() {
+    $this->backdropLogin($this->adminUser);
+    $project = $this->createTestProject();
+
+    // Create a normal ticket and an imported ticket.
+    $normal   = $this->createTestTicket($project, array('title' => 'Normal review ticket'));
+    $imported = $this->createTestTicket($project, array(
+      'title' => 'Imported JIRA ticket',
+      'import_id' => 'jira-batch-001',
+    ));
+
+    // Review page default view should show normal ticket but not imported.
+    $this->backdropGet('drop/tickets/review');
+    $this->assertText('Normal review ticket', 'Normal ticket appears on Review page.');
+    $this->assertNoText('Imported JIRA ticket', 'Imported ticket is hidden from Review page by default.');
+
+    // With "imported" filter, only imported ticket should show.
+    $this->backdropGet('drop/tickets/review', array('query' => array('status' => 'imported')));
+    $this->assertText('Imported JIRA ticket', 'Imported ticket appears when Imported filter is selected.');
+    $this->assertNoText('Normal review ticket', 'Normal ticket is hidden when Imported filter is selected.');
+  }
+
+  /**
+   * Tests that imported tickets do not appear on the Recent page by default.
+   */
+  public function testImportedTicketsExcludedFromRecent() {
+    $this->backdropLogin($this->adminUser);
+    $project = $this->createTestProject();
+
+    $normal   = $this->createTestTicket($project, array('title' => 'Normal recent ticket'));
+    $imported = $this->createTestTicket($project, array(
+      'title' => 'Imported recent ticket',
+      'import_id' => 'jira-batch-002',
+    ));
+
+    $this->backdropGet('drop/tickets/recent');
+    $this->assertText('Normal recent ticket', 'Normal ticket appears on Recent page.');
+    $this->assertNoText('Imported recent ticket', 'Imported ticket is hidden from Recent page by default.');
   }
 }

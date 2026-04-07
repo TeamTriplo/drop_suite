@@ -71,80 +71,18 @@ function dropmonitor_dashboard_page() {
     }
 
     // Agent check.
+    $agent_sites_html = '';
     if (isset($checks['agent'])) {
       $agent = json_decode($checks['agent']->data, TRUE);
       if (isset($agent['error'])) {
         $output .= _dropmonitor_metric_item(t('Agent'), t('Error'), $agent['error'], 'dropmonitor-error');
       }
+      elseif (isset($agent['_format']) && $agent['_format'] === 'standalone') {
+        $output .= _dropmonitor_dashboard_standalone_metrics($agent, $config);
+        $agent_sites_html = _dropmonitor_dashboard_standalone_sites($agent);
+      }
       else {
-        // Disk.
-        if (isset($agent['disk_used_percent'])) {
-          $free = round(100 - $agent['disk_used_percent'], 1);
-          $disk_class = '';
-          if ($free <= $config->get('alert_disk_percent')) {
-            $disk_class = 'dropmonitor-critical';
-          }
-          elseif ($free <= $config->get('alert_disk_percent') * 2) {
-            $disk_class = 'dropmonitor-warning';
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Disk'),
-            $agent['disk_used_percent'] . '% ' . t('used'),
-            $agent['disk_free_gb'] . 'GB ' . t('free'),
-            $disk_class
-          );
-        }
-
-        // Updates.
-        if (isset($agent['pending_updates'])) {
-          $update_class = '';
-          if (!empty($agent['pending_security'])) {
-            $update_class = 'dropmonitor-warning';
-          }
-          $update_detail = '';
-          if (!empty($agent['pending_security'])) {
-            $update_detail = $agent['pending_security'] . ' ' . t('security');
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Updates'),
-            $agent['pending_updates'] . ' ' . t('pending'),
-            $update_detail,
-            $update_class
-          );
-        }
-
-        // PHP + Backdrop + OS version.
-        if (!empty($agent['php_version']) || !empty($agent['backdrop_version'])) {
-          $php_short = !empty($agent['php_version']) ? preg_replace('/[-+].*$/', '', $agent['php_version']) : '';
-          $value = $php_short ? 'PHP ' . $php_short : 'Backdrop ' . $agent['backdrop_version'];
-          $details = array();
-          if ($php_short && !empty($agent['backdrop_version'])) {
-            $details[] = 'Backdrop ' . $agent['backdrop_version'];
-          }
-          if (!empty($agent['os_version'])) {
-            $details[] = check_plain($agent['os_version']);
-          }
-          $output .= _dropmonitor_metric_item(t('Stack'), $value, implode('<br>', $details));
-        }
-
-        // Cron.
-        if (isset($agent['cron_age_hours']) && $agent['cron_age_hours'] !== NULL) {
-          $cron_class = '';
-          if ($agent['cron_age_hours'] > 24) {
-            $cron_class = 'dropmonitor-warning';
-          }
-          $output .= _dropmonitor_metric_item(
-            t('Cron'),
-            $agent['cron_age_hours'] . 'h ' . t('ago'),
-            '',
-            $cron_class
-          );
-        }
-
-        // DB size.
-        if (isset($agent['db_size_mb'])) {
-          $output .= _dropmonitor_metric_item(t('Database'), $agent['db_size_mb'] . ' MB', '');
-        }
+        $output .= _dropmonitor_dashboard_legacy_agent($agent, $config);
       }
     }
 
@@ -189,6 +127,9 @@ function dropmonitor_dashboard_page() {
     }
 
     $output .= '</div>'; // .dropmonitor-metrics
+
+    // Per-site summary (standalone agent format only).
+    $output .= $agent_sites_html;
 
     // Footer with last checked time.
     $last_checked = 0;
@@ -270,45 +211,163 @@ function dropmonitor_server_detail_page($server) {
     $output .= '<p class="dropmonitor-checked-at">' . t('Last checked: @date', array('@date' => format_date($check->checked, 'medium'))) . '</p>';
 
     if (!empty($data)) {
-      $rows = array();
-      foreach ($data as $key => $value) {
-        if ($type === 'linode' && $key === 'specs' && is_array($value)) {
-          // Format Linode specs nicely.
-          $specs_output = '<ul style="margin: 5px 0; padding-left: 20px;">';
-          $specs_output .= !empty($value['disk']) ? '<li>Disk: ' . round($value['disk'] / 1024, 0) . ' GB</li>' : '';
-          $specs_output .= !empty($value['memory']) ? '<li>Memory: ' . $value['memory'] . ' MB (' . round($value['memory'] / 1024, 1) . ' GB)</li>' : '';
-          $specs_output .= !empty($value['vcpus']) ? '<li>vCPUs: ' . $value['vcpus'] . '</li>' : '';
-          $specs_output .= !empty($value['gpus']) && $value['gpus'] > 0 ? '<li>GPUs: ' . $value['gpus'] . '</li>' : '';
-          $specs_output .= !empty($value['transfer']) ? '<li>Transfer: ' . $value['transfer'] . ' GB/month</li>' : '';
-          $specs_output .= '</ul>';
-          $rows[] = array(
-            array('data' => '<strong>Specs</strong>'),
-            $specs_output,
-          );
-        }
-        elseif (is_array($value)) {
-          // Other arrays show as formatted JSON.
-          $display_value = '<pre>' . check_plain(json_encode($value, JSON_PRETTY_PRINT)) . '</pre>';
-          $rows[] = array(
-            array('data' => '<strong>' . check_plain($key) . '</strong>'),
-            $display_value,
-          );
-        }
-        else {
-          // Simple values.
-          $rows[] = array(
-            array('data' => '<strong>' . check_plain($key) . '</strong>'),
-            check_plain($value),
-          );
-        }
+      // Standalone agent format gets structured rendering.
+      if ($type === 'agent' && isset($data['_format']) && $data['_format'] === 'standalone') {
+        $output .= _dropmonitor_detail_standalone($data);
       }
-      $output .= theme('table', array('rows' => $rows));
+      else {
+        $output .= _dropmonitor_detail_generic($data, $type);
+      }
     }
   }
 
   $output .= '</div>';
 
   return $output;
+}
+
+/**
+ * Renders detail page data for the standalone monitoring app format.
+ */
+function _dropmonitor_detail_standalone($data) {
+  $output = '';
+  $srv = $data['server'];
+
+  // Server metrics table.
+  $rows = array();
+  if (!empty($srv['hostname'])) {
+    $rows[] = array(array('data' => '<strong>' . t('Hostname') . '</strong>'), check_plain($srv['hostname']));
+  }
+  if (!empty($srv['os'])) {
+    $rows[] = array(array('data' => '<strong>' . t('OS') . '</strong>'), check_plain($srv['os']));
+  }
+  if (isset($srv['uptime_days'])) {
+    $rows[] = array(array('data' => '<strong>' . t('Uptime') . '</strong>'), round($srv['uptime_days'], 1) . ' ' . t('days'));
+  }
+  if (isset($srv['disk_free_percent'])) {
+    $rows[] = array(array('data' => '<strong>' . t('Disk free') . '</strong>'), $srv['disk_free_percent'] . '%');
+  }
+  if (isset($srv['memory'])) {
+    $mem = $srv['memory'];
+    $mem_text = $mem['used_percent'] . '% ' . t('used');
+    if (isset($mem['used_mb']) && isset($mem['total_mb'])) {
+      $mem_text .= ' (' . $mem['used_mb'] . ' / ' . $mem['total_mb'] . ' MB)';
+    }
+    $rows[] = array(array('data' => '<strong>' . t('Memory') . '</strong>'), $mem_text);
+  }
+  if (isset($srv['cpu_used_percent'])) {
+    $rows[] = array(array('data' => '<strong>' . t('CPU') . '</strong>'), $srv['cpu_used_percent'] . '%');
+  }
+  if (isset($srv['network'])) {
+    $net = $srv['network'];
+    $rx = isset($net['rx_bytes_per_sec']) ? number_format($net['rx_bytes_per_sec']) : '0';
+    $tx = isset($net['tx_bytes_per_sec']) ? number_format($net['tx_bytes_per_sec']) : '0';
+    $rows[] = array(array('data' => '<strong>' . t('Network') . '</strong>'), t('RX: @rx B/s, TX: @tx B/s', array('@rx' => $rx, '@tx' => $tx)));
+  }
+  if (isset($srv['apt_updates_available'])) {
+    $rows[] = array(array('data' => '<strong>' . t('Apt updates') . '</strong>'), $srv['apt_updates_available'] . ' ' . t('pending'));
+  }
+
+  if (!empty($rows)) {
+    $output .= '<h4>' . t('Server metrics') . '</h4>';
+    $output .= theme('table', array('rows' => $rows));
+  }
+
+  // SSL certificates.
+  if (!empty($srv['ssl_certificates'])) {
+    $output .= '<h4>' . t('SSL certificates') . '</h4>';
+    $cert_header = array(t('Domain'), t('Days until expiry'));
+    $cert_rows = array();
+    foreach ($srv['ssl_certificates'] as $cert) {
+      $domain = isset($cert['domain']) ? check_plain($cert['domain']) : t('Unknown');
+      $days = isset($cert['days_until_expiry']) ? $cert['days_until_expiry'] : '—';
+      $cert_rows[] = array($domain, $days);
+    }
+    $output .= theme('table', array('header' => $cert_header, 'rows' => $cert_rows));
+  }
+
+  // Per-site details.
+  if (!empty($data['sites'])) {
+    $output .= '<h4>' . t('Sites (@count)', array('@count' => count($data['sites']))) . '</h4>';
+    $site_header = array(t('Site'), t('CMS'), t('HTTP'), t('Response'), t('DB size'), t('Watchdog (24h)'), t('Notes'));
+    $site_rows = array();
+    foreach ($data['sites'] as $label => $site) {
+      $site_name = check_plain($label);
+      if (!empty($site['http']['url'])) {
+        $site_name = l(check_plain($label), $site['http']['url'], array('external' => TRUE));
+      }
+
+      $http_status = '';
+      if (isset($site['http']['status'])) {
+        $class = $site['http']['status'] === 'up' ? 'dropmonitor-up' : ($site['http']['status'] === 'down' ? 'dropmonitor-down' : '');
+        $http_status = '<span class="' . $class . '">' . strtoupper($site['http']['status']) . '</span>';
+        if (isset($site['http']['http_code'])) {
+          $http_status .= ' (' . $site['http']['http_code'] . ')';
+        }
+      }
+
+      $response = isset($site['http']['response_ms']) ? $site['http']['response_ms'] . 'ms' : '—';
+      $db_size = isset($site['db_size_mb']) ? $site['db_size_mb'] . ' MB' : '—';
+      $watchdog = isset($site['watchdog_errors_24h']) ? $site['watchdog_errors_24h'] : '—';
+      $notes = !empty($site['error']) ? '<span class="dropmonitor-site-errors">' . check_plain($site['error']) . '</span>' : '';
+
+      $row_class = array();
+      if (isset($site['http']['status']) && $site['http']['status'] === 'down') {
+        $row_class = array('dropmonitor-row-down');
+      }
+      $site_rows[] = array(
+        'data' => array($site_name, isset($site['cms']) ? $site['cms'] : '—', $http_status, $response, $db_size, $watchdog, $notes),
+        'class' => $row_class,
+      );
+    }
+    $output .= theme('table', array('header' => $site_header, 'rows' => $site_rows));
+  }
+
+  return $output;
+}
+
+/**
+ * Renders detail page data as a generic key-value table (legacy/Linode/HTTP).
+ */
+function _dropmonitor_detail_generic($data, $type) {
+  $rows = array();
+  foreach ($data as $key => $value) {
+    // Skip internal format markers.
+    if ($key === '_format') {
+      continue;
+    }
+    if ($type === 'linode' && $key === 'specs' && is_array($value)) {
+      $specs_output = '<ul style="margin: 5px 0; padding-left: 20px;">';
+      $specs_output .= !empty($value['disk']) ? '<li>Disk: ' . round($value['disk'] / 1024, 0) . ' GB</li>' : '';
+      $specs_output .= !empty($value['memory']) ? '<li>Memory: ' . $value['memory'] . ' MB (' . round($value['memory'] / 1024, 1) . ' GB)</li>' : '';
+      $specs_output .= !empty($value['vcpus']) ? '<li>vCPUs: ' . $value['vcpus'] . '</li>' : '';
+      $specs_output .= !empty($value['gpus']) && $value['gpus'] > 0 ? '<li>GPUs: ' . $value['gpus'] . '</li>' : '';
+      $specs_output .= !empty($value['transfer']) ? '<li>Transfer: ' . $value['transfer'] . ' GB/month</li>' : '';
+      $specs_output .= '</ul>';
+      $rows[] = array(
+        array('data' => '<strong>Specs</strong>'),
+        $specs_output,
+      );
+    }
+    elseif (is_array($value)) {
+      $display_value = '<pre>' . check_plain(json_encode($value, JSON_PRETTY_PRINT)) . '</pre>';
+      $rows[] = array(
+        array('data' => '<strong>' . check_plain($key) . '</strong>'),
+        $display_value,
+      );
+    }
+    else {
+      $rows[] = array(
+        array('data' => '<strong>' . check_plain($key) . '</strong>'),
+        check_plain($value),
+      );
+    }
+  }
+
+  if (!empty($rows)) {
+    return theme('table', array('rows' => $rows));
+  }
+  return '';
 }
 
 /**
@@ -359,6 +418,266 @@ function _dropmonitor_metric_item($label, $value, $detail = '', $class = '') {
     $output .= '<span class="dropmonitor-metric-detail">' . $detail . '</span>';
   }
   $output .= '</div>';
+  return $output;
+}
+
+// -------------------------------------------------------------------------
+// Agent format renderers for dashboard cards.
+// -------------------------------------------------------------------------
+
+/**
+ * Renders server-level metrics for the standalone monitoring app format.
+ */
+function _dropmonitor_dashboard_standalone_metrics($agent, $config) {
+  $output = '';
+  $srv = $agent['server'];
+
+  // Disk.
+  if (isset($srv['disk_free_percent'])) {
+    $used = 100 - $srv['disk_free_percent'];
+    $disk_class = '';
+    if ($srv['disk_free_percent'] <= $config->get('alert_disk_percent')) {
+      $disk_class = 'dropmonitor-critical';
+    }
+    elseif ($srv['disk_free_percent'] <= $config->get('alert_disk_percent') * 2) {
+      $disk_class = 'dropmonitor-warning';
+    }
+    $output .= _dropmonitor_metric_item(
+      t('Disk'),
+      $used . '% ' . t('used'),
+      $srv['disk_free_percent'] . '% ' . t('free'),
+      $disk_class
+    );
+  }
+
+  // Memory.
+  if (isset($srv['memory']['used_percent'])) {
+    $mem = $srv['memory'];
+    $mem_class = '';
+    if ($mem['used_percent'] >= 90) {
+      $mem_class = 'dropmonitor-warning';
+    }
+    $output .= _dropmonitor_metric_item(
+      t('Memory'),
+      $mem['used_percent'] . '% ' . t('used'),
+      isset($mem['used_mb']) ? $mem['used_mb'] . ' / ' . $mem['total_mb'] . ' MB' : '',
+      $mem_class
+    );
+  }
+
+  // CPU.
+  if (isset($srv['cpu_used_percent'])) {
+    $cpu_class = '';
+    if ($srv['cpu_used_percent'] >= 90) {
+      $cpu_class = 'dropmonitor-warning';
+    }
+    $output .= _dropmonitor_metric_item(
+      t('CPU'),
+      $srv['cpu_used_percent'] . '%',
+      '',
+      $cpu_class
+    );
+  }
+
+  // OS + Uptime.
+  $os_details = array();
+  if (!empty($srv['os'])) {
+    $os_details[] = check_plain($srv['os']);
+  }
+  if (isset($srv['uptime_days'])) {
+    $os_details[] = t('Up @days days', array('@days' => round($srv['uptime_days'], 1)));
+  }
+  if (!empty($os_details)) {
+    $output .= _dropmonitor_metric_item(
+      t('System'),
+      array_shift($os_details),
+      implode('<br>', $os_details)
+    );
+  }
+
+  // Apt updates.
+  if (isset($srv['apt_updates_available'])) {
+    $output .= _dropmonitor_metric_item(
+      t('Updates'),
+      $srv['apt_updates_available'] . ' ' . t('pending'),
+      ''
+    );
+  }
+
+  // SSL certificates.
+  if (!empty($srv['ssl_certificates'])) {
+    $alert_cert_days = $config->get('alert_cert_days');
+    $worst_days = NULL;
+    $cert_count = count($srv['ssl_certificates']);
+    foreach ($srv['ssl_certificates'] as $cert) {
+      if (isset($cert['days_until_expiry'])) {
+        if ($worst_days === NULL || $cert['days_until_expiry'] < $worst_days) {
+          $worst_days = $cert['days_until_expiry'];
+        }
+      }
+    }
+    if ($worst_days !== NULL) {
+      $cert_class = '';
+      if ($worst_days <= 0) {
+        $cert_class = 'dropmonitor-critical';
+      }
+      elseif ($worst_days <= $alert_cert_days) {
+        $cert_class = 'dropmonitor-warning';
+      }
+      $output .= _dropmonitor_metric_item(
+        t('SSL certs'),
+        $worst_days . ' ' . t('days (nearest)'),
+        format_plural($cert_count, '1 certificate', '@count certificates'),
+        $cert_class
+      );
+    }
+  }
+
+  return $output;
+}
+
+/**
+ * Renders the per-site summary table for the standalone monitoring app format.
+ */
+function _dropmonitor_dashboard_standalone_sites($agent) {
+  if (empty($agent['sites'])) {
+    return '';
+  }
+
+  $output = '<div class="dropmonitor-sites">';
+  $output .= '<div class="dropmonitor-sites-header">' . t('Sites') . ' <span class="dropmonitor-sites-count">' . count($agent['sites']) . '</span></div>';
+  $output .= '<table class="dropmonitor-sites-table"><tbody>';
+  foreach ($agent['sites'] as $label => $site) {
+    $row_class = '';
+
+    // HTTP status indicator.
+    if (isset($site['http']['status'])) {
+      if ($site['http']['status'] === 'up') {
+        $http_icon = '<span class="dropmonitor-site-up" title="' . t('Up') . '">&bull;</span>';
+      }
+      elseif ($site['http']['status'] === 'down') {
+        $http_icon = '<span class="dropmonitor-site-down" title="' . t('Down') . '">&bull;</span>';
+        $row_class = ' dropmonitor-site-row-down';
+      }
+      else {
+        $http_icon = '<span class="dropmonitor-site-unknown" title="' . t('Unknown') . '">&bull;</span>';
+      }
+    }
+    else {
+      $http_icon = '';
+    }
+
+    // Site name with optional link.
+    $site_name = check_plain($label);
+    if (!empty($site['http']['url'])) {
+      $site_name = l(check_plain($label), $site['http']['url'], array('external' => TRUE));
+    }
+
+    // Details column.
+    $details = array();
+    if (isset($site['http']['http_code'])) {
+      $details[] = 'HTTP ' . $site['http']['http_code'];
+    }
+    if (isset($site['http']['response_ms'])) {
+      $details[] = $site['http']['response_ms'] . 'ms';
+    }
+    if (isset($site['db_size_mb'])) {
+      $details[] = $site['db_size_mb'] . ' MB';
+    }
+    if (!empty($site['watchdog_errors_24h'])) {
+      $details[] = '<span class="dropmonitor-site-errors">' . $site['watchdog_errors_24h'] . ' ' . t('errors') . '</span>';
+    }
+    if (!empty($site['error'])) {
+      $details[] = '<span class="dropmonitor-site-errors" title="' . check_plain($site['error']) . '">' . t('DB error') . '</span>';
+    }
+
+    $output .= '<tr class="dropmonitor-site-row' . $row_class . '">';
+    $output .= '<td class="dropmonitor-site-status">' . $http_icon . '</td>';
+    $output .= '<td class="dropmonitor-site-name">' . $site_name . '</td>';
+    $output .= '<td class="dropmonitor-site-details">' . implode(' &middot; ', $details) . '</td>';
+    $output .= '</tr>';
+  }
+  $output .= '</tbody></table>';
+  $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Renders dashboard metrics for the legacy per-site status.php format.
+ */
+function _dropmonitor_dashboard_legacy_agent($agent, $config) {
+  $output = '';
+
+  // Disk.
+  if (isset($agent['disk_used_percent'])) {
+    $free = round(100 - $agent['disk_used_percent'], 1);
+    $disk_class = '';
+    if ($free <= $config->get('alert_disk_percent')) {
+      $disk_class = 'dropmonitor-critical';
+    }
+    elseif ($free <= $config->get('alert_disk_percent') * 2) {
+      $disk_class = 'dropmonitor-warning';
+    }
+    $output .= _dropmonitor_metric_item(
+      t('Disk'),
+      $agent['disk_used_percent'] . '% ' . t('used'),
+      $agent['disk_free_gb'] . 'GB ' . t('free'),
+      $disk_class
+    );
+  }
+
+  // Updates.
+  if (isset($agent['pending_updates'])) {
+    $update_class = '';
+    if (!empty($agent['pending_security'])) {
+      $update_class = 'dropmonitor-warning';
+    }
+    $update_detail = '';
+    if (!empty($agent['pending_security'])) {
+      $update_detail = $agent['pending_security'] . ' ' . t('security');
+    }
+    $output .= _dropmonitor_metric_item(
+      t('Updates'),
+      $agent['pending_updates'] . ' ' . t('pending'),
+      $update_detail,
+      $update_class
+    );
+  }
+
+  // PHP + Backdrop + OS version.
+  if (!empty($agent['php_version']) || !empty($agent['backdrop_version'])) {
+    $php_short = !empty($agent['php_version']) ? preg_replace('/[-+].*$/', '', $agent['php_version']) : '';
+    $value = $php_short ? 'PHP ' . $php_short : 'Backdrop ' . $agent['backdrop_version'];
+    $details = array();
+    if ($php_short && !empty($agent['backdrop_version'])) {
+      $details[] = 'Backdrop ' . $agent['backdrop_version'];
+    }
+    if (!empty($agent['os_version'])) {
+      $details[] = check_plain($agent['os_version']);
+    }
+    $output .= _dropmonitor_metric_item(t('Stack'), $value, implode('<br>', $details));
+  }
+
+  // Cron.
+  if (isset($agent['cron_age_hours']) && $agent['cron_age_hours'] !== NULL) {
+    $cron_class = '';
+    if ($agent['cron_age_hours'] > 24) {
+      $cron_class = 'dropmonitor-warning';
+    }
+    $output .= _dropmonitor_metric_item(
+      t('Cron'),
+      $agent['cron_age_hours'] . 'h ' . t('ago'),
+      '',
+      $cron_class
+    );
+  }
+
+  // DB size.
+  if (isset($agent['db_size_mb'])) {
+    $output .= _dropmonitor_metric_item(t('Database'), $agent['db_size_mb'] . ' MB', '');
+  }
+
   return $output;
 }
 

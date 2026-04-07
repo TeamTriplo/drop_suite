@@ -141,6 +141,10 @@ function _dropmonitor_check_ssl($url) {
 
 /**
  * Polls the status agent script on a remote server.
+ *
+ * Supports two response formats:
+ * - Legacy (per-site status.php): flat JSON with disk, updates, cron, etc.
+ * - Standalone app: { server: {...}, sites: {...} } with per-site data.
  */
 function _dropmonitor_check_agent($server) {
   if (empty($server->agent_url) || empty($server->agent_token)) {
@@ -201,7 +205,87 @@ function _dropmonitor_check_agent($server) {
     return;
   }
 
-  // Determine status based on thresholds.
+  // Detect standalone app format (has 'server' and 'sites' keys).
+  if (isset($data['server']) && isset($data['sites'])) {
+    _dropmonitor_process_standalone_agent($server, $data, $config);
+    return;
+  }
+
+  // Legacy per-site status.php format.
+  _dropmonitor_process_legacy_agent($server, $data, $config);
+}
+
+/**
+ * Processes response from the standalone monitoring app.
+ */
+function _dropmonitor_process_standalone_agent($server, $data, $config) {
+  $alert_disk_percent = $config->get('alert_disk_percent');
+  $srv = $data['server'];
+  $status = 'ok';
+
+  // Disk space check.
+  if (isset($srv['disk_free_percent'])) {
+    if ($srv['disk_free_percent'] <= $alert_disk_percent) {
+      $status = 'critical';
+    }
+    elseif ($srv['disk_free_percent'] <= $alert_disk_percent * 2) {
+      $status = 'warning';
+    }
+  }
+
+  // High memory usage.
+  if (isset($srv['memory']['used_percent']) && $srv['memory']['used_percent'] >= 90) {
+    $status = _dropmonitor_worse_status($status, 'warning');
+  }
+
+  // High CPU usage.
+  if (isset($srv['cpu_used_percent']) && $srv['cpu_used_percent'] >= 90) {
+    $status = _dropmonitor_worse_status($status, 'warning');
+  }
+
+  // Pending apt updates (treat high count as informational, not warning).
+  // SSL certificates nearing expiry.
+  if (!empty($srv['ssl_certificates'])) {
+    $alert_cert_days = $config->get('alert_cert_days');
+    foreach ($srv['ssl_certificates'] as $cert) {
+      if (isset($cert['days_until_expiry'])) {
+        if ($cert['days_until_expiry'] <= 0) {
+          $status = _dropmonitor_worse_status($status, 'critical');
+        }
+        elseif ($cert['days_until_expiry'] <= $alert_cert_days) {
+          $status = _dropmonitor_worse_status($status, 'warning');
+        }
+      }
+    }
+  }
+
+  // Check per-site issues.
+  foreach ($data['sites'] as $label => $site) {
+    // Watchdog errors.
+    if (!empty($site['watchdog_errors_24h']) && $site['watchdog_errors_24h'] > 50) {
+      $status = _dropmonitor_worse_status($status, 'warning');
+    }
+    // Site HTTP down.
+    if (isset($site['http']['status']) && $site['http']['status'] === 'down') {
+      $status = _dropmonitor_worse_status($status, 'warning');
+    }
+    // DB connection errors.
+    if (!empty($site['error'])) {
+      $status = _dropmonitor_worse_status($status, 'warning');
+    }
+  }
+
+  // Mark format so the dashboard knows how to render.
+  $data['_format'] = 'standalone';
+
+  dropmonitor_save_check($server->sid, 'agent', $status, $data);
+}
+
+/**
+ * Processes response from the legacy per-site status.php agent.
+ */
+function _dropmonitor_process_legacy_agent($server, $data, $config) {
+  $alert_disk_percent = $config->get('alert_disk_percent');
   $status = 'ok';
 
   // Disk space check.

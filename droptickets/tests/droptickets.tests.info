@@ -57,3 +57,15 @@ name = DropTickets Inline Priority
 description = Changing priority from the ticket view page saves correctly via AJAX.
 group = DropTickets
 file = droptickets.test
+
+[DropTicketsActivityLogTest]
+name = DropTickets Activity Log
+description = Verifies that activity events are recorded on ticket create and field changes.
+group = DropTickets
+file = droptickets.test
+
+[DropTicketsReadUnreadTest]
+name = DropTickets Read/Unread Comments
+description = Verifies that comments posted after a user's last visit are marked as unread.
+group = DropTickets
+file = droptickets.test

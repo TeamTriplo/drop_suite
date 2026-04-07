@@ -1469,33 +1469,6 @@ function dropcrm_settings_form($form, &$form_state) {
 
   $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
 
-  $form['custom_fields'] = array(
-    '#type'        => 'fieldset',
-    '#title'       => t('Custom Fields'),
-    '#description' => t('Add or remove fields on contact types.'),
-    '#collapsible' => TRUE,
-    '#collapsed'   => TRUE,
-    '#weight'      => -20,
-  );
-  $bundles = array(
-    'crm_person'       => t('People'),
-    'crm_organization' => t('Organizations'),
-  );
-  if ($config->get('enable_households')) {
-    $bundles['crm_household'] = t('Households');
-  }
-  $links = array();
-  foreach ($bundles as $bundle => $label) {
-    $links[] = l($label, 'drop/crm/contacts/manage/' . $bundle . '/fields');
-  }
-  $links[] = l(t('Activities'), 'drop/crm/activities/manage/crm_activity/fields');
-  if (module_exists('droptasks')) {
-    $links[] = l(t('Tasks'), 'drop/tasks/configure/manage/drop_task/fields');
-  }
-  $form['custom_fields']['links'] = array(
-    '#markup' => implode(' &nbsp;·&nbsp; ', $links),
-  );
-
   $form['features'] = array(
     '#type'        => 'fieldset',
     '#title'       => t('Features'),
@@ -1550,8 +1523,18 @@ function dropcrm_settings_form($form, &$form_state) {
     '#description'   => t('How far back to measure your progress. The "Start over" button on the Outreach Goal report page resets this window.'),
   );
 
+  // Activity Types fieldset.
+  $form['activity_types'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Activity Types'),
+    '#description' => t('Activity types classify how a contact interaction was made. The machine key cannot be changed after saving.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => 0,
+  );
+
   // Table header.
-  $form['at_table_open'] = array(
+  $form['activity_types']['at_table_open'] = array(
     '#markup' => '<table class="dropcrm-settings-table">'
       . '<thead><tr>'
       . '<th>' . t('Key') . '</th>'
@@ -1559,8 +1542,6 @@ function dropcrm_settings_form($form, &$form_state) {
       . '<th>' . t('Has direction') . '</th>'
       . '<th>' . t('Delete') . '</th>'
       . '</tr></thead><tbody>',
-    '#prefix' => '<h3>' . t('Activity Types') . '</h3>'
-      . '<p>' . t('Activity types classify how a contact interaction was made. The machine key cannot be changed after saving.') . '</p>',
     '#weight' => 0,
   );
 
@@ -1572,13 +1553,13 @@ function dropcrm_settings_form($form, &$form_state) {
     )->fetchField();
 
     // Key column — opens the <tr>.
-    $form['at_key_' . $key] = array(
+    $form['activity_types']['at_key_' . $key] = array(
       '#markup' => '<td><code>' . check_plain($key) . '</code></td>',
       '#prefix' => '<tr>',
       '#weight' => $w,
     );
 
-    $form['at_label_' . $key] = array(
+    $form['activity_types']['at_label_' . $key] = array(
       '#type'          => 'textfield',
       '#title'         => t('Label'),
       '#title_display' => 'invisible',
@@ -1590,7 +1571,7 @@ function dropcrm_settings_form($form, &$form_state) {
       '#weight'        => $w + 0.1,
     );
 
-    $form['at_dir_' . $key] = array(
+    $form['activity_types']['at_dir_' . $key] = array(
       '#type'          => 'checkbox',
       '#title'         => t('Has direction'),
       '#title_display' => 'invisible',
@@ -1600,7 +1581,7 @@ function dropcrm_settings_form($form, &$form_state) {
       '#weight'        => $w + 0.2,
     );
 
-    $form['at_del_' . $key] = array(
+    $form['activity_types']['at_del_' . $key] = array(
       '#type'          => 'checkbox',
       '#title'         => t('Delete'),
       '#title_display' => 'invisible',
@@ -1615,20 +1596,20 @@ function dropcrm_settings_form($form, &$form_state) {
     $w += 1;
   }
 
-  $form['at_table_close'] = array(
+  $form['activity_types']['at_table_close'] = array(
     '#markup' => '</tbody></table>',
     '#weight' => $w,
   );
 
-  // Add new type.
-  $form['new_type'] = array(
+  // Add new type — inside the activity types fieldset.
+  $form['activity_types']['new_type'] = array(
     '#type'        => 'fieldset',
     '#title'       => t('Add a new activity type'),
     '#collapsible' => FALSE,
     '#weight'      => $w + 1,
   );
 
-  $form['new_type']['new_type_key'] = array(
+  $form['activity_types']['new_type']['new_type_key'] = array(
     '#type'        => 'textfield',
     '#title'       => t('Machine key'),
     '#description' => t('Lowercase letters, numbers, and underscores only — e.g. %example.', array('%example' => 'linkedin_message')),
@@ -1636,14 +1617,14 @@ function dropcrm_settings_form($form, &$form_state) {
     '#maxlength'   => 32,
   );
 
-  $form['new_type']['new_type_label'] = array(
+  $form['activity_types']['new_type']['new_type_label'] = array(
     '#type'     => 'textfield',
     '#title'    => t('Label'),
     '#size'     => 24,
     '#maxlength' => 64,
   );
 
-  $form['new_type']['new_type_has_direction'] = array(
+  $form['activity_types']['new_type']['new_type_has_direction'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Has direction (inbound / outbound)'),
     '#default_value' => 0,
@@ -1664,7 +1645,7 @@ function dropcrm_settings_form($form, &$form_state) {
     '#default_value' => $config->get('review_enabled'),
   );
 
-  $form['actions'] = array('#type' => 'actions', '#weight' => $w + 10);
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
     '#value' => t('Save settings'),

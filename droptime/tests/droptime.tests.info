@@ -21,3 +21,9 @@ name = DropTime Reassign Entries
 description = Verifies that the reassign tool moves entries between users correctly.
 group = DropTime
 file = droptime.test
+
+[DropTimeOwnerReassignTest]
+name = DropTime Owner Reassignment
+description = Admin can reassign individual time entries via the Owner field on the edit form.
+group = DropTime
+file = droptime.test

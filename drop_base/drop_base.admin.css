@@ -1,0 +1,131 @@
+/**
+ * @file
+ * Drop Suite admin page styling.
+ *
+ * Improves the appearance of core admin pages (Field UI, etc.) when used
+ * under Drop entity admin paths. Designed to be theme-agnostic — works
+ * with Opera, Basis, or any well-built Backdrop theme.
+ */
+
+/* ---------------------------------------------------------------------------
+   Field UI: Manage Fields overview table
+   --------------------------------------------------------------------------- */
+
+/* Table foundations */
+.field-ui-overview {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* Header row */
+.field-ui-overview thead th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--drop-text-secondary, #555);
+  border-bottom: 2px solid var(--drop-border, #ddd);
+  padding: 0.5rem 0.75rem;
+}
+
+/* Data cells */
+.field-ui-overview td {
+  padding: 0.6rem 0.75rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--drop-border, #eee);
+}
+
+/* Row hover */
+.field-ui-overview tbody tr:hover td {
+  background-color: var(--drop-bg-hover, #f5f5f5);
+}
+
+/* Striped rows */
+.field-ui-overview tbody tr:nth-child(even) td {
+  background-color: var(--drop-bg-subtle, #fafafa);
+}
+.field-ui-overview tbody tr:nth-child(even):hover td {
+  background-color: var(--drop-bg-hover, #f0f0f0);
+}
+
+/* Label — bold to anchor the eye.
+   The label sits inside the first td alongside the drag handle. */
+.field-ui-overview td .label {
+  font-weight: 600;
+}
+
+/* Machine name column (4th td: after drag+label, hidden weight, hidden parent) */
+.field-ui-overview td:nth-child(4) {
+  font-family: Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.78em;
+  color: #aaa;
+}
+
+/* Field type and widget links — subtle, not shouty */
+.field-ui-overview td a {
+  text-decoration: none;
+}
+.field-ui-overview td a:hover {
+  text-decoration: underline;
+}
+
+/* Operations column — tighter */
+.field-ui-overview td:last-child {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Add new field / Add existing field rows
+   --------------------------------------------------------------------------- */
+
+/* Visual separator before the add rows */
+.field-ui-overview tr.add-new td {
+  border-top: 2px solid var(--drop-border, #ddd);
+  background-color: var(--drop-bg-subtle, #f8f8f8);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+/* The "Add new field" / "Add existing field" label */
+.field-ui-overview tr.add-new .add-new-placeholder {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--drop-text-secondary, #555);
+  padding-bottom: 0.4em;
+}
+
+/* Inputs inside add rows — consistent sizing */
+.field-ui-overview tr.add-new input[type="text"],
+.field-ui-overview tr.add-new select {
+  font-size: 0.85rem;
+}
+
+/* Descriptions under add-row fields */
+.field-ui-overview tr.add-new .description {
+  font-size: 0.75rem;
+  color: var(--drop-text-secondary, #888);
+  margin-top: 0.2em;
+}
+
+/* ---------------------------------------------------------------------------
+   Drag handle column
+   --------------------------------------------------------------------------- */
+
+.field-ui-overview .tabledrag-handle {
+  padding: 0 0.25rem;
+}
+
+/* Hide the tabledrag changed marker — it's noisy on these pages */
+.field-ui-overview .tabledrag-changed {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Submit button area
+   --------------------------------------------------------------------------- */
+
+#field-overview-wrapper .form-actions {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+}
