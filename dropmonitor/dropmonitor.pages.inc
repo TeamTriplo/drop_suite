@@ -289,7 +289,7 @@ function _dropmonitor_detail_standalone($data) {
   // Per-site details.
   if (!empty($data['sites'])) {
     $output .= '<h4>' . t('Sites (@count)', array('@count' => count($data['sites']))) . '</h4>';
-    $site_header = array(t('Site'), t('CMS'), t('HTTP'), t('Response'), t('DB size'), t('Watchdog (24h)'), t('Notes'));
+    $site_header = array(t('Site'), t('CMS'), t('HTTP'), t('Response'), t('DB size'), t('Watchdog (24h)'), t('Core version'), t('Notes'));
     $site_rows = array();
     foreach ($data['sites'] as $label => $site) {
       $site_name = check_plain($label);
@@ -309,6 +309,26 @@ function _dropmonitor_detail_standalone($data) {
       $response = isset($site['http']['response_ms']) ? $site['http']['response_ms'] . 'ms' : '—';
       $db_size = isset($site['db_size_mb']) ? $site['db_size_mb'] . ' MB' : '—';
       $watchdog = isset($site['watchdog_errors_24h']) ? $site['watchdog_errors_24h'] : '—';
+
+      // Core version and update status.
+      $core_version = '—';
+      if (!empty($site['core_update'])) {
+        $cu = $site['core_update'];
+        $current = isset($cu['current']) ? check_plain($cu['current']) : '';
+        if (!empty($cu['update_available']) && !empty($cu['latest'])) {
+          $latest = check_plain($cu['latest']);
+          if (!empty($cu['security'])) {
+            $core_version = $current . ' <span class="dropmonitor-site-security">&rarr; ' . $latest . ' (' . t('security') . ')</span>';
+          }
+          else {
+            $core_version = $current . ' <span class="dropmonitor-site-update">&rarr; ' . $latest . '</span>';
+          }
+        }
+        else {
+          $core_version = $current;
+        }
+      }
+
       $notes = !empty($site['error']) ? '<span class="dropmonitor-site-errors">' . check_plain($site['error']) . '</span>' : '';
 
       $row_class = array();
@@ -316,7 +336,7 @@ function _dropmonitor_detail_standalone($data) {
         $row_class = array('dropmonitor-row-down');
       }
       $site_rows[] = array(
-        'data' => array($site_name, isset($site['cms']) ? $site['cms'] : '—', $http_status, $response, $db_size, $watchdog, $notes),
+        'data' => array($site_name, isset($site['cms']) ? $site['cms'] : '—', $http_status, $response, $db_size, $watchdog, $core_version, $notes),
         'class' => $row_class,
       );
     }
@@ -544,8 +564,43 @@ function _dropmonitor_dashboard_standalone_sites($agent) {
     return '';
   }
 
+  $site_count = count($agent['sites']);
+
+  // Count sites with errors and update issues for the summary line.
+  $error_count = 0;
+  $security_count = 0;
+  $update_count = 0;
+  foreach ($agent['sites'] as $site) {
+    if ((isset($site['http']['status']) && $site['http']['status'] === 'down')
+      || !empty($site['watchdog_errors_24h'])
+      || !empty($site['error'])) {
+      $error_count++;
+    }
+    if (!empty($site['core_update']['security'])) {
+      $security_count++;
+    }
+    elseif (!empty($site['core_update']['update_available'])) {
+      $update_count++;
+    }
+  }
+
+  // Build summary text.
+  $summary_parts = array();
+  $summary_parts[] = format_plural($site_count, '1 site', '@count sites');
+  if ($error_count > 0) {
+    $summary_parts[] = '<span class="dropmonitor-sites-errors-count">' . format_plural($error_count, '1 error', '@count errors') . '</span>';
+  }
+  if ($security_count > 0) {
+    $summary_parts[] = '<span class="dropmonitor-sites-security-count">' . format_plural($security_count, '1 security update', '@count security updates') . '</span>';
+  }
+  if ($update_count > 0) {
+    $summary_parts[] = '<span class="dropmonitor-sites-update-count">' . format_plural($update_count, '1 update', '@count updates') . '</span>';
+  }
+  $summary_text = implode(' &mdash; ', $summary_parts);
+
   $output = '<div class="dropmonitor-sites">';
-  $output .= '<div class="dropmonitor-sites-header">' . t('Sites') . ' <span class="dropmonitor-sites-count">' . count($agent['sites']) . '</span></div>';
+  $output .= '<details class="dropmonitor-sites-details">';
+  $output .= '<summary class="dropmonitor-sites-summary">' . $summary_text . '</summary>';
   $output .= '<table class="dropmonitor-sites-table"><tbody>';
   foreach ($agent['sites'] as $label => $site) {
     $row_class = '';
@@ -590,6 +645,16 @@ function _dropmonitor_dashboard_standalone_sites($agent) {
     if (!empty($site['error'])) {
       $details[] = '<span class="dropmonitor-site-errors" title="' . check_plain($site['error']) . '">' . t('DB error') . '</span>';
     }
+    // Core update info.
+    if (!empty($site['core_update']['update_available'])) {
+      $update_text = check_plain($site['core_update']['current']) . ' &rarr; ' . check_plain($site['core_update']['latest']);
+      if (!empty($site['core_update']['security'])) {
+        $details[] = '<span class="dropmonitor-site-security" title="' . $update_text . '">' . t('Security update') . '</span>';
+      }
+      else {
+        $details[] = '<span class="dropmonitor-site-update" title="' . $update_text . '">' . t('Update available') . '</span>';
+      }
+    }
 
     $output .= '<tr class="dropmonitor-site-row' . $row_class . '">';
     $output .= '<td class="dropmonitor-site-status">' . $http_icon . '</td>';
@@ -598,6 +663,7 @@ function _dropmonitor_dashboard_standalone_sites($agent) {
     $output .= '</tr>';
   }
   $output .= '</tbody></table>';
+  $output .= '</details>';
   $output .= '</div>';
 
   return $output;

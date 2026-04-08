@@ -273,6 +273,10 @@ function _dropmonitor_process_standalone_agent($server, $data, $config) {
     if (!empty($site['error'])) {
       $status = _dropmonitor_worse_status($status, 'warning');
     }
+    // Core update with security issue.
+    if (!empty($site['core_update']['security'])) {
+      $status = _dropmonitor_worse_status($status, 'warning');
+    }
   }
 
   // Mark format so the dashboard knows how to render.
