@@ -19,6 +19,27 @@ function droptasks_task_form($form, &$form_state, $task = NULL) {
     $task = new DroptTask();
   }
   $form_state['task'] = $task;
+  $is_edit = !empty($task->tid);
+
+  // CSS.
+  $form['#attached']['css'][] = backdrop_get_path('module', 'droptasks') . '/droptasks.css';
+
+  // Breadcrumbs.
+  if ($is_edit) {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Tasks'), 'drop/tasks'),
+      l($task->title, 'drop/tasks/' . $task->tid),
+    ));
+  }
+  else {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Tasks'), 'drop/tasks'),
+    ));
+  }
 
   // Pre-fill title from GET param when creating from an activity.
   $title_default = $task->title;
@@ -195,7 +216,7 @@ function droptasks_task_form($form, &$form_state, $task = NULL) {
     '#required'      => FALSE,
   );
 
-  $is_new = empty($task->tid);
+  $is_new = !$is_edit;
 
   // Assignees — admin/PM only.
   if (user_access('administer tasks')) {
@@ -257,7 +278,7 @@ function droptasks_task_form($form, &$form_state, $task = NULL) {
     $form['field_drop_tags']['#weight'] = 50;
   }
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
     '#value' => $is_new ? t('Add task') : t('Save task'),

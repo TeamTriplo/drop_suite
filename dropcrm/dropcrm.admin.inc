@@ -759,6 +759,26 @@ function crm_contact_form($form, &$form_state, $entity, $op = 'edit') {
   // The bundle determines which field API fields are attached.
   $bundle = $entity->bundle();
 
+  // CSS.
+  $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
+
+  // Breadcrumb.
+  $bundle_labels = array(
+    'crm_person' => t('People'),
+    'crm_org' => t('Organizations'),
+    'crm_household' => t('Households'),
+  );
+  $section_label = isset($bundle_labels[$bundle]) ? $bundle_labels[$bundle] : t('Contacts');
+  $crumb = array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(t('CRM'), 'drop/crm'),
+  );
+  if ($op === 'edit' && !empty($entity->cid)) {
+    $crumb[] = l(entity_label('crm_contact', $entity), 'drop/crm/contact/' . $entity->cid);
+  }
+  backdrop_set_breadcrumb($crumb);
+
   // For organizations and households, the display name lives directly in the
   // base-table 'name' column. For persons, it is computed from field API fields.
   if (in_array($bundle, array('crm_organization', 'crm_household'))) {
@@ -790,16 +810,22 @@ function crm_contact_form($form, &$form_state, $entity, $op = 'edit') {
     $form['confirm_duplicate_person'] = array(
       '#type'   => 'checkbox',
       '#title'  => t('I confirm this is a different person with the same name'),
-      '#weight' => 49,
+      '#weight' => 51,
       '#access' => $show,
     );
   }
 
   // Submit button.
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
-    '#value' => $op === 'add' ? t('Add Contact') : t('Save Contact'),
+    '#value' => $op === 'add' ? t('Add contact') : t('Save contact'),
+  );
+  $cancel_path = ($op === 'edit' && !empty($entity->cid))
+    ? 'drop/crm/contact/' . $entity->cid
+    : 'drop/crm';
+  $form['actions']['cancel'] = array(
+    '#markup' => ' ' . l(t('Cancel'), $cancel_path),
   );
 
   return $form;
@@ -918,6 +944,21 @@ function crm_contact_form_submit($form, &$form_state) {
  */
 function crm_activity_form($form, &$form_state, $entity, $op = 'edit') {
   $form_state['crm_activity'] = $entity;
+
+  // CSS.
+  $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
+
+  // Breadcrumb.
+  $crumb = array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(t('CRM'), 'drop/crm'),
+    l(t('Activities'), 'drop/crm/activities'),
+  );
+  if ($op === 'edit' && !empty($entity->aid)) {
+    $crumb[] = l(entity_label('crm_activity', $entity), 'drop/crm/activity/' . $entity->aid);
+  }
+  backdrop_set_breadcrumb($crumb);
 
   $form['subject'] = array(
     '#type'          => 'textfield',
@@ -1094,10 +1135,16 @@ function crm_activity_form($form, &$form_state, $entity, $op = 'edit') {
     );
   }
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
-    '#value' => $op === 'add' ? t('Add Activity') : t('Save Activity'),
+    '#value' => $op === 'add' ? t('Add activity') : t('Save activity'),
+  );
+  $cancel_path = ($op === 'edit' && !empty($entity->aid))
+    ? 'drop/crm/activity/' . $entity->aid
+    : 'drop/crm/activities';
+  $form['actions']['cancel'] = array(
+    '#markup' => ' ' . l(t('Cancel'), $cancel_path),
   );
 
   return $form;

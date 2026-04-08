@@ -95,6 +95,20 @@ function drop_base_schema() {
         'not null'    => TRUE,
         'default'     => 5,
       ),
+      'server_sid' => array(
+        'description' => 'Linked Drop Monitor server ID.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+      ),
+      'agent_site_key' => array(
+        'description' => 'Site key from the monitoring agent (matches the label in the agent JSON).',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
       'uid' => array(
         'type'     => 'int',
         'unsigned' => TRUE,
@@ -108,6 +122,7 @@ function drop_base_schema() {
     'indexes' => array(
       'uid'    => array('uid'),
       'active' => array('active'),
+      'server_sid' => array('server_sid'),
       'cid'    => array('cid'),
     ),
   );
@@ -285,4 +300,29 @@ function drop_base_update_1201() {
     }
   }
   return t('drop_projects view already exists.');
+}
+
+/**
+ * Add server_sid and agent_site_key columns to drop_project.
+ */
+function drop_base_update_1202() {
+  if (!db_field_exists('drop_project', 'server_sid')) {
+    db_add_field('drop_project', 'server_sid', array(
+      'description' => 'Linked Drop Monitor server ID.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => FALSE,
+      'default'     => NULL,
+    ));
+    db_add_index('drop_project', 'server_sid', array('server_sid'));
+  }
+  if (!db_field_exists('drop_project', 'agent_site_key')) {
+    db_add_field('drop_project', 'agent_site_key', array(
+      'description' => 'Site key from the monitoring agent.',
+      'type'        => 'varchar',
+      'length'      => 255,
+      'not null'    => TRUE,
+      'default'     => '',
+    ));
+  }
 }

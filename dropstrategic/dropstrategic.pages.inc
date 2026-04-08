@@ -278,6 +278,13 @@ function dropstrategic_goal_view(DropGoalStrategic $goal) {
     );
   }
 
+  // Render any additional Field API fields.
+  $field_output = field_attach_view('drop_goal_strategic', $goal, 'default');
+  if (!empty($field_output)) {
+    $field_output['#weight'] = 9;
+    $output['custom_fields'] = $field_output;
+  }
+
   return $output;
 }
 

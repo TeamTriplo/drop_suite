@@ -214,6 +214,23 @@ function dropmonitor_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  // Auto-match agent sites to projects.
+  $items['drop/monitor/match-sites'] = array(
+    'title' => 'Match sites to projects',
+    'page callback' => 'dropmonitor_match_sites_page',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+  );
+
+  // AJAX callback: save a single site-to-project match.
+  $items['drop/monitor/match-sites/link'] = array(
+    'title' => 'Link site to project',
+    'page callback' => 'dropmonitor_match_sites_link',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   // Admin menu link.
   $items['admin/drop/monitor'] = array(
     'title'            => 'Drop Monitor settings',
@@ -373,6 +390,13 @@ function dropmonitor_drop_section_links($section) {
       'admin_only' => TRUE,
     );
   }
+
+  $links['match_sites'] = array(
+    'title' => t('Match sites'),
+    'href' => 'drop/monitor/match-sites',
+    'weight' => 15,
+    'admin_only' => TRUE,
+  );
 
   $links['settings'] = array(
     'title' => t('Settings'),
@@ -550,6 +574,33 @@ function dropmonitor_overall_status($checks) {
     }
   }
   return $worst;
+}
+
+/**
+ * Returns a mapping of agent site keys to project data for a given server.
+ *
+ * @param int $sid
+ *   Server ID.
+ *
+ * @return array
+ *   Keyed by agent_site_key, value is an object with pid and name.
+ */
+function dropmonitor_get_project_links($sid) {
+  $links = &backdrop_static(__FUNCTION__, array());
+  if (!isset($links[$sid])) {
+    $links[$sid] = array();
+    if (db_field_exists('drop_project', 'server_sid')) {
+      $results = db_select('drop_project', 'p')
+        ->fields('p', array('pid', 'name', 'agent_site_key'))
+        ->condition('server_sid', $sid)
+        ->condition('agent_site_key', '', '!=')
+        ->execute();
+      foreach ($results as $row) {
+        $links[$sid][$row->agent_site_key] = $row;
+      }
+    }
+  }
+  return $links[$sid];
 }
 
 /**

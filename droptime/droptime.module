@@ -227,7 +227,82 @@ function droptime_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Settings.
+  $items['drop/time/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('droptime_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer droptime'),
+    'file'             => 'droptime.pages.inc',
+  );
+
   return $items;
+}
+
+// ---------------------------------------------------------------------------
+// Settings form
+// ---------------------------------------------------------------------------
+
+/**
+ * Settings form for DropTime.
+ */
+function droptime_settings_form($form, &$form_state) {
+  backdrop_set_title(t('Settings'));
+  backdrop_set_breadcrumb(array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(t('Time'), 'drop/time'),
+  ));
+
+  $form['#attached']['css'][] = backdrop_get_path('module', 'droptime') . '/droptime.css';
+
+  $config = config('droptime.settings');
+
+  $form['reminders'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Reminders'),
+    '#description' => t('Controls time-log reminders across the site and Slack.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 0,
+  );
+  $form['reminders']['reminder_enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show time-log reminder banner'),
+    '#description' => t('When enabled, a dismissible banner appears on Drop Suite pages when a team member has not logged time in the last 24 hours.'),
+    '#default_value' => $config->get('reminder_enabled'),
+  );
+  if (module_exists('dropbridge')) {
+    $form['reminders']['slack_reminders_enabled'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Send Slack time-log reminders'),
+      '#description' => t('When enabled, team members receive Slack DM reminders when they have not logged time during their configured work hours. Requires DropBridge Slack integration.'),
+      '#default_value' => $config->get('slack_reminders_enabled'),
+    );
+  }
+
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save settings'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for droptime_settings_form().
+ */
+function droptime_settings_form_submit($form, &$form_state) {
+  $config = config('droptime.settings');
+  $config->set('reminder_enabled', (bool) $form_state['values']['reminder_enabled']);
+  if (isset($form_state['values']['slack_reminders_enabled'])) {
+    $config->set('slack_reminders_enabled', (bool) $form_state['values']['slack_reminders_enabled']);
+  }
+  $config->save();
+  backdrop_set_message(t('Settings saved.'));
+  $form_state['redirect'] = 'drop/time';
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +321,11 @@ function droptime_preprocess_layout(&$variables) {
 
   // Only for logged-in users with time access.
   if (!$user->uid || !user_access('access droptime')) {
+    return;
+  }
+
+  // Check if reminders are enabled in settings.
+  if (!config_get('droptime.settings', 'reminder_enabled')) {
     return;
   }
 
@@ -406,6 +486,21 @@ function droptime_drop_nav_links() {
       'path'       => 'drop/time',
       'permission' => 'access droptime',
       'weight'     => 40,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function droptime_drop_settings_info() {
+  return array(
+    'droptime' => array(
+      'title' => t('DropTime'),
+      'description' => t('Reminder banner and other settings.'),
+      'path' => 'drop/time/settings',
+      'permission' => 'administer droptime',
+      'weight' => 35,
     ),
   );
 }

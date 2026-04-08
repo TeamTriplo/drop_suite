@@ -1,4 +1,5 @@
 {
     "_config_name": "drop_base.settings",
-    "narrow_page_width": 900
+    "narrow_page_width": 900,
+    "meeting_enabled": true
 }

@@ -73,7 +73,7 @@ function dropdocs_doc_view($node) {
   );
   $ancestors = dropdocs_get_ancestors($node->nid);
   foreach ($ancestors as $ancestor) {
-    $crumb[] = l(check_plain($ancestor->title), 'drop/doc/' . $ancestor->nid);
+    $crumb[] = l($ancestor->title, 'drop/doc/' . $ancestor->nid);
   }
   backdrop_set_breadcrumb($crumb);
 

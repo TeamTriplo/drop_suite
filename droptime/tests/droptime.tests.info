@@ -27,3 +27,9 @@ name = DropTime Owner Reassignment
 description = Admin can reassign individual time entries via the Owner field on the edit form.
 group = DropTime
 file = droptime.test
+
+[DropTimeSettingsTest]
+name = DropTime Settings
+description = Verifies the settings form and that the reminder toggle works.
+group = DropTime
+file = droptime.test

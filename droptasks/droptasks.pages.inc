@@ -397,6 +397,20 @@ function droptasks_task_view(DroptTask $task) {
     );
   }
 
+  // Render any additional Field API fields.
+  $field_output = field_attach_view('drop_task', $task, 'default');
+  // Remove fields already rendered manually (tags).
+  $manual_fields = array('field_drop_tags');
+  foreach ($manual_fields as $mf) {
+    if (isset($field_output[$mf])) {
+      unset($field_output[$mf]);
+    }
+  }
+  if (!empty($field_output)) {
+    $field_output['#weight'] = 5;
+    $output['custom_fields'] = $field_output;
+  }
+
   return $output;
 }
 

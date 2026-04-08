@@ -79,7 +79,7 @@ function dropmonitor_dashboard_page() {
       }
       elseif (isset($agent['_format']) && $agent['_format'] === 'standalone') {
         $output .= _dropmonitor_dashboard_standalone_metrics($agent, $config);
-        $agent_sites_html = _dropmonitor_dashboard_standalone_sites($agent);
+        $agent_sites_html = _dropmonitor_dashboard_standalone_sites($agent, $server->sid);
       }
       else {
         $output .= _dropmonitor_dashboard_legacy_agent($agent, $config);
@@ -213,7 +213,7 @@ function dropmonitor_server_detail_page($server) {
     if (!empty($data)) {
       // Standalone agent format gets structured rendering.
       if ($type === 'agent' && isset($data['_format']) && $data['_format'] === 'standalone') {
-        $output .= _dropmonitor_detail_standalone($data);
+        $output .= _dropmonitor_detail_standalone($data, $server->sid);
       }
       else {
         $output .= _dropmonitor_detail_generic($data, $type);
@@ -229,9 +229,10 @@ function dropmonitor_server_detail_page($server) {
 /**
  * Renders detail page data for the standalone monitoring app format.
  */
-function _dropmonitor_detail_standalone($data) {
+function _dropmonitor_detail_standalone($data, $sid = NULL) {
   $output = '';
   $srv = $data['server'];
+  $project_links = $sid ? dropmonitor_get_project_links($sid) : array();
 
   // Server metrics table.
   $rows = array();
@@ -293,7 +294,10 @@ function _dropmonitor_detail_standalone($data) {
     $site_rows = array();
     foreach ($data['sites'] as $label => $site) {
       $site_name = check_plain($label);
-      if (!empty($site['http']['url'])) {
+      if (isset($project_links[$label])) {
+        $site_name = l(check_plain($label), 'drop/projects/' . $project_links[$label]->pid);
+      }
+      elseif (!empty($site['http']['url'])) {
         $site_name = l(check_plain($label), $site['http']['url'], array('external' => TRUE));
       }
 
@@ -559,12 +563,13 @@ function _dropmonitor_dashboard_standalone_metrics($agent, $config) {
 /**
  * Renders the per-site summary table for the standalone monitoring app format.
  */
-function _dropmonitor_dashboard_standalone_sites($agent) {
+function _dropmonitor_dashboard_standalone_sites($agent, $sid = NULL) {
   if (empty($agent['sites'])) {
     return '';
   }
 
   $site_count = count($agent['sites']);
+  $project_links = $sid ? dropmonitor_get_project_links($sid) : array();
 
   // Count sites with errors and update issues for the summary line.
   $error_count = 0;
@@ -622,9 +627,12 @@ function _dropmonitor_dashboard_standalone_sites($agent) {
       $http_icon = '';
     }
 
-    // Site name with optional link.
+    // Site name with link — prefer project page, fall back to external URL.
     $site_name = check_plain($label);
-    if (!empty($site['http']['url'])) {
+    if (isset($project_links[$label])) {
+      $site_name = l(check_plain($label), 'drop/projects/' . $project_links[$label]->pid);
+    }
+    elseif (!empty($site['http']['url'])) {
       $site_name = l(check_plain($label), $site['http']['url'], array('external' => TRUE));
     }
 
@@ -1013,4 +1021,313 @@ function dropmonitor_uptime_check_now($pid) {
   }
 
   backdrop_goto('drop/monitor/uptime');
+}
+
+// -------------------------------------------------------------------------
+// Match agent sites to projects.
+// -------------------------------------------------------------------------
+
+/**
+ * Page callback: shows agent sites alongside projects for linking.
+ *
+ * Compares site URLs from agent data against project site_url values to
+ * suggest matches. Shows already-linked pairs, auto-matched suggestions,
+ * and unmatched agent sites (as a checklist for creating new projects).
+ */
+function dropmonitor_match_sites_page() {
+  backdrop_set_title(t('Match sites to projects'));
+
+  $output = '';
+
+  // Gather all agent site data across all servers.
+  $servers = dropmonitor_get_servers(TRUE);
+  $agent_sites = array();
+  foreach ($servers as $server) {
+    $check = db_select('dropmonitor_check', 'c')
+      ->fields('c', array('data'))
+      ->condition('sid', $server->sid)
+      ->condition('check_type', 'agent')
+      ->execute()
+      ->fetchField();
+
+    if (!$check) {
+      continue;
+    }
+    $data = json_decode($check, TRUE);
+    if (empty($data['sites'])) {
+      continue;
+    }
+    foreach ($data['sites'] as $key => $site) {
+      $agent_sites[] = array(
+        'sid' => $server->sid,
+        'server_label' => $server->label,
+        'site_key' => $key,
+        'url' => !empty($site['http']['url']) ? $site['http']['url'] : '',
+        'cms' => !empty($site['cms']) ? $site['cms'] : '',
+        'site' => $site,
+      );
+    }
+  }
+
+  if (empty($agent_sites)) {
+    return '<p>' . t('No agent data available. Run a server check first.') . '</p>';
+  }
+
+  // Load all projects.
+  $projects = db_select('drop_project', 'p')
+    ->fields('p')
+    ->orderBy('name')
+    ->execute()
+    ->fetchAllAssoc('pid');
+
+  // Build lookup: which projects are already linked.
+  $linked = array();
+  foreach ($projects as $project) {
+    if (!empty($project->server_sid) && !empty($project->agent_site_key)) {
+      $linked[$project->server_sid . '::' . $project->agent_site_key] = $project;
+    }
+  }
+
+  // Build URL-based lookup for auto-matching suggestions.
+  $project_by_url = array();
+  foreach ($projects as $project) {
+    if (!empty($project->site_url)) {
+      $normalized = _dropmonitor_normalize_url($project->site_url);
+      $project_by_url[$normalized] = $project;
+    }
+  }
+
+  // Categorize agent sites.
+  $rows_linked = array();
+  $rows_suggested = array();
+  $rows_unmatched = array();
+
+  foreach ($agent_sites as $asite) {
+    $compound_key = $asite['sid'] . '::' . $asite['site_key'];
+
+    if (isset($linked[$compound_key])) {
+      // Already linked.
+      $project = $linked[$compound_key];
+      $rows_linked[] = array(
+        l(check_plain($project->name), 'drop/projects/' . $project->pid),
+        check_plain($asite['site_key']),
+        check_plain($asite['server_label']),
+        !empty($asite['url']) ? l(check_plain($asite['url']), $asite['url'], array('external' => TRUE)) : '—',
+        check_plain($asite['cms']),
+        '<span class="dropmonitor-up">' . t('Linked') . '</span>',
+      );
+    }
+    else {
+      // Try URL match.
+      $match = NULL;
+      if (!empty($asite['url'])) {
+        $normalized = _dropmonitor_normalize_url($asite['url']);
+        if (isset($project_by_url[$normalized])) {
+          $candidate = $project_by_url[$normalized];
+          // Only suggest if not already linked to a different site.
+          if (empty($candidate->server_sid)) {
+            $match = $candidate;
+          }
+        }
+      }
+
+      if ($match) {
+        $link_url = url('drop/monitor/match-sites/link', array(
+          'query' => array(
+            'pid' => $match->pid,
+            'sid' => $asite['sid'],
+            'key' => $asite['site_key'],
+            'token' => backdrop_get_token('dropmonitor_match'),
+          ),
+        ));
+        $rows_suggested[] = array(
+          l(check_plain($match->name), 'drop/projects/' . $match->pid),
+          check_plain($asite['site_key']),
+          check_plain($asite['server_label']),
+          !empty($asite['url']) ? l(check_plain($asite['url']), $asite['url'], array('external' => TRUE)) : '—',
+          check_plain($asite['cms']),
+          '<a href="' . $link_url . '" class="button button-small">' . t('Link') . '</a>',
+        );
+      }
+      else {
+        $rows_unmatched[] = array(
+          '—',
+          check_plain($asite['site_key']),
+          check_plain($asite['server_label']),
+          !empty($asite['url']) ? l(check_plain($asite['url']), $asite['url'], array('external' => TRUE)) : '—',
+          check_plain($asite['cms']),
+          l(t('Create project'), 'drop/projects/add', array(
+            'query' => array('destination' => 'drop/monitor/match-sites'),
+          )),
+        );
+      }
+    }
+  }
+
+  $header = array(t('Project'), t('Agent site'), t('Server'), t('URL'), t('CMS'), t('Action'));
+
+  // Already linked.
+  if (!empty($rows_linked)) {
+    $output .= '<h3>' . t('Linked (@count)', array('@count' => count($rows_linked))) . '</h3>';
+    $output .= theme('table', array('header' => $header, 'rows' => $rows_linked));
+  }
+
+  // Suggested matches.
+  if (!empty($rows_suggested)) {
+    $output .= '<h3>' . t('Suggested matches (@count)', array('@count' => count($rows_suggested))) . '</h3>';
+    $output .= '<p>' . t('These agent sites have URLs matching an existing project. Click "Link" to connect them.') . '</p>';
+    $output .= theme('table', array('header' => $header, 'rows' => $rows_suggested));
+
+    // Link all button.
+    $link_all_url = url('drop/monitor/match-sites/link', array(
+      'query' => array(
+        'all' => 1,
+        'token' => backdrop_get_token('dropmonitor_match'),
+      ),
+    ));
+    $output .= '<p><a href="' . $link_all_url . '" class="button">' . t('Link all suggested matches') . '</a></p>';
+  }
+
+  // Unmatched.
+  if (!empty($rows_unmatched)) {
+    $output .= '<h3>' . t('Unmatched agent sites (@count)', array('@count' => count($rows_unmatched))) . '</h3>';
+    $output .= '<p>' . t('These monitored sites do not match any project. Create a project for each one you want to track.') . '</p>';
+    $output .= theme('table', array('header' => $header, 'rows' => $rows_unmatched));
+  }
+
+  // Summary.
+  $total = count($rows_linked) + count($rows_suggested) + count($rows_unmatched);
+  $output .= '<p class="dropmonitor-report-count">'
+    . t('@total agent sites: @linked linked, @suggested suggested, @unmatched unmatched', array(
+      '@total' => $total,
+      '@linked' => count($rows_linked),
+      '@suggested' => count($rows_suggested),
+      '@unmatched' => count($rows_unmatched),
+    ))
+    . '</p>';
+
+  return $output;
+}
+
+/**
+ * Callback: links an agent site to a project (or links all suggested matches).
+ */
+function dropmonitor_match_sites_link() {
+  if (!isset($_GET['token']) || !backdrop_valid_token($_GET['token'], 'dropmonitor_match')) {
+    backdrop_access_denied();
+    return;
+  }
+
+  // Link all suggested matches.
+  if (!empty($_GET['all'])) {
+    $count = _dropmonitor_link_all_suggested();
+    backdrop_set_message(t('Linked @count sites to projects.', array('@count' => $count)));
+    backdrop_goto('drop/monitor/match-sites');
+    return;
+  }
+
+  $pid = isset($_GET['pid']) ? (int) $_GET['pid'] : 0;
+  $sid = isset($_GET['sid']) ? (int) $_GET['sid'] : 0;
+  $key = isset($_GET['key']) ? $_GET['key'] : '';
+
+  if (!$pid || !$sid || $key === '') {
+    backdrop_set_message(t('Missing parameters.'), 'error');
+    backdrop_goto('drop/monitor/match-sites');
+    return;
+  }
+
+  db_update('drop_project')
+    ->fields(array(
+      'server_sid' => $sid,
+      'agent_site_key' => $key,
+    ))
+    ->condition('pid', $pid)
+    ->execute();
+
+  $project = db_select('drop_project', 'p')
+    ->fields('p', array('name'))
+    ->condition('pid', $pid)
+    ->execute()
+    ->fetchField();
+
+  backdrop_set_message(t('Linked %project to agent site %key.', array(
+    '%project' => $project,
+    '%key' => $key,
+  )));
+  backdrop_goto('drop/monitor/match-sites');
+}
+
+/**
+ * Links all URL-matched agent sites to their corresponding projects.
+ *
+ * @return int
+ *   Number of links created.
+ */
+function _dropmonitor_link_all_suggested() {
+  $servers = dropmonitor_get_servers(TRUE);
+  $count = 0;
+
+  // Build project URL lookup.
+  $projects = db_select('drop_project', 'p')
+    ->fields('p')
+    ->execute()
+    ->fetchAllAssoc('pid');
+
+  $project_by_url = array();
+  foreach ($projects as $project) {
+    if (!empty($project->site_url) && empty($project->server_sid)) {
+      $normalized = _dropmonitor_normalize_url($project->site_url);
+      $project_by_url[$normalized] = $project;
+    }
+  }
+
+  foreach ($servers as $server) {
+    $check = db_select('dropmonitor_check', 'c')
+      ->fields('c', array('data'))
+      ->condition('sid', $server->sid)
+      ->condition('check_type', 'agent')
+      ->execute()
+      ->fetchField();
+
+    if (!$check) {
+      continue;
+    }
+    $data = json_decode($check, TRUE);
+    if (empty($data['sites'])) {
+      continue;
+    }
+
+    foreach ($data['sites'] as $key => $site) {
+      if (empty($site['http']['url'])) {
+        continue;
+      }
+      $normalized = _dropmonitor_normalize_url($site['http']['url']);
+      if (isset($project_by_url[$normalized])) {
+        $project = $project_by_url[$normalized];
+        db_update('drop_project')
+          ->fields(array(
+            'server_sid' => $server->sid,
+            'agent_site_key' => $key,
+          ))
+          ->condition('pid', $project->pid)
+          ->execute();
+        // Remove from lookup so it's not matched again.
+        unset($project_by_url[$normalized]);
+        $count++;
+      }
+    }
+  }
+
+  return $count;
+}
+
+/**
+ * Normalizes a URL for comparison: lowercase, strip protocol, www, trailing slash.
+ */
+function _dropmonitor_normalize_url($url) {
+  $url = strtolower(trim($url));
+  $url = preg_replace('#^https?://#', '', $url);
+  $url = preg_replace('#^www\.#', '', $url);
+  $url = rtrim($url, '/');
+  return $url;
 }

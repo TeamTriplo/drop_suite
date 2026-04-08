@@ -507,6 +507,11 @@ function _dropbridge_cron_time_reminders($force_debug = FALSE) {
     return;
   }
 
+  // Check if Slack reminders are disabled in DropTime settings.
+  if (!$force_debug && !config_get('droptime.settings', 'slack_reminders_enabled')) {
+    return;
+  }
+
   $bot_token = config_get('dropbridge.settings', 'slack_bot_token');
   if (empty($bot_token)) {
     return;

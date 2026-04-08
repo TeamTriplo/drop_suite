@@ -71,25 +71,46 @@ function drop_base_preprocess_layout(&$variables) {
  */
 function _drop_base_is_narrow_page($path) {
   $patterns = array(
-    // Individual ticket view: drop/tickets/{tid} (but not drop/tickets or
-    // drop/tickets/board, drop/tickets/settings, etc.)
+    // Individual ticket view and forms: drop/tickets/{tid}, add, edit.
     '#^drop/tickets/\d+$#',
+    '#^drop/tickets/add$#',
+    '#^drop/tickets/\d+/edit$#',
     // CRM contact view: drop/crm/contact/{cid}
     '#^drop/crm/contact/\d+$#',
     // CRM activity view: drop/crm/activity/{aid}
     '#^drop/crm/activity/\d+$#',
     // CRM contact method view: drop/crm/contact-method/{cmid} (entity_ui path)
     '#^drop/crm/contact-methods/\d+$#',
-    // Individual task view: drop/tasks/{tid}
+    // Individual task view and forms: drop/tasks/{tid}, add, edit.
     '#^drop/tasks/\d+$#',
-    // Goals list and individual goal view.
+    '#^drop/tasks/add$#',
+    '#^drop/tasks/\d+/edit$#',
+    // Goals list, individual goal view, and forms.
     '#^drop/goals$#',
     '#^drop/goals/manage/\d+$#',
+    '#^drop/goals/manage/add$#',
+    '#^drop/goals/manage/\d+/edit$#',
+    // Time entry edit.
+    '#^drop/time/entry/\d+/edit$#',
     // Docs list and individual doc view.
     '#^drop/docs$#',
     '#^drop/doc/\d+$#',
-    // Project view: drop/projects/{pid}
+    // Project view and forms: drop/projects/{pid}, add, edit.
     '#^drop/projects/\d+$#',
+    '#^drop/projects/add$#',
+    '#^drop/projects/\d+/edit$#',
+    // CRM contact add/edit (entity_ui paths).
+    '#^drop/crm/contacts/manage/crm_\w+/add$#',
+    '#^drop/crm/contacts/manage/\d+/edit$#',
+    // CRM activity add/edit (entity_ui paths).
+    '#^drop/crm/activities/manage/add$#',
+    '#^drop/crm/activities/manage/\d+/edit$#',
+    // File library: upload, view, replace.
+    '#^drop/files/upload$#',
+    '#^drop/files/\d+/view$#',
+    '#^drop/files/\d+/edit$#',
+    '#^drop/files/\d+/replace$#',
+    '#^drop/files/\d+/delete$#',
     // Meeting agenda.
     '#^drop/meeting$#',
     // Settings pages (main dashboard and per-module).
@@ -98,6 +119,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/crm/settings#',
     '#^drop/monitor/settings#',
     '#^drop/docs/settings#',
+    '#^drop/time/settings#',
+    '#^drop/files/settings#',
   );
 
   foreach ($patterns as $pattern) {
@@ -264,6 +287,9 @@ function _drop_base_render_nav() {
   $links = module_invoke_all('drop_nav_links');
   $links = array_filter($links, function($link) {
     if (isset($link['visible']) && !$link['visible']) {
+      return FALSE;
+    }
+    if (!empty($link['hidden'])) {
       return FALSE;
     }
     return empty($link['permission']) || user_access($link['permission']);
@@ -707,6 +733,16 @@ function drop_base_field_extra_fields() {
     'label' => t('Tickets'),
     'description' => t('Ticket list for this project (when DropTickets is enabled).'),
     'weight' => 20,
+  );
+  $extra['drop_project']['drop_project']['display']['site_health'] = array(
+    'label' => t('Site health'),
+    'description' => t('Server monitoring health card (when Drop Monitor is linked).'),
+    'weight' => 7,
+  );
+  $extra['drop_project']['drop_project']['display']['uptime'] = array(
+    'label' => t('Uptime'),
+    'description' => t('Uptime summary and link to detail (when site URL is set).'),
+    'weight' => 9,
   );
 
   return $extra;
@@ -1250,6 +1286,7 @@ function drop_base_drop_nav_links() {
       'path'       => 'drop/meeting',
       'weight'     => 80,
       'separator'  => TRUE,
+      'hidden'     => !config_get('drop_base.settings', 'meeting_enabled'),
     ),
     array(
       'title'      => t('Team'),
@@ -1422,17 +1459,19 @@ function drop_base_form_user_admin_permissions_alter(&$form, &$form_state, $form
 
   $drop_modules = array(
     'drop_base',
-    'dropcrm',
-    'droptasks',
-    'dropgoals',
+    'drop_start',
     'dropbridge',
-    'droptime',
-    'droptickets',
+    'dropcrm',
     'dropdocs',
     'dropemail',
+    'dropfiles',
+    'dropgoals',
     'dropmonitor',
     'dropnewsletter',
     'dropstrategic',
+    'droptasks',
+    'droptickets',
+    'droptime',
   );
 
   // Collect all permission keys that belong to Drop Suite modules.

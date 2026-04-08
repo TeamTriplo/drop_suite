@@ -1,0 +1,6 @@
+{
+  "_config_name": "dropfiles.settings",
+  "display_name": "Files",
+  "upload_directory": "dropfiles",
+  "allowed_extensions": "pdf doc docx xls xlsx csv txt md png jpg jpeg gif zip rar"
+}

@@ -240,6 +240,16 @@ function droptime_entry_form($form, &$form_state, $entry = NULL, $date = NULL) {
     $date = $is_edit ? $entry->entry_date : date('Y-m-d');
   }
 
+  // CSS.
+  $form['#attached']['css'][] = backdrop_get_path('module', 'droptime') . '/droptime.css';
+
+  // Breadcrumbs.
+  backdrop_set_breadcrumb(array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(t('Time'), 'drop/time'),
+  ));
+
   // Pre-fill start/end from GET params (timer stop).
   $default_start = $is_edit ? $entry->start_time : (isset($_GET['start']) ? check_plain($_GET['start']) : '');
   $default_end   = $is_edit ? $entry->end_time   : (isset($_GET['end'])   ? check_plain($_GET['end'])   : '');
@@ -352,7 +362,7 @@ function droptime_entry_form($form, &$form_state, $entry = NULL, $date = NULL) {
     $form['eid'] = array('#type' => 'hidden', '#value' => $entry->eid);
   }
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
     '#value' => $is_edit ? t('Update entry') : t('Add entry'),

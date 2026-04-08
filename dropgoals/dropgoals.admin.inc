@@ -100,8 +100,27 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     $goal = new DropGoal();
   }
   $form_state['goal'] = $goal;
+  $is_edit = !empty($goal->gid);
 
+  // CSS.
   $form['#attached']['css'][] = backdrop_get_path('module', 'dropgoals') . '/dropgoals.css';
+
+  // Breadcrumbs.
+  if ($is_edit) {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Goals'), 'drop/goals'),
+      l($goal->label, 'drop/goals/manage/' . $goal->gid),
+    ));
+  }
+  else {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Goals'), 'drop/goals'),
+    ));
+  }
 
   $form['label'] = array(
     '#type'          => 'textfield',
@@ -111,6 +130,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     '#required'      => TRUE,
     '#maxlength'     => 255,
     '#autofocus'     => TRUE,
+    '#weight'        => -20,
   );
 
   $form['description'] = array(
@@ -119,6 +139,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     '#default_value' => $goal->description,
     '#rows'          => 3,
     '#required'      => FALSE,
+    '#weight'        => -15,
   );
 
   $form['frequency'] = array(
@@ -127,6 +148,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     '#options'       => dropgoals_frequency_labels(),
     '#default_value' => isset($goal->frequency) ? $goal->frequency : 'daily',
     '#description'   => t('How often you want to complete this goal. Weekly goals disappear from the dashboard once completed for that week.'),
+    '#weight'        => -10,
   );
 
   $day_options = array(
@@ -151,6 +173,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     ),
     '#prefix'        => '<div class="dropgoals-days-wrapper">',
     '#suffix'        => '</div>',
+    '#weight'        => -5,
   );
 
   // Specific days: one or more days per week.
@@ -170,12 +193,14 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     ),
     '#prefix'        => '<div class="dropgoals-days-wrapper">',
     '#suffix'        => '</div>',
+    '#weight'        => -4,
   );
 
   $form['active'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Show on daily dashboard'),
     '#default_value' => isset($goal->gid) ? $goal->active : 1,
+    '#weight'        => 50,
   );
 
   // Dev-only: allow backdating the creation date for testing and historical entry.
@@ -185,6 +210,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     '#title'       => t('Developer settings'),
     '#collapsible' => TRUE,
     '#collapsed'   => TRUE,
+    '#weight'      => 40,
   );
   $form['dev']['created_date'] = array(
     '#type'          => 'date',
@@ -197,7 +223,7 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
     '#description'   => t('Sets the creation date. Used for streak and completion rate calculations. Useful for backdating or testing.'),
   );
 
-  $is_new = empty($goal->gid);
+  $is_new = !$is_edit;
 
   // Owner — admin only, shown when editing an existing goal.
   if (!$is_new && user_access('administer goals')) {
@@ -208,10 +234,11 @@ function dropgoals_goal_form($form, &$form_state, $goal = NULL) {
       '#options'       => $all_users,
       '#default_value' => $goal->uid,
       '#description'   => t('Reassign this goal to a different person.'),
+      '#weight'        => 45,
     );
   }
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
     '#value' => $is_new ? t('Add goal') : t('Save goal'),

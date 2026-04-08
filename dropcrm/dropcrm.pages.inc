@@ -109,6 +109,24 @@ function dropcrm_contact_view(CrmContact $contact) {
     );
   }
 
+  // --- Field API fields (custom fields added via UI) ---
+  // For person contacts, the hero renders specific fields manually.
+  // Render remaining Field API fields so custom fields are visible.
+  if ($contact->bundle() === 'crm_person') {
+    $field_output = field_attach_view('crm_contact', $contact, 'default');
+    // Remove fields already rendered in the hero to avoid duplication.
+    $hero_fields = array('field_crm_rating', 'field_crm_job_title', 'field_crm_employer', 'field_crm_tags', 'field_crm_warmth', 'field_drop_tags');
+    foreach ($hero_fields as $hf) {
+      if (isset($field_output[$hf])) {
+        unset($field_output[$hf]);
+      }
+    }
+    if (!empty($field_output)) {
+      $field_output['#weight'] = 8;
+      $output['custom_fields'] = $field_output;
+    }
+  }
+
   // --- Contact details (phone, email, address) ---
   $add_links = array();
   foreach (array(
@@ -476,6 +494,19 @@ function dropcrm_activity_view(CrmActivity $activity) {
         . '</details>',
       '#weight' => 21,
     );
+  }
+
+  // Render any additional Field API fields not already shown above.
+  $field_output = field_attach_view('crm_activity', $activity, 'default');
+  $manual_fields = array('field_crm_contacts', 'field_crm_activity_body', 'field_crm_meeting_notes');
+  foreach ($manual_fields as $mf) {
+    if (isset($field_output[$mf])) {
+      unset($field_output[$mf]);
+    }
+  }
+  if (!empty($field_output)) {
+    $field_output['#weight'] = 15;
+    $output['custom_fields'] = $field_output;
   }
 
   return $output;

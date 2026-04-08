@@ -43,36 +43,45 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
   // Per-user last-used project (persists across devices via state API).
   $last_pid = state_get('droptickets_last_pid_' . $user->uid, NULL);
 
-  // Open two-column layout wrapper and main column.
-  $form['title'] = array(
+  // Two-column layout: main (left) and sidebar (right).
+  $form['layout'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('drop-form-layout', 'droptickets-form-layout')),
+    '#weight' => -20,
+  );
+  $form['layout']['main'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('drop-form-main', 'droptickets-form-main')),
+  );
+  $form['layout']['sidebar'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('drop-form-sidebar', 'droptickets-form-sidebar')),
+  );
+
+  $form['layout']['main']['title'] = array(
     '#type'          => 'textfield',
     '#title'         => t('Title'),
     '#default_value' => $is_edit ? $ticket->title : '',
     '#required'      => TRUE,
     '#maxlength'     => 255,
-    '#prefix'        => '<div class="droptickets-form-layout"><div class="droptickets-form-main">',
     '#weight'        => -20,
   );
 
-  $form['body'] = array(
+  $form['layout']['main']['body'] = array(
     '#type'          => 'text_format',
     '#title'         => t('Description'),
     '#default_value' => $is_edit ? $ticket->body : '',
     '#format'        => $is_edit ? $ticket->body_format : NULL,
     '#rows'          => 10,
-    '#suffix'        => '</div>',
     '#weight'        => -19,
   );
 
-  // Open sidebar column. Type is first — determines what else is shown.
-
-  $form['type'] = array(
+  $form['layout']['sidebar']['type'] = array(
     '#type'          => 'select',
     '#title'         => t('Type'),
     '#options'       => droptickets_type_options(),
     '#default_value' => $is_edit ? $ticket->type : 'task',
     '#required'      => TRUE,
-    '#prefix'        => '<div class="droptickets-form-sidebar">',
     '#weight'        => -18,
     '#attributes'    => array('class' => array('droptickets-type-select')),
   );
@@ -125,7 +134,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     $default_pid = $last_pid;
   }
 
-  $form['pid'] = array(
+  $form['layout']['sidebar']['pid'] = array(
     '#type'          => 'select',
     '#title'         => t('Project'),
     '#options'       => $pid_options,
@@ -136,7 +145,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#attributes'    => array('class' => array('droptickets-project-select')),
   );
 
-  $form['priority'] = array(
+  $form['layout']['sidebar']['priority'] = array(
     '#type'          => 'select',
     '#title'         => t('Priority'),
     '#options'       => array_reverse(drop_base_priority_labels(), TRUE),
@@ -159,7 +168,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
         unset($status_options['closed']);
       }
     }
-    $form['status'] = array(
+    $form['layout']['sidebar']['status'] = array(
       '#type'          => 'select',
       '#title'         => t('Status'),
       '#options'       => $status_options,
@@ -194,7 +203,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     $default_assignee = NULL;
   }
 
-  $form['assignee_uid'] = array(
+  $form['layout']['sidebar']['assignee_uid'] = array(
     '#type'          => 'select',
     '#title'         => $is_discussion ? t('Facilitator') : t('Assignee'),
     '#description'   => $is_discussion ? t('Who is facilitating this discussion.') : t('Who needs to act on this right now.'),
@@ -204,7 +213,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#weight'        => -14,
   );
 
-  $form['due_date'] = array(
+  $form['layout']['sidebar']['due_date'] = array(
     '#type'          => 'textfield',
     '#title'         => $is_discussion ? t('Decision by') : t('Due date'),
     '#default_value' => ($is_edit && $ticket->due_date) ? format_date($ticket->due_date, 'custom', 'Y-m-d') : '',
@@ -237,7 +246,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
       $parent_default = $parent_label . ': ' . $parent->title . ' [' . $parent->tid . ']';
     }
   }
-  $form['parent_tid'] = array(
+  $form['layout']['sidebar']['parent_tid'] = array(
     '#type'              => 'textfield',
     '#title'             => t('Parent ticket'),
     '#default_value'     => $parent_default,
@@ -260,24 +269,23 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
       $type_label = $g->type === 'team' ? t('Team') : t('Personal');
       $goal_options[$g->gid] = '[' . $type_label . '] ' . $g->title;
     }
-    $form['goal_id'] = array(
+    $form['layout']['sidebar']['goal_id'] = array(
       '#type'          => 'select',
       '#title'         => t('Goal'),
       '#options'       => $goal_options,
       '#default_value' => ($is_edit && !empty($ticket->goal_id)) ? $ticket->goal_id : 0,
       '#description'   => t('Link this ticket to a strategic goal.'),
+      '#weight'        => -11,
     );
   }
 
-  // External link closes the sidebar and layout wrapper.
-  $form['external_link'] = array(
+  $form['layout']['sidebar']['external_link'] = array(
     '#type'          => 'textfield',
     '#title'         => t('External link'),
     '#default_value' => ($is_edit && !empty($ticket->external_link)) ? $ticket->external_link : '',
     '#maxlength'     => 512,
     '#description'   => t('Optional URL, e.g. the original JIRA issue.'),
-    '#suffix'        => '</div></div>',
-    '#weight'        => -12,
+    '#weight'        => -10,
   );
 
   $form['#attached']['js'][] = 'core/misc/ui/jquery.ui.datepicker.min.js';
@@ -291,7 +299,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
 
   // On create, show Slack silence option if a webhook is configured.
   if (!$is_edit && config_get('droptickets.settings', 'slack_webhook_url')) {
-    $form['silence_slack'] = array(
+    $form['layout']['main']['silence_slack'] = array(
       '#type'          => 'checkbox',
       '#title'         => t('Silence Slack notification'),
       '#default_value' => 0,
@@ -304,14 +312,14 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     $team            = droptickets_assignee_options();
     $saved_defaults  = config_get('droptickets.settings', 'default_watchers');
     $default_uids    = ($saved_defaults !== NULL) ? $saved_defaults : array_keys($team);
-    $form['watchers'] = array(
+    $form['layout']['main']['watchers'] = array(
       '#type'        => 'fieldset',
       '#title'       => t('Notify'),
       '#description' => t('These people will be added as watchers and notified when the ticket is created.'),
       '#collapsible' => FALSE,
       '#weight'      => 25,
     );
-    $form['watchers']['watcher_uids'] = array(
+    $form['layout']['main']['watchers']['watcher_uids'] = array(
       '#type'          => 'checkboxes',
       '#options'       => $team,
       '#default_value' => $default_uids,
@@ -321,7 +329,10 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
   // Attach any Field API fields defined for this entity.
   field_attach_form('drop_ticket', $ticket, $form, $form_state);
 
-  $form['actions'] = array('#type' => 'actions');
+  // Move Field API fields into the main column of the layout.
+  $form['#after_build'][] = '_droptickets_form_move_fields';
+
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
     '#value' => $is_edit ? t('Update ticket') : t('Add ticket'),
@@ -330,6 +341,21 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#markup' => ' ' . l(t('Cancel'), $is_edit ? 'drop/tickets/' . $ticket->tid : 'drop/tickets'),
   );
 
+  return $form;
+}
+
+/**
+ * After-build callback: moves Field API fields into the main column.
+ */
+function _droptickets_form_move_fields($form, &$form_state) {
+  // Field API fields to move into the main column.
+  $field_names = array('field_ticket_files', 'field_drop_tags', 'field_drop_board');
+  foreach ($field_names as $field_name) {
+    if (isset($form[$field_name])) {
+      $form['layout']['main'][$field_name] = $form[$field_name];
+      unset($form[$field_name]);
+    }
+  }
   return $form;
 }
 

@@ -294,9 +294,9 @@ function dropdocs_form_doc_node_form_alter(&$form, &$form_state, $form_id) {
     );
     $parents = dropdocs_get_ancestors($node->nid);
     foreach ($parents as $ancestor) {
-      $crumb[] = l(check_plain($ancestor->title), 'drop/doc/' . $ancestor->nid);
+      $crumb[] = l($ancestor->title, 'drop/doc/' . $ancestor->nid);
     }
-    $crumb[] = l(check_plain($node->title), 'drop/doc/' . $node->nid);
+    $crumb[] = l($node->title, 'drop/doc/' . $node->nid);
     backdrop_set_breadcrumb($crumb);
   }
   else {
@@ -315,7 +315,7 @@ function dropdocs_form_doc_node_form_alter(&$form, &$form_state, $form_id) {
           // entityreference_autocomplete expects "Title (nid)" format.
           $form['field_doc_parent'][$lang][0]['target_id']['#default_value'] =
             $parent->title . ' (' . $parent_nid . ')';
-          $crumb[] = l(check_plain($parent->title), 'drop/doc/' . $parent_nid);
+          $crumb[] = l($parent->title, 'drop/doc/' . $parent_nid);
         }
       }
     }
@@ -468,12 +468,12 @@ function dropdocs_render_tree(array $tree, $active_nid = NULL) {
     if ($has_children) {
       $output .= '<span class="dropdocs-tree-item">'
         . '<button class="dropdocs-toggle" aria-expanded="true" aria-label="' . t('Toggle') . '"></button>'
-        . l(check_plain($doc->title), 'drop/doc/' . $doc->nid)
+        . l($doc->title, 'drop/doc/' . $doc->nid)
         . '</span>';
       $output .= dropdocs_render_tree($doc->children, $active_nid);
     }
     else {
-      $output .= l(check_plain($doc->title), 'drop/doc/' . $doc->nid);
+      $output .= l($doc->title, 'drop/doc/' . $doc->nid);
     }
     $output .= '</li>';
   }

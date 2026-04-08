@@ -125,7 +125,7 @@ function drop_base_project_view($project) {
   );
 
   // Get extra field display settings.
-  $display = field_extra_fields_get_display('drop_project', 'drop_project', 'full');
+  $display = field_extra_fields_get_display('drop_project', 'drop_project', 'default');
 
   // Actions bar.
   if (user_access('administer projects')) {
@@ -138,10 +138,21 @@ function drop_base_project_view($project) {
     );
   }
 
+  // Build a single render array for all fields (base properties + Field API).
+  // Each element gets a #weight from the Manage Display settings so they
+  // interleave correctly when the site architect reorders them.
+  $fields_output = array(
+    '#prefix' => '<div class="drop-meta-section drop-meta-fields">',
+    '#suffix' => '</div>',
+  );
+
   // Prefix.
   if (!empty($project->prefix) && (!isset($display['prefix']) || $display['prefix']['visible'])) {
-    $output['prefix'] = array(
-      '#markup' => '<div class="dropcrm-project-meta-item">' . t('Prefix: <code>@p</code>', array('@p' => $project->prefix)) . '</div>',
+    $fields_output['prefix'] = array(
+      '#markup' => '<div class="drop-meta-row">'
+        . '<span class="drop-meta-label">' . t('Prefix') . '</span>'
+        . '<span class="drop-meta-value"><code>' . check_plain($project->prefix) . '</code></span>'
+        . '</div>',
       '#weight' => isset($display['prefix']['weight']) ? $display['prefix']['weight'] : -5,
     );
   }
@@ -156,27 +167,70 @@ function drop_base_project_view($project) {
         $contact_html = l(check_plain($contact->name), 'drop/crm/contact/' . $project->cid);
       }
     }
-    $output['contact'] = array(
-      '#markup' => '<div class="dropcrm-project-meta-item">' . t('Contact: !c', array('!c' => $contact_html)) . '</div>',
+    $fields_output['contact'] = array(
+      '#markup' => '<div class="drop-meta-row">'
+        . '<span class="drop-meta-label">' . t('Contact') . '</span>'
+        . '<span class="drop-meta-value">' . $contact_html . '</span>'
+        . '</div>',
       '#weight' => isset($display['contact']['weight']) ? $display['contact']['weight'] : 0,
     );
   }
 
   // Site URL.
   if (!empty($project->site_url) && (!isset($display['site_url']) || $display['site_url']['visible'])) {
-    $output['site_url'] = array(
-      '#markup' => '<div class="dropcrm-project-meta-item">' . t('Website: !url', array('!url' => l(check_plain($project->site_url), $project->site_url, array('external' => TRUE)))) . '</div>',
+    $fields_output['site_url'] = array(
+      '#markup' => '<div class="drop-meta-row">'
+        . '<span class="drop-meta-label">' . t('Website') . '</span>'
+        . '<span class="drop-meta-value">' . l(check_plain($project->site_url), $project->site_url, array('external' => TRUE)) . '</span>'
+        . '</div>',
       '#weight' => isset($display['site_url']['weight']) ? $display['site_url']['weight'] : 5,
     );
   }
 
+  // Site health — from Drop Monitor agent data.
+  if (module_exists('dropmonitor') && !empty($project->server_sid) && !empty($project->agent_site_key)
+    && (!isset($display['site_health']) || $display['site_health']['visible'])) {
+    $health_html = _drop_base_project_health_card($project);
+    if ($health_html) {
+      $fields_output['site_health'] = array(
+        '#markup' => $health_html,
+        '#weight' => isset($display['site_health']['weight']) ? $display['site_health']['weight'] : 8,
+      );
+    }
+  }
+
+  // Uptime summary — from Drop Monitor uptime checks.
+  if (module_exists('dropmonitor') && !empty($project->site_url)
+    && (!isset($display['uptime']) || $display['uptime']['visible'])) {
+    $uptime_html = _drop_base_project_uptime_summary($project);
+    if ($uptime_html) {
+      $fields_output['uptime'] = array(
+        '#markup' => $uptime_html,
+        '#weight' => isset($display['uptime']['weight']) ? $display['uptime']['weight'] : 9,
+      );
+    }
+  }
+
   // Status (archived indicator).
   if (!$project->active && (!isset($display['status']) || $display['status']['visible'])) {
-    $output['status'] = array(
-      '#markup' => '<div class="dropcrm-project-meta-item"><span class="dropcrm-project-archived">' . t('Archived') . '</span></div>',
+    $fields_output['status'] = array(
+      '#markup' => '<div class="drop-meta-row">'
+        . '<span class="drop-meta-label">' . t('Status') . '</span>'
+        . '<span class="drop-meta-value"><span class="dropcrm-project-archived">' . t('Archived') . '</span></span>'
+        . '</div>',
       '#weight' => isset($display['status']['weight']) ? $display['status']['weight'] : 10,
     );
   }
+
+  // Merge in Field API fields so they sort alongside base properties.
+  $field_output = field_attach_view('drop_project', $project, 'default');
+  if (!empty($field_output)) {
+    foreach (element_children($field_output) as $field_name) {
+      $fields_output[$field_name] = $field_output[$field_name];
+    }
+  }
+
+  $output['fields'] = $fields_output;
 
   // Tickets for this project.
   if (module_exists('droptickets') && (!isset($display['tickets']) || $display['tickets']['visible'])) {
@@ -287,6 +341,24 @@ function drop_base_project_view($project) {
 function drop_base_project_form($form, &$form_state, $project = NULL) {
   $is_edit = !empty($project);
 
+  $form['#attached']['css'][] = backdrop_get_path('module', 'drop_base') . '/drop_base.css';
+
+  if ($is_edit) {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Projects'), 'drop/projects'),
+      l($project->name, 'drop/projects/' . $project->pid),
+    ));
+  }
+  else {
+    backdrop_set_breadcrumb(array(
+      l(t('Home'), '<front>'),
+      l(t('Drop Suite'), 'drop'),
+      l(t('Projects'), 'drop/projects'),
+    ));
+  }
+
   $form['#project'] = $project;
 
   $form['name'] = array(
@@ -295,6 +367,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     '#default_value' => $is_edit ? $project->name : '',
     '#required'      => TRUE,
     '#maxlength'     => 255,
+    '#weight'        => -20,
   );
 
   // Contact autocomplete — only when CRM is enabled.
@@ -314,6 +387,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
       '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
       '#description'       => t('Optionally link this project to a CRM contact.'),
       '#maxlength'         => 300,
+      '#weight'            => -18,
     );
   }
 
@@ -324,6 +398,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     '#maxlength'     => 255,
     '#description'   => t('The primary URL for this project (e.g. https://example.com). Used for uptime monitoring.'),
     '#placeholder'   => 'https://',
+    '#weight'        => -16,
   );
 
   $form['platform'] = array(
@@ -338,6 +413,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     ),
     '#default_value' => $is_edit && !empty($project->platform) ? $project->platform : '',
     '#description'   => t('Determines which health check URL is used for uptime monitoring.'),
+    '#weight'        => -14,
   );
 
   $form['health_url'] = array(
@@ -347,6 +423,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     '#maxlength'     => 255,
     '#description'   => t('Optional. A URL that requires a live backend (not cached). Leave empty to auto-detect based on platform.'),
     '#placeholder'   => t('e.g. https://example.com/user/login'),
+    '#weight'        => -12,
   );
 
   $form['gentle_monitor'] = array(
@@ -354,6 +431,7 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     '#title'         => t('Gentle monitoring'),
     '#default_value' => $is_edit && !empty($project->gentle_monitor) ? $project->gentle_monitor : 0,
     '#description'   => t('Use a lighter check for sites with strict bot protection. Checks the homepage with a browser-like request instead of the health URL.'),
+    '#weight'        => -10,
   );
 
   $form['check_interval'] = array(
@@ -366,13 +444,67 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     ),
     '#default_value' => $is_edit && !empty($project->check_interval) ? $project->check_interval : 5,
     '#description'   => t('How often to check uptime. Gentle-monitored sites may benefit from longer intervals.'),
+    '#weight'        => -8,
   );
+
+  // Server monitoring link — only when Drop Monitor is enabled.
+  if (module_exists('dropmonitor')) {
+    $servers = dropmonitor_get_servers(TRUE);
+    $server_options = array('' => t('— None —'));
+    foreach ($servers as $srv) {
+      $server_options[$srv->sid] = $srv->label;
+    }
+
+    $default_sid = $is_edit && !empty($project->server_sid) ? $project->server_sid : '';
+
+    $form['monitoring'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Server monitoring'),
+      '#collapsible' => TRUE,
+      '#collapsed' => empty($default_sid),
+      '#weight' => 40,
+      '#tree' => TRUE,
+    );
+
+    $form['monitoring']['server_sid'] = array(
+      '#type' => 'select',
+      '#title' => t('Server'),
+      '#options' => $server_options,
+      '#default_value' => $default_sid,
+      '#description' => t('Link this project to a monitored server to display site health data.'),
+      '#ajax' => array(
+        'callback' => 'drop_base_project_form_site_keys_ajax',
+        'wrapper' => 'agent-site-key-wrapper',
+      ),
+    );
+
+    // Determine which server to load site keys for.
+    $selected_sid = isset($form_state['values']['monitoring']['server_sid'])
+      ? $form_state['values']['monitoring']['server_sid']
+      : $default_sid;
+
+    $site_key_options = array('' => t('— None —'));
+    if (!empty($selected_sid)) {
+      $site_key_options += _drop_base_get_agent_site_keys($selected_sid);
+    }
+
+    $form['monitoring']['agent_site_key'] = array(
+      '#type' => 'select',
+      '#title' => t('Monitored site'),
+      '#options' => $site_key_options,
+      '#default_value' => $is_edit && !empty($project->agent_site_key) ? $project->agent_site_key : '',
+      '#description' => t('Select the site on this server that corresponds to this project.'),
+      '#prefix' => '<div id="agent-site-key-wrapper">',
+      '#suffix' => '</div>',
+    );
+  }
 
   $form['active'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Active'),
     '#default_value' => $is_edit ? $project->active : 1,
     '#description'   => t('Inactive projects are hidden from the time entry form.'),
+    '#weight'        => 50,
   );
 
   if ($is_edit) {
@@ -383,10 +515,10 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
   $entity = $is_edit ? $project : entity_create('drop_project', array());
   field_attach_form('drop_project', $entity, $form, $form_state);
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
-    '#value' => $is_edit ? t('Update project') : t('Add project'),
+    '#value' => $is_edit ? t('Save') : t('Add project'),
   );
   $form['actions']['cancel'] = array(
     '#markup' => ' ' . l(t('Cancel'), 'drop/projects'),
@@ -443,6 +575,12 @@ function drop_base_project_form_submit($form, &$form_state) {
   $project->check_interval  = (int) $values['check_interval'];
   $project->active          = (int) $values['active'];
 
+  // Server monitoring link.
+  if (module_exists('dropmonitor') && isset($values['monitoring'])) {
+    $project->server_sid = !empty($values['monitoring']['server_sid']) ? (int) $values['monitoring']['server_sid'] : NULL;
+    $project->agent_site_key = !empty($values['monitoring']['agent_site_key']) ? $values['monitoring']['agent_site_key'] : '';
+  }
+
   // Parse cid from autocomplete value (only present when CRM is enabled).
   if (isset($values['cid_autocomplete'])) {
     $raw = trim($values['cid_autocomplete']);
@@ -461,6 +599,219 @@ function drop_base_project_form_submit($form, &$form_state) {
 
   backdrop_set_message(t('Project %name saved.', array('%name' => $project->name)));
   $form_state['redirect'] = 'drop/projects';
+}
+
+/**
+ * AJAX callback: returns the agent_site_key dropdown for the selected server.
+ */
+function drop_base_project_form_site_keys_ajax($form, $form_state) {
+  return $form['monitoring']['agent_site_key'];
+}
+
+/**
+ * Returns available site keys from a server's latest agent check data.
+ *
+ * @param int $sid
+ *   Server ID.
+ *
+ * @return array
+ *   Associative array of site_key => site_key for use as #options.
+ */
+function _drop_base_get_agent_site_keys($sid) {
+  $options = array();
+
+  $check = db_select('dropmonitor_check', 'c')
+    ->fields('c', array('data'))
+    ->condition('sid', $sid)
+    ->condition('check_type', 'agent')
+    ->execute()
+    ->fetchField();
+
+  if ($check) {
+    $data = json_decode($check, TRUE);
+    if (!empty($data['sites'])) {
+      foreach (array_keys($data['sites']) as $key) {
+        $options[$key] = $key;
+      }
+      ksort($options);
+    }
+  }
+
+  return $options;
+}
+
+/**
+ * Renders a site health card from Drop Monitor agent data for a project.
+ *
+ * @param object $project
+ *   The project object with server_sid and agent_site_key set.
+ *
+ * @return string|FALSE
+ *   HTML string, or FALSE if no data available.
+ */
+function _drop_base_project_health_card($project) {
+  $check = db_select('dropmonitor_check', 'c')
+    ->fields('c', array('data', 'checked'))
+    ->condition('sid', $project->server_sid)
+    ->condition('check_type', 'agent')
+    ->execute()
+    ->fetchObject();
+
+  if (!$check) {
+    return FALSE;
+  }
+
+  $data = json_decode($check->data, TRUE);
+  if (empty($data['sites'][$project->agent_site_key])) {
+    return FALSE;
+  }
+
+  $site = $data['sites'][$project->agent_site_key];
+  $items = array();
+
+  // HTTP status.
+  if (isset($site['http']['status'])) {
+    $class = $site['http']['status'] === 'up' ? 'dropmonitor-up' : 'dropmonitor-down';
+    $value = '<span class="' . $class . '">' . strtoupper($site['http']['status']) . '</span>';
+    if (isset($site['http']['response_ms'])) {
+      $value .= ' (' . $site['http']['response_ms'] . 'ms)';
+    }
+    $items[] = '<span class="drop-meta-label">' . t('HTTP') . '</span> ' . $value;
+  }
+
+  // Core version and update status.
+  if (!empty($site['core_update'])) {
+    $cu = $site['core_update'];
+    $version = isset($cu['current']) ? check_plain($cu['current']) : '';
+    if (!empty($cu['update_available']) && !empty($cu['latest'])) {
+      $latest = check_plain($cu['latest']);
+      if (!empty($cu['security'])) {
+        $version .= ' &rarr; ' . $latest . ' <span class="dropmonitor-site-security">(' . t('security update') . ')</span>';
+      }
+      else {
+        $version .= ' &rarr; ' . $latest . ' <span class="dropmonitor-site-update">(' . t('update available') . ')</span>';
+      }
+    }
+    $items[] = '<span class="drop-meta-label">' . t('Core') . '</span> ' . $version;
+  }
+
+  // CMS type.
+  if (!empty($site['cms'])) {
+    $items[] = '<span class="drop-meta-label">' . t('CMS') . '</span> ' . check_plain($site['cms']);
+  }
+
+  // Database size.
+  if (isset($site['db_size_mb'])) {
+    $items[] = '<span class="drop-meta-label">' . t('Database') . '</span> ' . $site['db_size_mb'] . ' MB';
+  }
+
+  // Watchdog errors.
+  if (isset($site['watchdog_errors_24h'])) {
+    $value = $site['watchdog_errors_24h'];
+    if ($value > 0) {
+      $value = '<span class="dropmonitor-site-errors">' . $value . '</span>';
+    }
+    $items[] = '<span class="drop-meta-label">' . t('Errors (24h)') . '</span> ' . $value;
+  }
+
+  // Cron.
+  if (isset($site['cron_last'])) {
+    $age = REQUEST_TIME - $site['cron_last'];
+    $cron_text = format_interval($age, 1) . ' ' . t('ago');
+    if ($age > 86400) {
+      $cron_text = '<span class="dropmonitor-site-errors">' . $cron_text . '</span>';
+    }
+    $items[] = '<span class="drop-meta-label">' . t('Last cron') . '</span> ' . $cron_text;
+  }
+
+  if (empty($items)) {
+    return FALSE;
+  }
+
+  // Link to server detail page.
+  $server = dropmonitor_server_load($project->server_sid);
+  $server_link = $server ? l(check_plain($server->label), 'drop/monitor/server/' . $project->server_sid) : '';
+
+  $age_text = format_interval(REQUEST_TIME - $check->checked, 1) . ' ' . t('ago');
+
+  $output = '<div class="drop-meta-section drop-health-card">';
+  $output .= '<h4>' . t('Site health') . '</h4>';
+  $output .= '<div class="drop-health-items">' . implode('<br>', $items) . '</div>';
+  $output .= '<div class="drop-health-meta">';
+  if ($server_link) {
+    $output .= t('Server: !server', array('!server' => $server_link)) . ' &middot; ';
+  }
+  $output .= t('Updated @time', array('@time' => $age_text));
+  $output .= '</div>';
+  $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Renders an uptime summary for a project.
+ *
+ * Shows current status, 14-day uptime percentage, and a link to the detail
+ * page. Uses the same data as the Uptime dashboard.
+ *
+ * @param object $project
+ *   The project object (must have pid and site_url).
+ *
+ * @return string|FALSE
+ *   HTML string, or FALSE if no uptime data available.
+ */
+function _drop_base_project_uptime_summary($project) {
+  module_load_include('inc', 'dropmonitor', 'dropmonitor.uptime');
+
+  $pct = dropmonitor_uptime_percentage($project->pid, 14);
+
+  // Get the latest check.
+  $latest = db_select('dropmonitor_uptime', 'u')
+    ->fields('u')
+    ->condition('pid', $project->pid)
+    ->orderBy('checked', 'DESC')
+    ->range(0, 1)
+    ->execute()
+    ->fetchObject();
+
+  if (!$latest) {
+    return FALSE;
+  }
+
+  $items = array();
+
+  // Current status.
+  $is_up = (int) $latest->status;
+  if ($is_up) {
+    $status = '<span class="dropmonitor-up">' . t('UP') . '</span>';
+    $status .= ' (' . $latest->response_code . ', ' . $latest->response_ms . 'ms)';
+  }
+  else {
+    $status = '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
+    $status .= ' (' . $latest->response_code . ')';
+  }
+  $items[] = '<span class="drop-meta-label">' . t('Status') . '</span> ' . $status;
+
+  // 14-day uptime.
+  if ($pct !== NULL) {
+    $pct_class = $pct >= 99.5 ? 'dropmonitor-up' : ($pct >= 95 ? 'dropmonitor-site-update' : 'dropmonitor-down');
+    $items[] = '<span class="drop-meta-label">' . t('Uptime (14d)') . '</span> '
+      . '<span class="' . $pct_class . '">' . $pct . '%</span>';
+  }
+
+  // Last checked.
+  $items[] = '<span class="drop-meta-label">' . t('Last check') . '</span> '
+    . format_interval(REQUEST_TIME - $latest->checked, 1) . ' ' . t('ago');
+
+  $output = '<div class="drop-meta-section drop-health-card">';
+  $output .= '<h4>' . t('Uptime') . '</h4>';
+  $output .= '<div class="drop-health-items">' . implode('<br>', $items) . '</div>';
+  $output .= '<div class="drop-health-meta">';
+  $output .= l(t('View uptime log'), 'drop/monitor/uptime/' . $project->pid);
+  $output .= '</div>';
+  $output .= '</div>';
+
+  return $output;
 }
 
 // ---------------------------------------------------------------------------
@@ -512,6 +863,18 @@ function drop_base_settings_form($form, &$form_state) {
     '#field_suffix'  => 'px',
   );
 
+  $form['features'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Features'),
+    '#collapsible' => TRUE,
+  );
+  $form['features']['meeting_enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable meeting agenda'),
+    '#description' => t('Show the Meeting page in the navigation bar.'),
+    '#default_value' => $config->get('meeting_enabled') !== FALSE ? $config->get('meeting_enabled') : TRUE,
+  );
+
   $form['actions'] = array('#type' => 'actions');
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
@@ -527,6 +890,7 @@ function drop_base_settings_form($form, &$form_state) {
 function drop_base_settings_form_submit($form, &$form_state) {
   $config = config('drop_base.settings');
   $config->set('narrow_page_width', (int) $form_state['values']['narrow_page_width']);
+  $config->set('meeting_enabled', (bool) $form_state['values']['meeting_enabled']);
   $config->save();
   backdrop_set_message(t('Settings saved.'));
 }

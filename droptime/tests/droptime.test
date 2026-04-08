@@ -630,3 +630,121 @@ class DropTimeOwnerReassignTest extends DropTimeTestBase {
     $this->assertLinkByHref('drop/time/entry/' . $entry->eid . '/edit');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Settings tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests the DropTime settings form and reminder toggle.
+ */
+class DropTimeSettingsTest extends DropTimeTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTime Settings',
+      'description' => 'Verifies the settings form and that the reminder toggle works.',
+      'group'       => 'DropTime',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'dropcrm', 'entity_plus', 'droptime');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer droptime',
+      'access droptime',
+    ));
+    $this->regularUser = $this->backdropCreateUser(array(
+      'access droptime',
+    ));
+    $this->project = $this->createTestProject();
+  }
+
+  /**
+   * Admin can access the settings page.
+   */
+  public function testAdminCanAccessSettings() {
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet('drop/time/settings');
+    $this->assertResponse(200);
+    $this->assertText('Reminders');
+    $this->assertFieldByName('reminder_enabled');
+  }
+
+  /**
+   * Non-admin cannot access the settings page.
+   */
+  public function testNonAdminCannotAccessSettings() {
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time/settings');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * Saving the settings form persists the reminder_enabled value.
+   */
+  public function testSaveReminderSetting() {
+    $this->backdropLogin($this->adminUser);
+
+    // Disable reminders.
+    $this->backdropPost('drop/time/settings', array(
+      'reminder_enabled' => FALSE,
+    ), t('Save settings'));
+
+    $this->assertText('Settings saved.');
+    $this->assertFalse(config_get('droptime.settings', 'reminder_enabled'), 'Reminder is disabled in config.');
+
+    // Re-enable reminders.
+    $this->backdropPost('drop/time/settings', array(
+      'reminder_enabled' => TRUE,
+    ), t('Save settings'));
+
+    $this->assertTrue(config_get('droptime.settings', 'reminder_enabled'), 'Reminder is re-enabled in config.');
+  }
+
+  /**
+   * The reminder banner appears when enabled and no time logged.
+   */
+  public function testReminderBannerShowsWhenEnabled() {
+    // Ensure reminders are enabled (default).
+    config_set('droptime.settings', 'reminder_enabled', TRUE);
+
+    // Log in as a user with no time entries.
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time');
+
+    // The reminder banner text should appear.
+    $this->assertText('You have not logged any time', 'Reminder banner appears when enabled and no time logged.');
+  }
+
+  /**
+   * The reminder banner does not appear when disabled.
+   */
+  public function testReminderBannerHiddenWhenDisabled() {
+    // Disable reminders.
+    config_set('droptime.settings', 'reminder_enabled', FALSE);
+
+    // Log in as a user with no time entries.
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time');
+
+    // The reminder banner should NOT appear.
+    $this->assertNoText('You have not logged any time', 'Reminder banner is hidden when disabled.');
+  }
+
+  /**
+   * The reminder banner does not appear if the user has logged time recently.
+   */
+  public function testReminderBannerHiddenWhenTimeLogged() {
+    config_set('droptime.settings', 'reminder_enabled', TRUE);
+
+    // Create a time entry for today.
+    $this->createTestEntry($this->regularUser->uid);
+
+    $this->backdropLogin($this->regularUser);
+    $this->backdropGet('drop/time');
+
+    $this->assertNoText('You have not logged any time', 'Reminder banner is hidden when time has been logged today.');
+  }
+}
