@@ -129,8 +129,9 @@ function dropmonitor_menu() {
 
   $items['drop/monitor/dashboard'] = array(
     'title' => 'Dashboard',
-    'type' => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
+    'page callback' => 'dropmonitor_dashboard_page',
+    'access arguments' => array('access dropmonitor'),
+    'file' => 'dropmonitor.pages.inc',
   );
 
   // Server detail page.
@@ -169,8 +170,6 @@ function dropmonitor_menu() {
     'page arguments' => array('dropmonitor_settings_form'),
     'access arguments' => array('administer dropmonitor'),
     'file' => 'dropmonitor.admin.inc',
-    'type' => MENU_LOCAL_TASK,
-    'weight' => 10,
   );
 
   // Server management.
@@ -179,8 +178,6 @@ function dropmonitor_menu() {
     'page callback' => 'dropmonitor_servers_list',
     'access arguments' => array('administer dropmonitor'),
     'file' => 'dropmonitor.admin.inc',
-    'type' => MENU_LOCAL_TASK,
-    'weight' => 5,
   );
 
   $items['drop/monitor/servers/add'] = array(
@@ -243,8 +240,6 @@ function dropmonitor_menu() {
     'page callback' => 'dropmonitor_uptime_dashboard',
     'access arguments' => array('access dropmonitor'),
     'file' => 'dropmonitor.pages.inc',
-    'type' => MENU_LOCAL_TASK,
-    'weight' => 5,
   );
 
   // Uptime check now (single project).
@@ -267,6 +262,61 @@ function dropmonitor_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  // Archives (S3).
+  $items['drop/monitor/archives'] = array(
+    'title' => 'Archives',
+    'page callback' => 'dropmonitor_archives_page',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+  );
+
+  // Upload endpoint for archives (AJAX).
+  $items['drop/monitor/archives/upload'] = array(
+    'title' => 'Upload archive',
+    'page callback' => 'dropmonitor_archives_upload',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Download proxy for archives.
+  $items['drop/monitor/archives/download'] = array(
+    'title' => 'Download archive',
+    'page callback' => 'dropmonitor_archives_download',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Create folder in S3.
+  $items['drop/monitor/archives/new-folder'] = array(
+    'title' => 'New folder',
+    'page callback' => 'dropmonitor_archives_new_folder',
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Move archive to folder.
+  $items['drop/monitor/archives/move'] = array(
+    'title' => 'Move archive',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_archive_move_form'),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Delete archive.
+  $items['drop/monitor/archives/delete'] = array(
+    'title' => 'Delete archive',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('dropmonitor_archive_delete_form'),
+    'access arguments' => array('administer dropmonitor'),
+    'file' => 'dropmonitor.archives.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
 }
 
@@ -281,6 +331,57 @@ function dropmonitor_drop_nav_links() {
       'weight' => 85,
     ),
   );
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function dropmonitor_drop_section_links($section) {
+  if ($section !== 'monitor') {
+    return array();
+  }
+
+  $links = array();
+
+  $links['dashboard'] = array(
+    'title' => t('Dashboard'),
+    'href' => 'drop/monitor',
+    'weight' => -20,
+    'active_paths' => array('drop/monitor', 'drop/monitor/dashboard'),
+  );
+
+  $links['servers'] = array(
+    'title' => t('Servers'),
+    'href' => 'drop/monitor/servers',
+    'weight' => -10,
+    'admin_only' => TRUE,
+  );
+
+  $links['uptime'] = array(
+    'title' => t('Uptime'),
+    'href' => 'drop/monitor/uptime',
+    'weight' => 0,
+  );
+
+  // Only show Archives if S3 is configured.
+  $config = config('dropmonitor.settings');
+  if (!empty($config->get('s3_access_key')) && !empty($config->get('s3_bucket'))) {
+    $links['archives'] = array(
+      'title' => t('Archives'),
+      'href' => 'drop/monitor/archives',
+      'weight' => 10,
+      'admin_only' => TRUE,
+    );
+  }
+
+  $links['settings'] = array(
+    'title' => t('Settings'),
+    'href' => 'drop/monitor/settings',
+    'weight' => 20,
+    'admin_only' => TRUE,
+  );
+
+  return $links;
 }
 
 /**

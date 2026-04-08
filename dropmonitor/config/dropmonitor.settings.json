@@ -8,5 +8,10 @@
     "alert_disk_percent": 10,
     "alert_cert_days": 14,
     "alert_response_ms": 5000,
-    "failure_threshold": 3
+    "failure_threshold": 3,
+    "s3_access_key": "",
+    "s3_secret_key": "",
+    "s3_bucket": "",
+    "s3_region": "us-east-1",
+    "s3_endpoint": ""
 }

@@ -133,7 +133,48 @@ function dropmonitor_settings_form($form, &$form_state) {
     '#default_value' => $config->get('failure_threshold') ?: 3,
   );
 
-  $form['actions'] = array('#type' => 'actions');
+  // S3 Archives.
+  $form['s3'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('S3 Archives'),
+    '#description' => t('Store site archives in Amazon S3 or any S3-compatible service.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['s3']['s3_access_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Access Key ID'),
+    '#default_value' => $config->get('s3_access_key'),
+    '#maxlength' => 128,
+  );
+  $form['s3']['s3_secret_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Secret Access Key'),
+    '#default_value' => $config->get('s3_secret_key'),
+    '#maxlength' => 128,
+  );
+  $form['s3']['s3_bucket'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Bucket name'),
+    '#default_value' => $config->get('s3_bucket'),
+    '#maxlength' => 64,
+  );
+  $form['s3']['s3_region'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Region'),
+    '#default_value' => $config->get('s3_region') ?: 'us-east-1',
+    '#maxlength' => 32,
+    '#description' => t('e.g. us-east-1, us-west-2, eu-west-1'),
+  );
+  $form['s3']['s3_endpoint'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Custom endpoint (optional)'),
+    '#default_value' => $config->get('s3_endpoint'),
+    '#maxlength' => 255,
+    '#description' => t('Leave empty for Amazon S3. For Linode Object Storage use e.g. https://us-east-1.linodeobjects.com'),
+  );
+
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save settings'),
@@ -155,6 +196,11 @@ function dropmonitor_settings_form_submit($form, &$form_state) {
   $config->set('alert_disk_percent', $form_state['values']['alert_disk_percent']);
   $config->set('alert_cert_days', $form_state['values']['alert_cert_days']);
   $config->set('alert_response_ms', $form_state['values']['alert_response_ms']);
+  $config->set('s3_access_key', $form_state['values']['s3_access_key']);
+  $config->set('s3_secret_key', $form_state['values']['s3_secret_key']);
+  $config->set('s3_bucket', $form_state['values']['s3_bucket']);
+  $config->set('s3_region', $form_state['values']['s3_region']);
+  $config->set('s3_endpoint', $form_state['values']['s3_endpoint']);
   $config->save();
   backdrop_set_message(t('Settings saved.'));
 }
