@@ -187,6 +187,19 @@ function drop_base_project_view($project) {
     );
   }
 
+  // Platform.
+  if (!empty($project->platform) && (!isset($display['platform']) || $display['platform']['visible'])) {
+    $platform_labels = drop_base_platform_options();
+    $platform_text = isset($platform_labels[$project->platform]) ? $platform_labels[$project->platform] : check_plain($project->platform);
+    $fields_output['platform'] = array(
+      '#markup' => '<div class="drop-meta-row">'
+        . '<span class="drop-meta-label">' . t('Platform') . '</span>'
+        . '<span class="drop-meta-value">' . $platform_text . '</span>'
+        . '</div>',
+      '#weight' => isset($display['platform']['weight']) ? $display['platform']['weight'] : 6,
+    );
+  }
+
   // Site health — from Drop Monitor agent data.
   if (module_exists('dropmonitor') && !empty($project->server_sid) && !empty($project->agent_site_key)
     && (!isset($display['site_health']) || $display['site_health']['visible'])) {
@@ -695,11 +708,6 @@ function _drop_base_project_health_card($project) {
     $items[] = '<span class="drop-meta-label">' . t('Core') . '</span> ' . $version;
   }
 
-  // CMS type.
-  if (!empty($site['cms'])) {
-    $items[] = '<span class="drop-meta-label">' . t('CMS') . '</span> ' . check_plain($site['cms']);
-  }
-
   // Database size.
   if (isset($site['db_size_mb'])) {
     $items[] = '<span class="drop-meta-label">' . t('Database') . '</span> ' . $site['db_size_mb'] . ' MB';
@@ -728,22 +736,49 @@ function _drop_base_project_health_card($project) {
     return FALSE;
   }
 
+  // Determine if there's an actionable issue that warrants auto-opening.
+  $has_issue = FALSE;
+  if (!empty($site['core_update']['security'])) {
+    $has_issue = TRUE;
+  }
+  if (isset($site['watchdog_errors_24h']) && $site['watchdog_errors_24h'] > 0) {
+    $has_issue = TRUE;
+  }
+  if (isset($site['http']['status']) && $site['http']['status'] !== 'up') {
+    $has_issue = TRUE;
+  }
+  if (isset($site['cron_last']) && (REQUEST_TIME - $site['cron_last']) > 86400) {
+    $has_issue = TRUE;
+  }
+
+  // Build summary text for the collapsed state — focus on update status.
+  if (!empty($site['core_update']['security'])) {
+    $summary_status = ' &mdash; <span class="dropmonitor-site-security">' . t('Needs security update') . '</span>';
+  }
+  elseif (!empty($site['core_update']['update_available'])) {
+    $summary_status = ' &mdash; <span class="dropmonitor-site-update">' . t('Update available') . '</span>';
+  }
+  else {
+    $summary_status = ' &mdash; ' . t('Up to date');
+  }
+
   // Link to server detail page.
   $server = dropmonitor_server_load($project->server_sid);
   $server_link = $server ? l(check_plain($server->label), 'drop/monitor/server/' . $project->server_sid) : '';
 
   $age_text = format_interval(REQUEST_TIME - $check->checked, 1) . ' ' . t('ago');
 
-  $output = '<div class="drop-meta-section drop-health-card">';
-  $output .= '<h4>' . t('Site health') . '</h4>';
-  $output .= '<div class="drop-health-items">' . implode('<br>', $items) . '</div>';
-  $output .= '<div class="drop-health-meta">';
+  $open_attr = $has_issue ? ' open' : '';
+  $output = '<details class="drop-details"' . $open_attr . '>';
+  $output .= '<summary class="drop-details-summary">' . t('Site health') . $summary_status . '</summary>';
+  $output .= '<div class="drop-details-body">' . implode('<br>', $items) . '</div>';
+  $output .= '<div class="drop-details-meta">';
   if ($server_link) {
     $output .= t('Server: !server', array('!server' => $server_link)) . ' &middot; ';
   }
   $output .= t('Updated @time', array('@time' => $age_text));
   $output .= '</div>';
-  $output .= '</div>';
+  $output .= '</details>';
 
   return $output;
 }
@@ -803,13 +838,30 @@ function _drop_base_project_uptime_summary($project) {
   $items[] = '<span class="drop-meta-label">' . t('Last check') . '</span> '
     . format_interval(REQUEST_TIME - $latest->checked, 1) . ' ' . t('ago');
 
-  $output = '<div class="drop-meta-section drop-health-card">';
-  $output .= '<h4>' . t('Uptime') . '</h4>';
-  $output .= '<div class="drop-health-items">' . implode('<br>', $items) . '</div>';
-  $output .= '<div class="drop-health-meta">';
+  // Summary status for the collapsed state.
+  $summary_parts = array();
+  if ($is_up) {
+    $summary_parts[] = '<span class="dropmonitor-up">' . t('UP') . '</span>';
+  }
+  else {
+    $summary_parts[] = '<span class="dropmonitor-down">' . t('DOWN') . '</span>';
+  }
+  if ($pct !== NULL) {
+    $summary_parts[] = $pct . '%';
+  }
+  $summary_status = ' &mdash; ' . implode(' &middot; ', $summary_parts);
+
+  // Auto-open if site is down or uptime is poor.
+  $has_issue = !$is_up || ($pct !== NULL && $pct < 99.5);
+  $open_attr = $has_issue ? ' open' : '';
+
+  $output = '<details class="drop-details"' . $open_attr . '>';
+  $output .= '<summary class="drop-details-summary">' . t('Uptime') . $summary_status . '</summary>';
+  $output .= '<div class="drop-details-body">' . implode('<br>', $items) . '</div>';
+  $output .= '<div class="drop-details-meta">';
   $output .= l(t('View uptime log'), 'drop/monitor/uptime/' . $project->pid);
   $output .= '</div>';
-  $output .= '</div>';
+  $output .= '</details>';
 
   return $output;
 }
