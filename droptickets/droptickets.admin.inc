@@ -329,8 +329,23 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
   // Attach any Field API fields defined for this entity.
   field_attach_form('drop_ticket', $ticket, $form, $form_state);
 
-  // Move Field API fields into the main column of the layout.
-  $form['#after_build'][] = '_droptickets_form_move_fields';
+  // Move non-AJAX Field API fields into the main column directly.
+  // Note: field_ticket_files uses an AJAX upload widget whose callback
+  // resolves the element by its original #array_parents. Moving it in an
+  // after_build breaks that resolution, so we leave it at the top level and
+  // use #weight to position it visually within the layout.
+  $move_fields = array('field_drop_tags', 'field_drop_board');
+  foreach ($move_fields as $field_name) {
+    if (isset($form[$field_name])) {
+      $form['layout']['main'][$field_name] = $form[$field_name];
+      unset($form[$field_name]);
+    }
+  }
+  // The file field stays at form root for AJAX compatibility but is weighted
+  // to render after the main layout.
+  if (isset($form['field_ticket_files'])) {
+    $form['field_ticket_files']['#weight'] = -19;
+  }
 
   $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
@@ -345,19 +360,12 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
 }
 
 /**
- * After-build callback: moves Field API fields into the main column.
+ * After-build callback (legacy, no longer registered).
+ *
+ * Field API fields are now moved directly after field_attach_form() in the
+ * form builder, except for field_ticket_files which stays at form root for
+ * AJAX upload compatibility.
  */
-function _droptickets_form_move_fields($form, &$form_state) {
-  // Field API fields to move into the main column.
-  $field_names = array('field_ticket_files', 'field_drop_tags', 'field_drop_board');
-  foreach ($field_names as $field_name) {
-    if (isset($form[$field_name])) {
-      $form['layout']['main'][$field_name] = $form[$field_name];
-      unset($form[$field_name]);
-    }
-  }
-  return $form;
-}
 
 /**
  * Validation handler for droptickets_ticket_form().

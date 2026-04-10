@@ -299,6 +299,16 @@ function dropcrm_install() {
     $config->set('relationship_types', _dropcrm_default_relationship_types());
     $config->save();
   }
+
+  // Import the crm_contacts view.
+  $module_path = backdrop_get_path('module', 'dropcrm');
+  $config_path = $module_path . '/config/views.view.crm_contacts.json';
+  if (file_exists($config_path)) {
+    $data = json_decode(file_get_contents($config_path), TRUE);
+    $view_config = config('views.view.crm_contacts');
+    $view_config->setData($data);
+    $view_config->save();
+  }
 }
 
 /**
@@ -1374,4 +1384,23 @@ function dropcrm_update_1023() {
   }
 
   return t('Project permissions migrated from CRM to Drop Base.');
+}
+
+/**
+ * Import the crm_contacts view for People, Organizations, Households pages.
+ */
+function dropcrm_update_1024() {
+  $view = views_get_view('crm_contacts');
+  if (!$view) {
+    $module_path = backdrop_get_path('module', 'dropcrm');
+    $config_path = $module_path . '/config/views.view.crm_contacts.json';
+    if (file_exists($config_path)) {
+      $data = json_decode(file_get_contents($config_path), TRUE);
+      $config = config('views.view.crm_contacts');
+      $config->setData($data);
+      $config->save();
+      return t('Imported the crm_contacts view.');
+    }
+  }
+  return t('crm_contacts view already exists.');
 }

@@ -181,6 +181,61 @@ function dropcrm_entity_property_info_alter(&$info) {
 }
 
 /**
+ * Implements hook_field_extra_fields().
+ *
+ * Exposes hardcoded contact properties to the Field UI "Manage display"
+ * interface so they can be reordered and toggled per bundle.
+ */
+function dropcrm_field_extra_fields() {
+  $extra = array();
+
+  // Display pseudo-fields shared by all bundles.
+  $shared_display = array(
+    'status' => array(
+      'label' => t('Status'),
+      'description' => t('Active or inactive status badge.'),
+      'weight' => -5,
+    ),
+    'contact_methods' => array(
+      'label' => t('Contact details'),
+      'description' => t('Phone, email, address, URL.'),
+      'weight' => 10,
+    ),
+    'relationships' => array(
+      'label' => t('Relationships'),
+      'description' => t('Relationships to other contacts.'),
+      'weight' => 15,
+    ),
+    'activities' => array(
+      'label' => t('Activities'),
+      'description' => t('Activity history.'),
+      'weight' => 20,
+    ),
+  );
+
+  // Person-specific display fields.
+  $extra['crm_contact']['crm_person']['display'] = $shared_display;
+  $extra['crm_contact']['crm_person']['display']['hero'] = array(
+    'label' => t('Hero section'),
+    'description' => t('Rating, job title, employer, tags, and action links.'),
+    'weight' => -90,
+  );
+
+  // Organization-specific display fields.
+  $extra['crm_contact']['crm_organization']['display'] = $shared_display;
+  $extra['crm_contact']['crm_organization']['display']['affiliated_contacts'] = array(
+    'label' => t('Affiliated people'),
+    'description' => t('People who list this organization as their employer.'),
+    'weight' => 5,
+  );
+
+  // Household display fields.
+  $extra['crm_contact']['crm_household']['display'] = $shared_display;
+
+  return $extra;
+}
+
+/**
  * Implements hook_entity_property_info().
  */
 function dropcrm_entity_property_info() {
@@ -988,33 +1043,37 @@ function dropcrm_menu() {
     'type'             => MENU_CALLBACK,
   );
 
-  // Per-bundle contact tabs.
-  $items['drop/crm/people'] = array(
-    'title'            => 'People',
-    'page callback'    => 'dropcrm_contact_list_page',
+  // Per-bundle contact listing pages are provided by the crm_contacts view.
+  // See config/views.view.crm_contacts.json for paths:
+  //   drop/crm/people, drop/crm/organizations, drop/crm/households.
+  // Action links on each list page.
+  $items['drop/crm/people/add'] = array(
+    'title'            => 'Add Person',
+    'page callback'    => 'dropcrm_contact_add_page',
     'page arguments'   => array('crm_person'),
-    'access arguments' => array('access crm'),
+    'access callback'  => 'dropcrm_contact_access',
+    'access arguments' => array('create'),
     'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
+    'type'             => MENU_LOCAL_ACTION,
   );
-  $items['drop/crm/organizations'] = array(
-    'title'            => 'Organizations',
-    'page callback'    => 'dropcrm_contact_list_page',
+  $items['drop/crm/organizations/add'] = array(
+    'title'            => 'Add Organization',
+    'page callback'    => 'dropcrm_contact_add_page',
     'page arguments'   => array('crm_organization'),
-    'access arguments' => array('access crm'),
+    'access callback'  => 'dropcrm_contact_access',
+    'access arguments' => array('create'),
     'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
+    'type'             => MENU_LOCAL_ACTION,
   );
-  if (config_get('dropcrm.settings', 'enable_households')) {
-    $items['drop/crm/households'] = array(
-      'title'            => 'Households',
-      'page callback'    => 'dropcrm_contact_list_page',
-      'page arguments'   => array('crm_household'),
-      'access arguments' => array('access crm'),
-      'file'             => 'dropcrm.admin.inc',
-      'type'             => MENU_CALLBACK,
-    );
-  }
+  $items['drop/crm/households/add'] = array(
+    'title'            => 'Add Household',
+    'page callback'    => 'dropcrm_contact_add_page',
+    'page arguments'   => array('crm_household'),
+    'access callback'  => 'dropcrm_contact_access',
+    'access arguments' => array('create'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
 
   // Relationship CRUD routes.
   $items['drop/crm/relationships/add'] = array(

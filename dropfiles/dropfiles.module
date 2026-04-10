@@ -116,6 +116,15 @@ function dropfiles_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  // Autocomplete callback for searching library files.
+  $items['drop/files/autocomplete'] = array(
+    'page callback' => 'dropfiles_autocomplete',
+    'access callback' => 'user_access',
+    'access arguments' => array('access dropfiles'),
+    'file' => 'dropfiles.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   $items['drop/files/settings'] = array(
     'title' => 'Settings',
     'page callback' => 'backdrop_get_form',
@@ -493,4 +502,97 @@ function dropfiles_file_icon($filemime) {
   }
 
   return 'file';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for droptickets_ticket_form.
+ *
+ * Adds a "Attach from file library" autocomplete field so users can select
+ * existing files from the DropFiles library to attach to a ticket.
+ */
+function dropfiles_form_droptickets_ticket_form_alter(&$form, &$form_state) {
+  // Place in the main column, just after field_ticket_files (weight 20).
+  $form['layout']['main']['library_files'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Attach from file library'),
+    '#description' => t('Search for files in the file library. Separate multiple files with commas.'),
+    '#autocomplete_path' => 'drop/files/autocomplete',
+    '#weight' => 21,
+  );
+
+  // Add our submit handler after the main one to attach library files
+  // post-save (avoids conflicts with the file widget's internal state).
+  $form['#submit'][] = 'dropfiles_ticket_library_submit';
+}
+
+/**
+ * Submit handler: attach library files to the ticket after save.
+ *
+ * Parses the autocomplete values (format: "filename [fid:123]"), loads the
+ * just-saved ticket, appends the library files, and re-saves.
+ */
+function dropfiles_ticket_library_submit($form, &$form_state) {
+  $raw = trim($form_state['values']['library_files']);
+  if (empty($raw)) {
+    return;
+  }
+
+  // Parse comma-separated autocomplete values.
+  $parts = array_map('trim', explode(',', $raw));
+  $fids = array();
+  foreach ($parts as $part) {
+    if (preg_match('/\[fid:(\d+)\]/', $part, $m)) {
+      $fids[] = (int) $m[1];
+    }
+  }
+
+  if (empty($fids)) {
+    return;
+  }
+
+  // The main submit handler has already saved the ticket. Load it fresh.
+  $ticket = $form['#ticket'];
+  if (empty($ticket->tid)) {
+    return;
+  }
+  $tickets = entity_load('drop_ticket', array($ticket->tid));
+  $ticket = $tickets ? reset($tickets) : NULL;
+  if (!$ticket) {
+    return;
+  }
+
+  // Collect fids already on the ticket to avoid duplicates.
+  $existing_fids = array();
+  if (!empty($ticket->field_ticket_files[LANGUAGE_NONE])) {
+    foreach ($ticket->field_ticket_files[LANGUAGE_NONE] as $item) {
+      $existing_fids[] = (int) $item['fid'];
+    }
+  }
+  else {
+    $ticket->field_ticket_files[LANGUAGE_NONE] = array();
+  }
+
+  $added = 0;
+  foreach ($fids as $fid) {
+    if (in_array($fid, $existing_fids)) {
+      continue;
+    }
+    $file = file_load($fid);
+    if (!$file) {
+      continue;
+    }
+
+    $ticket->field_ticket_files[LANGUAGE_NONE][] = array(
+      'fid' => $file->fid,
+      'display' => 1,
+      'description' => '',
+    );
+    $existing_fids[] = $file->fid;
+    $added++;
+  }
+
+  if ($added) {
+    $ticket->save();
+    backdrop_set_message(format_plural($added, '1 file attached from the library.', '@count files attached from the library.'));
+  }
 }

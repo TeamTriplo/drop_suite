@@ -283,6 +283,56 @@ class DropCRMContactCRUDTest extends DropCRMTestBase {
     $this->backdropGet('drop/crm/organizations');
     $this->assertLink('Delete', 0, 'Delete link is present on the organization list page.');
   }
+
+  /**
+   * The People list page shows an Add Person action link.
+   */
+  public function testAddPersonActionLinkOnPeopleList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/people');
+    $this->assertResponse(200);
+    $this->assertLink('Add Person', 0, 'Add Person action link is present on the People list page.');
+  }
+
+  /**
+   * The Organizations list page shows an Add Organization action link.
+   */
+  public function testAddOrganizationActionLinkOnOrgList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations');
+    $this->assertResponse(200);
+    $this->assertLink('Add Organization', 0, 'Add Organization action link is present on the Organizations list page.');
+  }
+
+  /**
+   * The Households list page shows an Add Household action link.
+   */
+  public function testAddHouseholdActionLinkOnHouseholdList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/households');
+    $this->assertResponse(200);
+    $this->assertLink('Add Household', 0, 'Add Household action link is present on the Households list page.');
+  }
+
+  /**
+   * The Add Person action link leads to a working add form.
+   */
+  public function testAddPersonActionLinkWorks() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/people/add');
+    $this->assertResponse(200);
+    $this->assertField('field_crm_first_name[und][0][value]', 'First name field is present on the add person form.');
+  }
+
+  /**
+   * The Add Organization action link leads to a working add form.
+   */
+  public function testAddOrganizationActionLinkWorks() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations/add');
+    $this->assertResponse(200);
+    $this->assertField('name', 'Name field is present on the add organization form.');
+  }
 }
 
 // ---------------------------------------------------------------------------

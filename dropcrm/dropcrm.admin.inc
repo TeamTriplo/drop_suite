@@ -220,6 +220,20 @@ function dropcrm_contact_list_page($bundle) {
   return $output;
 }
 
+/**
+ * Page callback: add a contact of a given bundle.
+ *
+ * Used by the MENU_LOCAL_ACTION items on per-bundle view pages
+ * (drop/crm/people/add, drop/crm/organizations/add, etc.).
+ *
+ * @param string $bundle
+ *   The contact bundle machine name (crm_person, crm_organization, etc.).
+ */
+function dropcrm_contact_add_page($bundle) {
+  $entity = entity_create('crm_contact', array('type' => $bundle));
+  return backdrop_get_form('crm_contact_form', $entity);
+}
+
 // ---------------------------------------------------------------------------
 // Reports
 // ---------------------------------------------------------------------------

@@ -172,31 +172,31 @@ function dropfiles_library_page() {
     }
 
     // Actions.
-    $download_url = file_create_url($file->uri);
-    $actions = l(t('Download'), $download_url, array('attributes' => array('target' => '_blank')));
+    $file_url = file_create_url($file->uri);
+    $actions = l(t('Details'), 'drop/files/' . $file->fid . '/view');
     if ($can_edit) {
       $actions .= ' ' . l(t('Edit'), 'drop/files/' . $file->fid . '/edit');
       $actions .= ' ' . l(t('Replace'), 'drop/files/' . $file->fid . '/replace');
       $actions .= ' ' . l(t('Delete'), 'drop/files/' . $file->fid . '/delete');
     }
 
-    // Table row.
+    // Table row — file name links directly to the file (opens in browser).
     $rows[] = array(
       array('data' => $thumb, 'class' => array('dropfiles-icon-cell')),
-      l($file->filename, 'drop/files/' . $file->fid . '/view'),
+      l($file->filename, $file_url, array('attributes' => array('target' => '_blank'))),
       $tag_html,
       format_size($file->filesize),
       format_date($file->timestamp, 'short'),
       array('data' => $actions, 'class' => array('dropfiles-actions-cell')),
     );
 
-    // Grid card.
+    // Grid card — links open the file directly in the browser.
     $grid_cards .= '<div class="dropfiles-grid-card">';
-    $grid_cards .= '<a href="' . url('drop/files/' . $file->fid . '/view') . '" class="dropfiles-grid-card-thumb">';
+    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="dropfiles-grid-card-thumb">';
     $grid_cards .= $thumb_large;
     $grid_cards .= '</a>';
     $grid_cards .= '<div class="dropfiles-grid-card-info">';
-    $grid_cards .= '<a href="' . url('drop/files/' . $file->fid . '/view') . '" class="dropfiles-grid-card-name" title="' . check_plain($file->filename) . '">'
+    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="dropfiles-grid-card-name" title="' . check_plain($file->filename) . '">'
       . check_plain($file->filename) . '</a>';
     $grid_cards .= '<span class="dropfiles-grid-card-size">' . format_size($file->filesize) . '</span>';
     $grid_cards .= '</div>';
@@ -442,9 +442,9 @@ function dropfiles_file_view_page($file) {
   // Two-column layout: preview left, metadata right.
   $html = '<div class="dropfiles-detail-layout">';
 
-  // Left: preview thumbnail.
+  // Left: preview thumbnail (clickable — opens the file in the browser).
   $html .= '<div class="dropfiles-detail-preview">';
-  $html .= $thumb;
+  $html .= '<a href="' . check_url($download_url) . '" target="_blank">' . $thumb . '</a>';
   $html .= '</div>';
 
   // Right: metadata.
@@ -478,7 +478,10 @@ function dropfiles_file_view_page($file) {
   }
 
   $html .= '<div class="dropfiles-detail-actions">';
-  $html .= '<a href="' . check_url($download_url) . '" class="dropfiles-download-link">'
+  $html .= '<a href="' . check_url($download_url) . '" target="_blank" class="dropfiles-open-link">'
+    . icon('eye', array('attributes' => array('width' => 16, 'height' => 16)))
+    . ' ' . t('Open') . '</a>';
+  $html .= '<a href="' . check_url($download_url) . '" download class="dropfiles-download-link">'
     . icon('download', array('attributes' => array('width' => 16, 'height' => 16)))
     . ' ' . t('Download') . '</a>';
   if (user_access('upload dropfiles')) {
@@ -821,5 +824,38 @@ function dropfiles_ajax_upload() {
 
   backdrop_json_output(array('ok' => TRUE, 'filename' => $file->filename));
   backdrop_exit();
+}
+
+/**
+ * Autocomplete callback: search library files by filename.
+ *
+ * Returns JSON keyed by "filename [fid:N]" for autocomplete matching.
+ *
+ * @param string $string
+ *   The partial filename to search for.
+ */
+function dropfiles_autocomplete($string = '') {
+  $matches = array();
+
+  if (strlen($string) < 2) {
+    backdrop_json_output($matches);
+    return;
+  }
+
+  $query = db_select('file_managed', 'f')
+    ->fields('f', array('fid', 'filename', 'filesize', 'filemime'))
+    ->condition('f.status', 1)
+    ->condition('f.filename', '%' . db_like($string) . '%', 'LIKE');
+  $query->innerJoin('file_usage', 'fu', 'fu.fid = f.fid AND fu.module = :mod AND fu.type = :type', array(':mod' => 'dropfiles', ':type' => 'library'));
+  $query->orderBy('f.filename');
+  $query->range(0, 10);
+
+  $results = $query->execute()->fetchAll();
+  foreach ($results as $file) {
+    $key = check_plain($file->filename) . ' [fid:' . $file->fid . ']';
+    $matches[$key] = check_plain($file->filename) . ' (' . format_size($file->filesize) . ')';
+  }
+
+  backdrop_json_output($matches);
 }
 

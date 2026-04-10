@@ -22,14 +22,19 @@ function dropcrm_contact_view(CrmContact $contact) {
     l(t('Contacts'), 'drop/crm/contacts'),
   ));
 
+  // Get extra field display settings for this bundle.
+  $display = field_extra_fields_get_display('crm_contact', $contact->bundle(), 'default');
+
   // Always start with a plain array so all named children render reliably.
   $output = array();
   $output['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
 
   // --- Hero section (replaces separate action bar + details block) ---
   if ($contact->bundle() === 'crm_person') {
-    $output['hero'] = _dropcrm_contact_hero($contact);
-    $output['hero']['#weight'] = -90;
+    if (!isset($display['hero']) || $display['hero']['visible']) {
+      $output['hero'] = _dropcrm_contact_hero($contact);
+      $output['hero']['#weight'] = isset($display['hero']['weight']) ? $display['hero']['weight'] : -90;
+    }
   }
   else {
     // Non-person contacts: simple action bar + entity view.
@@ -93,7 +98,8 @@ function dropcrm_contact_view(CrmContact $contact) {
       array('attributes' => array('class' => array('drop-section-add')),
             'query'      => array('org' => $contact->cid)));
     $output['affiliated_contacts'] = array(
-      '#weight' => 5,
+      '#weight' => isset($display['affiliated_contacts']['weight']) ? $display['affiliated_contacts']['weight'] : 5,
+      '#access' => !isset($display['affiliated_contacts']) || $display['affiliated_contacts']['visible'],
       '#prefix' => dropcrm_accordion_prefix(t('Affiliated People'), $add_person_link, TRUE),
       '#suffix' => dropcrm_accordion_suffix(),
       'help'    => array(
@@ -142,7 +148,8 @@ function dropcrm_contact_view(CrmContact $contact) {
   $add_links_html = '<span class="crm-section-add-group">' . implode(' ', $add_links) . '</span>';
 
   $output['contact_methods'] = array(
-    '#weight' => 10,
+    '#weight' => isset($display['contact_methods']['weight']) ? $display['contact_methods']['weight'] : 10,
+    '#access' => !isset($display['contact_methods']) || $display['contact_methods']['visible'],
     '#prefix' => dropcrm_accordion_prefix(t('Contact Details'), $add_links_html, TRUE),
     '#suffix' => dropcrm_accordion_suffix(),
   );
@@ -196,7 +203,8 @@ function dropcrm_contact_view(CrmContact $contact) {
             'query'      => array('contact' => $contact->cid)));
   }
   $output['relationships'] = array(
-    '#weight' => 15,
+    '#weight' => isset($display['relationships']['weight']) ? $display['relationships']['weight'] : 15,
+    '#access' => !isset($display['relationships']) || $display['relationships']['visible'],
     '#prefix' => dropcrm_accordion_prefix(t('Relationships'), $rel_add_link),
     '#suffix' => dropcrm_accordion_suffix(),
     'help'    => array(
@@ -231,7 +239,8 @@ function dropcrm_contact_view(CrmContact $contact) {
 
   // --- Activities ---
   $output['activities'] = array(
-    '#weight' => 20,
+    '#weight' => isset($display['activities']['weight']) ? $display['activities']['weight'] : 20,
+    '#access' => !isset($display['activities']) || $display['activities']['visible'],
     '#prefix' => dropcrm_accordion_prefix(
       t('Activities'),
       l(t('+ Add activity'), 'drop/crm/activities/add',
