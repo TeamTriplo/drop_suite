@@ -452,6 +452,22 @@ function droptime_project_options($uid = 0) {
 }
 
 /**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Strip all local tasks on the Time landing page. Operational navigation
+ * lives in the Drop Section Navigation block; admin links are accessible
+ * via the settings dashboard (drop/settings).
+ */
+function droptime_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/time') {
+    return;
+  }
+  if (!empty($data['tabs'][0]['output'])) {
+    $data['tabs'][0]['output'] = array();
+  }
+}
+
+/**
  * Implements hook_drop_reports().
  */
 function droptime_drop_reports() {

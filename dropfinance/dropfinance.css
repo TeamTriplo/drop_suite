@@ -1,0 +1,271 @@
+/**
+ * @file
+ * Styles for Drop Finance module.
+ */
+
+/* Balance display */
+.dropfinance-balance {
+  margin-bottom: 1.5em;
+  padding: 12px 16px;
+  background: var(--drop-bg-subtle, #f5f5f5);
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 4px;
+  font-size: 1.1em;
+}
+
+.dropfinance-balance-amount {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: var(--drop-primary, #1565c0);
+}
+
+.dropfinance-balance-date {
+  color: var(--drop-text-secondary, #555);
+  font-size: 0.85em;
+}
+
+.dropfinance-balance-edit {
+  font-size: 0.8em;
+}
+
+/* Monthly summary bar */
+.dropfinance-summary {
+  display: flex;
+  gap: 2em;
+  margin-bottom: 1.5em;
+  padding: 10px 16px;
+  background: #fff;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 4px;
+}
+
+.dropfinance-summary-item {
+  white-space: nowrap;
+}
+
+/* Projection table */
+.dropfinance-projection-table {
+  margin-bottom: 2em;
+}
+
+.dropfinance-projection-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dropfinance-projection-table td:first-child {
+  text-align: left;
+  font-weight: bold;
+}
+
+/* Positive/negative colors */
+.dropfinance-positive {
+  color: var(--drop-success, #2e7d32);
+}
+
+.dropfinance-negative {
+  color: #c62828;
+}
+
+/* Charts */
+.dropfinance-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2em;
+  margin-bottom: 2em;
+}
+
+.dropfinance-chart-wrapper {
+  position: relative;
+  min-height: 300px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 4px;
+}
+
+@media (max-width: 900px) {
+  .dropfinance-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Breakdown tables */
+.dropfinance-breakdown-table td:nth-child(3),
+.dropfinance-breakdown-table td:nth-child(5) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inactive rows in lists */
+.dropfinance-inactive {
+  opacity: 0.5;
+}
+
+.dropfinance-inactive td {
+  font-style: italic;
+}
+
+/* Import preview */
+.dropfinance-import-summary {
+  margin-bottom: 1em;
+  padding: 10px 16px;
+  background: var(--drop-bg-subtle, #f5f5f5);
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 4px;
+}
+
+.dropfinance-rule-matched {
+  background-color: rgba(46, 125, 50, 0.06);
+}
+
+.dropfinance-rule-unmatched {
+  background-color: rgba(255, 152, 0, 0.08);
+}
+
+/* Transaction list */
+.dropfinance-transaction-summary {
+  color: var(--drop-text-secondary, #555);
+  font-size: 0.9em;
+}
+
+/* Client revenue report */
+.dropfinance-client-revenue-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dropfinance-client-revenue-table td:first-child {
+  text-align: left;
+}
+
+.dropfinance-client-revenue-table .dropfinance-total-cell {
+  border-left: 2px solid var(--drop-border, #e0e0e0);
+}
+
+.dropfinance-totals-row td {
+  border-top: 2px solid var(--drop-border, #999);
+  background: var(--drop-bg-subtle, #f5f5f5);
+}
+
+/* Projection range toggle */
+.dropfinance-toggle {
+  font-size: 0.6em;
+  font-weight: normal;
+  color: var(--drop-text-secondary, #666);
+  margin-left: 0.5em;
+}
+
+/* Help text beneath sections */
+.dropfinance-help-text {
+  margin-top: -0.5em;
+  margin-bottom: 2em;
+  padding: 8px 12px;
+  color: var(--drop-text-secondary, #666);
+  font-size: 0.85em;
+  line-height: 1.5;
+  border-left: 3px solid var(--drop-border, #e0e0e0);
+}
+
+/* Profit & Loss table */
+.dropfinance-pnl-toggle {
+  margin-bottom: 1em;
+  color: var(--drop-text-secondary, #666);
+}
+
+.dropfinance-pnl-table {
+  font-size: 0.9em;
+}
+
+.dropfinance-pnl-table td,
+.dropfinance-pnl-table th {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 4px 8px;
+}
+
+.dropfinance-pnl-table td:first-child,
+.dropfinance-pnl-table th:first-child {
+  text-align: left;
+}
+
+.dropfinance-pnl-table td:last-child {
+  border-left: 2px solid var(--drop-border, #e0e0e0);
+  font-weight: bold;
+}
+
+.dropfinance-pnl-section td {
+  background: var(--drop-bg-subtle, #f0f0f0);
+  border-top: 2px solid var(--drop-border, #ccc);
+  padding-top: 8px !important;
+}
+
+.dropfinance-pnl-net td {
+  border-top: 3px double var(--drop-border, #999);
+}
+
+/* Help / documentation page */
+.dropfinance-help-page h2 {
+  margin-top: 1.5em;
+  border-bottom: 1px solid var(--drop-border, #e0e0e0);
+  padding-bottom: 0.3em;
+}
+
+.dropfinance-help-page h2:first-child {
+  margin-top: 0;
+}
+
+.dropfinance-help-dl dt {
+  font-weight: bold;
+  margin-top: 0.8em;
+}
+
+.dropfinance-help-dl dd {
+  margin-left: 1.5em;
+  margin-bottom: 0.3em;
+}
+
+/* Pipeline rows (revenue form) */
+.pipeline-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.pipeline-header {
+  font-weight: bold;
+  font-size: 0.9em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--drop-border, #e0e0e0);
+  margin-bottom: 4px;
+}
+
+.pipeline-col-month {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.pipeline-col-amount {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.pipeline-col-desc {
+  flex: 1;
+}
+
+.pipeline-row .form-item {
+  margin: 0;
+}
+
+/* Transaction edit info */
+.dropfinance-txn-info {
+  margin-bottom: 1.5em;
+  padding: 12px 16px;
+  background: var(--drop-bg-subtle, #f5f5f5);
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 4px;
+  line-height: 1.8;
+}

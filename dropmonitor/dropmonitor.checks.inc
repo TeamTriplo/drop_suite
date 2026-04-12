@@ -34,9 +34,26 @@ function dropmonitor_check_server($server) {
 
 /**
  * Checks HTTP response and SSL certificate for a server.
+ *
+ * Prefers the status agent URL (with token) over site_url, since the agent
+ * is the authoritative health endpoint for the server. site_url is only used
+ * as a fallback when no agent is configured.
  */
 function _dropmonitor_check_http($server) {
-  if (empty($server->site_url)) {
+  // Prefer agent URL with token; fall back to site_url.
+  $check_url = '';
+  $request_options = array('timeout' => 15);
+  if (!empty($server->agent_url) && !empty($server->agent_token)) {
+    $check_url = $server->agent_url;
+    $request_options['headers'] = array(
+      'Authorization' => 'Bearer ' . $server->agent_token,
+    );
+  }
+  elseif (!empty($server->site_url)) {
+    $check_url = $server->site_url;
+  }
+
+  if (empty($check_url)) {
     return;
   }
 
@@ -49,7 +66,7 @@ function _dropmonitor_check_http($server) {
 
   // HTTP response check. Suppress notices from core when connections fail.
   $start = microtime(TRUE);
-  @$response = backdrop_http_request($server->site_url, array('timeout' => 15));
+  @$response = backdrop_http_request($check_url, $request_options);
   $elapsed_ms = round((microtime(TRUE) - $start) * 1000);
 
   $data['response_code'] = isset($response->code) ? (int) $response->code : 0;
@@ -70,8 +87,8 @@ function _dropmonitor_check_http($server) {
   $data['ssl_expiry_days'] = NULL;
   $data['ssl_expiry_date'] = '';
 
-  if (strpos($server->site_url, 'https://') === 0) {
-    $ssl_info = _dropmonitor_check_ssl($server->site_url);
+  if (strpos($check_url, 'https://') === 0) {
+    $ssl_info = _dropmonitor_check_ssl($check_url);
     if ($ssl_info) {
       $data['ssl_expiry_days'] = $ssl_info['days'];
       $data['ssl_expiry_date'] = $ssl_info['date'];

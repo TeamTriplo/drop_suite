@@ -235,6 +235,51 @@ function dropcrm_contact_add_page($bundle) {
 }
 
 // ---------------------------------------------------------------------------
+// JSON API
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: JSON endpoint for cross-site data sync.
+ *
+ * Returns organizations and projects as JSON. Requires a valid API key
+ * passed as ?key= query parameter. Returns 403 if the key is missing,
+ * wrong, or the endpoint is disabled (no key configured).
+ *
+ * @return array|int
+ *   Data array (delivered as JSON) or MENU_ACCESS_DENIED.
+ */
+function dropcrm_api_endpoint() {
+  $configured_key = config_get('dropcrm.settings', 'api_key');
+  if (empty($configured_key)) {
+    return MENU_ACCESS_DENIED;
+  }
+  $provided_key = isset($_GET['key']) ? $_GET['key'] : '';
+  if ($provided_key !== $configured_key) {
+    return MENU_ACCESS_DENIED;
+  }
+
+  // Organizations.
+  $orgs = db_select('crm_contact', 'c')
+    ->fields('c', array('cid', 'name', 'status', 'changed'))
+    ->condition('c.type', 'crm_organization')
+    ->orderBy('c.name')
+    ->execute()
+    ->fetchAll();
+
+  // Projects.
+  $projects = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name', 'active', 'cid', 'prefix', 'site_url', 'changed'))
+    ->orderBy('p.name')
+    ->execute()
+    ->fetchAll();
+
+  backdrop_json_output(array(
+    'organizations' => $orgs,
+    'projects' => $projects,
+  ));
+}
+
+// ---------------------------------------------------------------------------
 // Reports
 // ---------------------------------------------------------------------------
 
@@ -1706,6 +1751,23 @@ function dropcrm_settings_form($form, &$form_state) {
     '#default_value' => $config->get('review_enabled'),
   );
 
+  // --- API ---
+  $form['api'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('API'),
+    '#description' => t('A JSON endpoint at <code>drop/api/crm?key=YOUR_KEY</code> exposes organizations and projects for use by other sites.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => 40,
+  );
+  $form['api']['api_key'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('API key'),
+    '#description'   => t('Shared secret required to access the JSON endpoint. Leave blank to disable the endpoint.'),
+    '#default_value' => $config->get('api_key'),
+    '#size'          => 40,
+  );
+
   $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
@@ -2112,6 +2174,7 @@ function dropcrm_settings_form_submit($form, &$form_state) {
   $config->set('outreach_goal_period', $values['outreach_goal_period']);
   $config->set('outreach_goal_window_weeks', (int) $values['outreach_goal_window_weeks']);
   $config->set('review_enabled', !empty($values['review_enabled']));
+  $config->set('api_key', trim($values['api_key']));
   $config->save();
 
   // Rebuild the menu so the Households tab appears/disappears immediately.

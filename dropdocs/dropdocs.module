@@ -219,6 +219,21 @@ function dropdocs_theme() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Strip all local tasks on the Docs landing page. Admin links (Reorder,
+ * Settings) are accessible via the settings dashboard (drop/settings).
+ */
+function dropdocs_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/docs') {
+    return;
+  }
+  if (!empty($data['tabs'][0]['output'])) {
+    $data['tabs'][0]['output'] = array();
+  }
+}
+
+/**
  * Implements hook_drop_nav_links().
  */
 function dropdocs_drop_nav_links() {

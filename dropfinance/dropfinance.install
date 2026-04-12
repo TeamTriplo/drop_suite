@@ -1,0 +1,550 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for Drop Finance.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dropfinance_schema() {
+  $schema['drop_vendor'] = array(
+    'description' => 'Stores vendor entities for Drop Finance.',
+    'fields' => array(
+      'vid' => array(
+        'description' => 'Primary key: vendor ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'name' => array(
+        'description' => 'Vendor name.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'notes' => array(
+        'description' => 'Optional notes about the vendor.',
+        'type'        => 'text',
+        'size'        => 'medium',
+        'not null'    => FALSE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created this vendor.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when last updated.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('vid'),
+  );
+
+  $schema['drop_revenue'] = array(
+    'description' => 'Stores revenue line entities for Drop Finance.',
+    'fields' => array(
+      'rid' => array(
+        'description' => 'Primary key: revenue line ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'label' => array(
+        'description' => 'Revenue line label.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'amount' => array(
+        'description' => 'Dollar amount per occurrence.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'frequency' => array(
+        'description' => 'Billing frequency: monthly, quarterly, annual, once.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => 'monthly',
+      ),
+      'cid' => array(
+        'description' => 'Linked CRM organization (client) ID, or NULL.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+      ),
+      'pid' => array(
+        'description' => 'Linked project ID, or NULL.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+      ),
+      'start_date' => array(
+        'description' => 'Unix timestamp when billing starts.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'end_date' => array(
+        'description' => 'Unix timestamp when billing ends, or NULL for ongoing.',
+        'type'        => 'int',
+        'not null'    => FALSE,
+      ),
+      'active' => array(
+        'description' => '1 = included in projections.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 1,
+      ),
+      'notes' => array(
+        'description' => 'Optional notes.',
+        'type'        => 'text',
+        'size'        => 'medium',
+        'not null'    => FALSE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created this revenue line.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when last updated.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('rid'),
+    'indexes' => array(
+      'cid'    => array('cid'),
+      'pid'    => array('pid'),
+      'active' => array('active'),
+    ),
+  );
+
+  $schema['drop_expense'] = array(
+    'description' => 'Stores expense line entities for Drop Finance.',
+    'fields' => array(
+      'eid' => array(
+        'description' => 'Primary key: expense line ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'label' => array(
+        'description' => 'Expense line label.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'amount' => array(
+        'description' => 'Dollar amount per occurrence.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'frequency' => array(
+        'description' => 'Payment frequency: monthly, quarterly, annual, once.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => 'monthly',
+      ),
+      'vid' => array(
+        'description' => 'Linked vendor ID, or NULL.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+      ),
+      'category' => array(
+        'description' => 'Category label for non-vendor expenses.',
+        'type'        => 'varchar',
+        'length'      => 100,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'start_date' => array(
+        'description' => 'Unix timestamp when payments start.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'end_date' => array(
+        'description' => 'Unix timestamp when payments end, or NULL for ongoing.',
+        'type'        => 'int',
+        'not null'    => FALSE,
+      ),
+      'active' => array(
+        'description' => '1 = included in projections.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 1,
+      ),
+      'notes' => array(
+        'description' => 'Optional notes.',
+        'type'        => 'text',
+        'size'        => 'medium',
+        'not null'    => FALSE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created this expense line.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when last updated.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('eid'),
+    'indexes' => array(
+      'vid'    => array('vid'),
+      'active' => array('active'),
+    ),
+  );
+
+  $schema['drop_transaction'] = array(
+    'description' => 'Stores bank transaction records for Drop Finance.',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Primary key: transaction ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'hash' => array(
+        'description' => 'SHA-256 hash for duplicate detection.',
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'date' => array(
+        'description' => 'Unix timestamp of the transaction date.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'description' => array(
+        'description' => 'Raw bank description.',
+        'type'        => 'varchar',
+        'length'      => 500,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'amount' => array(
+        'description' => 'Transaction amount (always positive).',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'type' => array(
+        'description' => 'Transaction type: debit or credit.',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => TRUE,
+        'default'     => 'debit',
+      ),
+      'vendor_name' => array(
+        'description' => 'Cleaned/normalized vendor name.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'vid' => array(
+        'description' => 'Linked vendor entity ID, or NULL.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+      ),
+      'category' => array(
+        'description' => 'Transaction category.',
+        'type'        => 'varchar',
+        'length'      => 100,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'is_personal' => array(
+        'description' => '1 = personal expense, not business.',
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'check_number' => array(
+        'description' => 'Check number from bank CSV.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'balance' => array(
+        'description' => 'Running balance from bank CSV.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => FALSE,
+      ),
+      'notes' => array(
+        'description' => 'Optional notes.',
+        'type'        => 'text',
+        'size'        => 'medium',
+        'not null'    => FALSE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that created this transaction.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'changed' => array(
+        'description' => 'Unix timestamp when last updated.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('tid'),
+    'unique keys' => array(
+      'hash' => array('hash'),
+    ),
+    'indexes' => array(
+      'date'        => array('date'),
+      'type'        => array('type'),
+      'category'    => array('category'),
+      'vid'         => array('vid'),
+      'is_personal' => array('is_personal'),
+    ),
+  );
+
+  $schema['drop_invoice'] = array(
+    'description' => 'Stores imported invoice records for Drop Finance reporting.',
+    'fields' => array(
+      'iid' => array(
+        'description' => 'Primary key: invoice record ID.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'invoice_number' => array(
+        'description' => 'Invoice number from FreshBooks.',
+        'type'        => 'varchar',
+        'length'      => 50,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'client_name' => array(
+        'description' => 'Client name from the invoice.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'cid' => array(
+        'description' => 'Linked CRM organization ID, or NULL.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+      ),
+      'date_issued' => array(
+        'description' => 'Unix timestamp when the invoice was issued.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'date_paid' => array(
+        'description' => 'Unix timestamp when paid, or NULL.',
+        'type'        => 'int',
+        'not null'    => FALSE,
+      ),
+      'status' => array(
+        'description' => 'Invoice status: paid, sent, overdue, draft, etc.',
+        'type'        => 'varchar',
+        'length'      => 20,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'amount' => array(
+        'description' => 'Total invoice amount.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'currency' => array(
+        'description' => 'Currency code (e.g. USD).',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => TRUE,
+        'default'     => 'USD',
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that imported this record.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when imported.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('iid'),
+    'unique keys' => array(
+      'invoice_number' => array('invoice_number'),
+    ),
+    'indexes' => array(
+      'client_name'  => array('client_name'),
+      'cid'          => array('cid'),
+      'date_issued'  => array('date_issued'),
+      'status'       => array('status'),
+    ),
+  );
+
+  $schema['drop_revenue_pipeline'] = array(
+    'description' => 'Stores one-off project revenue items tied to a revenue line.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'rid' => array(
+        'description' => 'Revenue line ID from {drop_revenue}.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'month' => array(
+        'description' => 'Target month as YYYY-MM.',
+        'type'        => 'varchar',
+        'length'      => 7,
+        'not null'    => TRUE,
+      ),
+      'amount' => array(
+        'description' => 'Dollar amount for this project.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'description' => array(
+        'description' => 'Brief description of the project.',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'rid' => array('rid'),
+      'month' => array('month'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Create drop_vendor, drop_revenue, and drop_expense tables.
+ */
+function dropfinance_update_1000() {
+  $schema = dropfinance_schema();
+
+  if (!db_table_exists('drop_vendor')) {
+    db_create_table('drop_vendor', $schema['drop_vendor']);
+  }
+  if (!db_table_exists('drop_revenue')) {
+    db_create_table('drop_revenue', $schema['drop_revenue']);
+  }
+  if (!db_table_exists('drop_expense')) {
+    db_create_table('drop_expense', $schema['drop_expense']);
+  }
+}
+
+/**
+ * Create drop_transaction table.
+ */
+function dropfinance_update_1001() {
+  $schema = dropfinance_schema();
+  if (!db_table_exists('drop_transaction')) {
+    db_create_table('drop_transaction', $schema['drop_transaction']);
+  }
+}
+
+/**
+ * Create drop_invoice table for FreshBooks invoice data.
+ */
+function dropfinance_update_1002() {
+  $schema = dropfinance_schema();
+  if (!db_table_exists('drop_invoice')) {
+    db_create_table('drop_invoice', $schema['drop_invoice']);
+  }
+}
+
+/**
+ * Create drop_revenue_pipeline table for one-off project revenue.
+ */
+function dropfinance_update_1003() {
+  $schema = dropfinance_schema();
+  if (!db_table_exists('drop_revenue_pipeline')) {
+    db_create_table('drop_revenue_pipeline', $schema['drop_revenue_pipeline']);
+  }
+}

@@ -801,25 +801,10 @@ function droptickets_menu_local_tasks_alter(&$data, $router_item, $root_path) {
     return;
   }
 
-  // Only admin tabs belong in the Local Tasks block. Everything else lives in
-  // the Drop Section Navigation block. Use a whitelist so any injected tabs
-  // (e.g. pinned reports) are also stripped.
-  $admin_paths = array(
-    'drop/tickets/settings',
-    'drop/tickets/notification-log',
-    'drop/tickets/manage/fields',
-    'drop/tickets/manage/display',
-  );
-
-  foreach ($data['tabs'][0]['output'] as $key => &$tab) {
-    $href = isset($tab['#link']['href']) ? $tab['#link']['href'] : '';
-    if (!in_array($href, $admin_paths)) {
-      unset($data['tabs'][0]['output'][$key]);
-    }
-    else {
-      $tab['#link']['localized_options']['attributes']['class'][] = 'droptickets-tab-admin';
-    }
-  }
+  // Strip all local tasks on the tickets landing page. Operational navigation
+  // lives in the Drop Section Navigation block; admin links (Settings, Field UI)
+  // are accessible via the settings dashboard (drop/settings).
+  $data['tabs'][0]['output'] = array();
 }
 
 // ---------------------------------------------------------------------------

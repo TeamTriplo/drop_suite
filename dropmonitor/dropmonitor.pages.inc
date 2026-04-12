@@ -182,9 +182,10 @@ function dropmonitor_server_detail_page($server) {
 
   // Server info.
   $output .= '<h3>' . t('Server information') . '</h3>';
-  $info_rows = array(
-    array(t('Site URL'), l($server->site_url, $server->site_url, array('external' => TRUE))),
-  );
+  $info_rows = array();
+  if (!empty($server->site_url)) {
+    $info_rows[] = array(t('Site URL'), l($server->site_url, $server->site_url, array('external' => TRUE)));
+  }
   if (!empty($server->agent_url)) {
     $info_rows[] = array(t('Agent URL'), check_plain($server->agent_url));
   }

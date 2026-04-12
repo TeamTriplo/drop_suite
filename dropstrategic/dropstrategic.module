@@ -377,6 +377,21 @@ function dropstrategic_kr_toggle($krid) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Strip all local tasks on the Strategy landing page. Admin links are
+ * accessible via the settings dashboard (drop/settings).
+ */
+function dropstrategic_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($root_path !== 'drop/strategic') {
+    return;
+  }
+  if (!empty($data['tabs'][0]['output'])) {
+    $data['tabs'][0]['output'] = array();
+  }
+}
+
+/**
  * Implements hook_drop_nav_links().
  */
 function dropstrategic_drop_nav_links() {

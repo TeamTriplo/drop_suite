@@ -239,9 +239,16 @@ function dropmonitor_servers_list() {
       l(t('Edit'), 'drop/monitor/servers/' . $server->sid . '/edit'),
       l(t('Delete'), 'drop/monitor/servers/' . $server->sid . '/delete'),
     );
+    $url_display = '—';
+    if (!empty($server->site_url)) {
+      $url_display = l($server->site_url, $server->site_url, array('external' => TRUE));
+    }
+    elseif (!empty($server->agent_url)) {
+      $url_display = t('(agent only)');
+    }
     $rows[] = array(
       check_plain($server->label),
-      l($server->site_url, $server->site_url, array('external' => TRUE)),
+      $url_display,
       $server->linode_id ? $server->linode_id : '—',
       $server->active ? t('Yes') : t('No'),
       implode(' | ', $actions),
@@ -281,9 +288,8 @@ function dropmonitor_server_form($form, &$form_state, $server = NULL) {
   $form['site_url'] = array(
     '#type' => 'textfield',
     '#title' => t('Site URL'),
-    '#description' => t('Primary URL for HTTP checks (e.g. https://example.com).'),
+    '#description' => t('Optional fallback URL for HTTP checks (e.g. https://example.com). Leave empty if using a status agent — the agent URL will be checked instead.'),
     '#default_value' => $server ? $server->site_url : '',
-    '#required' => TRUE,
     '#maxlength' => 255,
   );
 

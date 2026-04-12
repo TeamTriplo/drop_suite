@@ -1,0 +1,624 @@
+{
+  "_config_name": "dropfinance.matching_rules",
+  "rules": [
+    {
+      "pattern": "LINODE|AKAMAI",
+      "vendor_name": "Linode/Akamai",
+      "vid": null,
+      "category": "Hosting",
+      "is_personal": 0
+    },
+    {
+      "pattern": "GOOGLE *GSUITE|GOOGLE*GSUITE|GOOGLE GSUITE|GOOGLE *WORKSPACE|GOOGLE*SVC|GOOGLE *SVC|Google Workspace|Google LLC GSUITE",
+      "vendor_name": "Google",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "GOOGLE *ADS|GOOGLE*ADS|Google ADS",
+      "vendor_name": "Google",
+      "vid": null,
+      "category": "Advertising",
+      "is_personal": 0
+    },
+    {
+      "pattern": "TWILIO|SENDGRID",
+      "vendor_name": "Twilio/SendGrid",
+      "vid": null,
+      "category": "Communication",
+      "is_personal": 0
+    },
+    {
+      "pattern": "SLACK",
+      "vendor_name": "Slack",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "ANTHROPIC|CLAUDE",
+      "vendor_name": "Anthropic",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "UPTIMEROBOT",
+      "vendor_name": "UptimeRobot",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "LINKEDIN",
+      "vendor_name": "LinkedIn",
+      "vid": null,
+      "category": "Marketing",
+      "is_personal": 0
+    },
+    {
+      "pattern": "NAMECHEAP|NAME-CHEAP",
+      "vendor_name": "Namecheap",
+      "vid": null,
+      "category": "Domains",
+      "is_personal": 0
+    },
+    {
+      "pattern": "WISE",
+      "vendor_name": "Wise",
+      "vid": null,
+      "category": "Contractor Payments",
+      "is_personal": 0
+    },
+    {
+      "pattern": "GITHUB",
+      "vendor_name": "GitHub",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "OPENAI|CHATGPT",
+      "vendor_name": "OpenAI",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "RACKSPACE",
+      "vendor_name": "Rackspace",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "TOGGL",
+      "vendor_name": "Toggl",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "PLATFORM.SH|HTTPSPLATFORM",
+      "vendor_name": "Platform.sh",
+      "vid": null,
+      "category": "Hosting",
+      "is_personal": 0
+    },
+    {
+      "pattern": "BTRF.LY",
+      "vendor_name": "Bitly",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "CLOUDFLARE",
+      "vendor_name": "Cloudflare",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "LASTPASS",
+      "vendor_name": "LastPass",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Dotster|DOTSTER",
+      "vendor_name": "Dotster",
+      "vid": null,
+      "category": "Domains",
+      "is_personal": 0
+    },
+    {
+      "pattern": "SENDINBLUE",
+      "vendor_name": "Brevo",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "WPENGINE|ACF PLUGIN|ADVANCED CUSTOM",
+      "vendor_name": "WP Engine",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "S PAYMENTS PLUGIN",
+      "vendor_name": "S Payments",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Moo Print",
+      "vendor_name": "Moo",
+      "vid": null,
+      "category": "Marketing",
+      "is_personal": 0
+    },
+    {
+      "pattern": "INTERNET ARCHIVE",
+      "vendor_name": "Internet Archive",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Amazon web services|aws.amazon",
+      "vendor_name": "AWS",
+      "vid": null,
+      "category": "Hosting",
+      "is_personal": 0
+    },
+    {
+      "pattern": "ATLASSIAN",
+      "vendor_name": "Atlassian",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "VIMEO|VMO*VIMEO",
+      "vendor_name": "Vimeo",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "LAMBDATEST",
+      "vendor_name": "LambdaTest",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "MOMENTO360",
+      "vendor_name": "Momento360",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "tagspaces",
+      "vendor_name": "TagSpaces",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0
+    },
+    {
+      "pattern": "FLATT & SONS|FLATT &amp; SONS",
+      "vendor_name": "Flatt & Sons",
+      "vid": null,
+      "category": "Contractor Payments",
+      "is_personal": 0
+    },
+    {
+      "pattern": "UPS STORE",
+      "vendor_name": "UPS Store",
+      "vid": null,
+      "category": "Triplo LLC Mailbox",
+      "is_personal": 0
+    },
+    {
+      "pattern": "TCDRUPAL|MIDCAMP|BAY AREA DRUPAL|FEDIFORUM|MIDWESTOPENSO",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Conferences",
+      "is_personal": 0
+    },
+    {
+      "pattern": "LCWR",
+      "vendor_name": "LCWR",
+      "vid": null,
+      "category": "Donations",
+      "is_personal": 0
+    },
+    {
+      "pattern": "International Fee",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Bank Fees",
+      "is_personal": 0
+    },
+    {
+      "pattern": "FRESHBOOKS",
+      "vendor_name": "FreshBooks",
+      "vid": null,
+      "category": "Client Payments - FreshBooks",
+      "is_personal": 0,
+      "type": "credit"
+    },
+    {
+      "pattern": "FRESHBOOKS",
+      "vendor_name": "FreshBooks",
+      "vid": null,
+      "category": "Software",
+      "is_personal": 0,
+      "type": "debit"
+    },
+    {
+      "pattern": "STRIPE",
+      "vendor_name": "Stripe",
+      "vid": null,
+      "category": "Client Payments",
+      "is_personal": 0
+    },
+    {
+      "pattern": "PAYPAL",
+      "vendor_name": "PayPal",
+      "vid": null,
+      "category": "Transfers",
+      "is_personal": 0
+    },
+    {
+      "pattern": "TRIPLO LLC",
+      "vendor_name": "Triplo LLC",
+      "vid": null,
+      "category": "Transfers",
+      "is_personal": 0
+    },
+    {
+      "pattern": "VENMO",
+      "vendor_name": "Venmo",
+      "vid": null,
+      "category": "Transfers",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Digital Banking Transfer|Internet Transfer|External Transfer",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Transfers",
+      "is_personal": 0
+    },
+    {
+      "pattern": "WIRE FEE|NSF Fee|ACH NSF|Overdrawn|VISA INTERNATIONAL SERVICE",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Bank Fees",
+      "is_personal": 0
+    },
+    {
+      "pattern": "WIRE",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Wire Transfer",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Orbitz|PRICELN",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "DELTA AIR|FRONTIER AI",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "THRIFTY",
+      "vendor_name": "Thrifty",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "LIM*RIDE",
+      "vendor_name": "Lime",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "PARKING|ONSTREET|U OF M PARKING|MPLS|PK 2069|TOWN SQUARE RAMP",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Parking",
+      "is_personal": 0
+    },
+    {
+      "pattern": "NETFLIX",
+      "vendor_name": "Netflix",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "Peacock|PEACOCK",
+      "vendor_name": "Peacock",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "YouTube TV",
+      "vendor_name": "Google",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "STEAMGAMES",
+      "vendor_name": "Steam",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "AMAZON PRIME|PRIME VIDEO",
+      "vendor_name": "Amazon",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "AMAZON MKTPL|AMZN",
+      "vendor_name": "Amazon",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "eBay",
+      "vendor_name": "eBay",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "BEST BUY|BESTBUY",
+      "vendor_name": "Best Buy",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "MICRO CENTER",
+      "vendor_name": "Micro Center",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "DICKSSPORTINGGOODS",
+      "vendor_name": "Dick's Sporting Goods",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "GAMES BY JAMES|DRAGON FORGE|TOWER GAMES",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "DJI",
+      "vendor_name": "DJI",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "MINER'S|SUPER ONE|COBORN|CUB FOODS|CUBS FOODS|ALDI|PAULBECK|LUNDS|BYERLYS|WHOLEFDS|WHOLE FOODS|KOWALSKI|TEAL'S MARKET|GARRISON FAMILY FOO",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Groceries",
+      "is_personal": 1
+    },
+    {
+      "pattern": "KWIK TRIP|SPEEDWAY|CIRCLEK|CIRCLE K|HOLIDAY|CASEY|SHELL|MARATHON|BP#",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Gas",
+      "is_personal": 1
+    },
+    {
+      "pattern": "TARGET",
+      "vendor_name": "Target",
+      "vid": null,
+      "category": "Shopping",
+      "is_personal": 1
+    },
+    {
+      "pattern": "CARIBOU|STARBUCK|COFFEE|PEETS|ROOTS ROASTING|SOVEREIGNGROUNDS",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Coffee",
+      "is_personal": 1
+    },
+    {
+      "pattern": "MENARDS|HOME DEPOT|LOWES|LINGWALL",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Home",
+      "is_personal": 1
+    },
+    {
+      "pattern": "GREAT CLIPS",
+      "vendor_name": "Great Clips",
+      "vid": null,
+      "category": "Personal Care",
+      "is_personal": 1
+    },
+    {
+      "pattern": "CVS|PHARMACY|WALGREENS",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Personal Care",
+      "is_personal": 1
+    },
+    {
+      "pattern": "O'REILLY|VIOC|AUTOSMITH|CUYUNA COUNTRY AUTO|ASAP TOWING",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Auto",
+      "is_personal": 1
+    },
+    {
+      "pattern": "UBER",
+      "vendor_name": "Uber",
+      "vid": null,
+      "category": "Transportation",
+      "is_personal": 1
+    },
+    {
+      "pattern": "SPIRE CU|ATM Withdrawal|ATM FEE|To Share 00",
+      "vendor_name": "",
+      "vid": null,
+      "category": "ATM/Cash",
+      "is_personal": 1
+    },
+    {
+      "pattern": "CUYUNA REGIONAL MEDICA",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Medical",
+      "is_personal": 1
+    },
+    {
+      "pattern": "MINNESOTA FRINGE|ARTS' NEST|HUGE IMPROV|HUGE BAR|ANDY WARHOL|SOUTHERN THEAT|WHIRLYBALL|FRIENDS OF THE SPCO|THREE RIVERS COMMUNITY",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Entertainment",
+      "is_personal": 1
+    },
+    {
+      "pattern": "PANERA|CHIPOTLE|Cracker Barrel|WAFFLE HOUSE|WAWA",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Business Travel - Dining",
+      "is_personal": 0
+    },
+    {
+      "pattern": "SUNCTRYAIR|SUN COUNTRY",
+      "vendor_name": "Sun Country",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "BART CLIPPER",
+      "vendor_name": "BART",
+      "vid": null,
+      "category": "Business Travel",
+      "is_personal": 0
+    },
+    {
+      "pattern": "NAMES4EVER",
+      "vendor_name": "Names4Ever",
+      "vid": null,
+      "category": "Domains",
+      "is_personal": 0
+    },
+    {
+      "pattern": "PILOT INSTITUTE|TEACHABLE",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Education",
+      "is_personal": 1
+    },
+    {
+      "pattern": "BRD DISPATCH|ECHO JRNL",
+      "vendor_name": "Brainerd Dispatch",
+      "vid": null,
+      "category": "News",
+      "is_personal": 1
+    },
+    {
+      "pattern": "U OF CO FOUNDTN",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Donations",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Stripe Cap",
+      "vendor_name": "Stripe Capital",
+      "vid": null,
+      "category": "Loan Repayment",
+      "is_personal": 0
+    },
+    {
+      "pattern": "Deposit|DEPOSIT|Mobile Deposit",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Client Payments - Other",
+      "is_personal": 0,
+      "type": "credit"
+    },
+    {
+      "pattern": "REVERSED MOBILE DEPOSIT",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Bank Fees",
+      "is_personal": 0
+    },
+    {
+      "pattern": "HarlandClarke|CHK ORDER",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Bank Fees",
+      "is_personal": 0
+    },
+    {
+      "pattern": "RESTAURANT.COM",
+      "vendor_name": "Restaurant.com",
+      "vid": null,
+      "category": "Dining",
+      "is_personal": 1
+    },
+    {
+      "pattern": "MCDONALD|TACO BELL|TACO JOHN|ARBY|JIMMY JOHN|DUNKIN|DD/BR",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Dining",
+      "is_personal": 1
+    },
+    {
+      "pattern": "PERKINS",
+      "vendor_name": "Perkins",
+      "vid": null,
+      "category": "Dining",
+      "is_personal": 1
+    },
+    {
+      "pattern": "ROGERS WINE|TOTAL WINE",
+      "vendor_name": "",
+      "vid": null,
+      "category": "Dining",
+      "is_personal": 1
+    }
+  ]
+}

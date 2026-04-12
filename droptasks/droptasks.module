@@ -337,21 +337,16 @@ function droptasks_drop_nav_links() {
 /**
  * Implements hook_menu_local_tasks_alter().
  *
- * On the main Tasks page, strips all local tasks except admin-only ones.
- * Operational navigation lives in the Drop Section Navigation block.
+ * Strip all local tasks on the Tasks landing page. Operational navigation
+ * lives in the Drop Section Navigation block; admin links are accessible
+ * via the settings dashboard (drop/settings).
  */
 function droptasks_menu_local_tasks_alter(&$data, $router_item, $root_path) {
   if ($root_path !== 'drop/tasks') {
     return;
   }
-  $admin_paths = array('drop/tasks/configure');
   if (!empty($data['tabs'][0]['output'])) {
-    foreach ($data['tabs'][0]['output'] as $key => $tab) {
-      $href = isset($tab['#link']['href']) ? $tab['#link']['href'] : '';
-      if (!in_array($href, $admin_paths)) {
-        unset($data['tabs'][0]['output'][$key]);
-      }
-    }
+    $data['tabs'][0]['output'] = array();
   }
 }
 
