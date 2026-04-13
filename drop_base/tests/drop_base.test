@@ -171,3 +171,79 @@ class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
     $this->assertNoText('DropTickets', 'Disabled module does not show a settings card.');
   }
 }
+
+/**
+ * Tests that Drop module hook_install() grants every declared permission to
+ * the configured administrator role via drop_base_grant_admin_permissions().
+ *
+ * Enables drop_base plus one additional Drop module (dropbridge) so that both
+ * drop_base's own install path and a second module's install path are covered
+ * in a single test site without loading the full Drop Suite.
+ */
+class DropBaseAdminPermissionsTest extends BackdropWebTestCase {
+
+  protected $profile = 'standard';
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Admin permissions granted on install',
+      'description' => 'Verifies Drop modules grant all declared permissions to the admin role on fresh install.',
+      'group'       => 'Drop Base',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'dropbridge');
+  }
+
+  /**
+   * drop_base_install() grants every drop_base permission to the admin role.
+   */
+  public function testDropBasePermissionsGrantedToAdminRole() {
+    $this->assertAllModulePermissionsGranted('drop_base');
+  }
+
+  /**
+   * dropbridge_install() grants every dropbridge permission to the admin role.
+   */
+  public function testDropBridgePermissionsGrantedToAdminRole() {
+    $this->assertAllModulePermissionsGranted('dropbridge');
+  }
+
+  /**
+   * The helper silently no-ops for a module with no declared permissions.
+   *
+   * Covers modules like drop_start whose hook_permission() returns an empty
+   * array — the helper must not warn or error in that case.
+   */
+  public function testHelperNoOpForModuleWithoutPermissions() {
+    // Pass a module name whose permission hook returns nothing. The helper
+    // should return cleanly without granting anything or triggering errors.
+    drop_base_grant_admin_permissions('nonexistent_module_xyz');
+    $this->pass('drop_base_grant_admin_permissions() handled a module with no permissions without error.');
+  }
+
+  /**
+   * Asserts that every permission declared by a module has been granted to
+   * the configured administrator role.
+   *
+   * @param string $module
+   *   Machine name of the module whose permissions should have been granted.
+   */
+  protected function assertAllModulePermissionsGranted($module) {
+    $admin_role = config_get('system.core', 'user_admin_role');
+    $this->assertTrue(!empty($admin_role) && $admin_role !== 'anonymous', 'Admin role is configured: ' . $admin_role);
+
+    $declared = module_invoke($module, 'permission');
+    $this->assertTrue(!empty($declared), "$module declares at least one permission.");
+
+    $granted = user_role_permissions(array($admin_role));
+
+    foreach (array_keys($declared) as $perm) {
+      $this->assertTrue(
+        in_array($perm, $granted),
+        format_string("Admin role has @module permission: @perm", array('@module' => $module, '@perm' => $perm))
+      );
+    }
+  }
+}

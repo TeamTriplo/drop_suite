@@ -9,3 +9,9 @@ name = Settings Dashboard
 description = Verifies settings cards appear for enabled modules and access is restricted.
 group = Drop Base
 file = drop_base.test
+
+[DropBaseAdminPermissionsTest]
+name = Admin permissions granted on install
+description = Verifies Drop modules grant all declared permissions to the admin role on fresh install.
+group = Drop Base
+file = drop_base.test
