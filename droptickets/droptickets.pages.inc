@@ -30,6 +30,132 @@ function _droptickets_child_count_badge(array $child_counts, $tid) {
 }
 
 /**
+ * Bulk-load comment info for a set of tickets.
+ *
+ * Returns a map keyed by tid with: count, last_created, last_body,
+ * last_format, last_author. Tickets with no comments are omitted.
+ *
+ * @param int[] $tids
+ *
+ * @return array
+ */
+function _droptickets_bulk_comment_info(array $tids) {
+  $info = array();
+  if (empty($tids)) {
+    return $info;
+  }
+
+  // Count + max(created) per ticket.
+  $agg = db_select('drop_ticket_comment', 'c')
+    ->fields('c', array('tid'))
+    ->condition('c.tid', $tids, 'IN')
+    ->groupBy('c.tid');
+  $agg->addExpression('COUNT(*)', 'cnt');
+  $agg->addExpression('MAX(c.created)', 'last_created');
+  foreach ($agg->execute()->fetchAll() as $r) {
+    $info[(int) $r->tid] = array(
+      'count'        => (int) $r->cnt,
+      'last_created' => (int) $r->last_created,
+      'last_body'    => '',
+      'last_format'  => NULL,
+      'last_author'  => '',
+    );
+  }
+
+  if (empty($info)) {
+    return $info;
+  }
+
+  // Fetch the actual latest-comment row for each ticket. Using a correlated
+  // sub-select keeps this a single round trip.
+  $sql = "SELECT c.tid, c.body, c.body_format, c.uid, c.created
+          FROM {drop_ticket_comment} c
+          INNER JOIN (
+            SELECT tid, MAX(created) AS mc
+            FROM {drop_ticket_comment}
+            WHERE tid IN (:tids)
+            GROUP BY tid
+          ) latest ON latest.tid = c.tid AND latest.mc = c.created";
+  $rows = db_query($sql, array(':tids' => array_keys($info)))->fetchAll();
+
+  // Collect author uids for a single user_load_multiple.
+  $author_uids = array();
+  foreach ($rows as $row) {
+    if ($row->uid) {
+      $author_uids[(int) $row->uid] = (int) $row->uid;
+    }
+  }
+  $authors = $author_uids ? user_load_multiple($author_uids) : array();
+
+  // It's possible (though unlikely) for two comments to share max(created).
+  // In that case we take whichever row comes first.
+  $seen = array();
+  foreach ($rows as $row) {
+    $tid = (int) $row->tid;
+    if (isset($seen[$tid])) {
+      continue;
+    }
+    $seen[$tid] = TRUE;
+    $info[$tid]['last_body']   = $row->body;
+    $info[$tid]['last_format'] = $row->body_format;
+    $uid = (int) $row->uid;
+    $info[$tid]['last_author'] = ($uid && isset($authors[$uid]))
+      ? format_username($authors[$uid])
+      : t('Anonymous');
+  }
+
+  return $info;
+}
+
+/**
+ * Render the combined "comment count + relative date" table cell.
+ *
+ * When there is a latest comment, the cell carries data attributes that
+ * the popover JS behavior reads on hover to display body + author + date.
+ *
+ * @param int $tid
+ * @param array $info
+ *   Output of _droptickets_bulk_comment_info().
+ *
+ * @return string
+ */
+function _droptickets_comment_cell_markup($tid, array $info) {
+  if (empty($info[$tid]) || $info[$tid]['count'] === 0) {
+    return '<span class="droptickets-comment-count droptickets-comment-count--none">—</span>';
+  }
+
+  $row   = $info[$tid];
+  $count = (int) $row['count'];
+  $when  = (int) $row['last_created'];
+
+  $rel   = format_interval(REQUEST_TIME - $when, 1) . ' ' . t('ago');
+  $abs   = format_date($when, 'short');
+
+  // Render the latest body through its text format, then strip tags for the
+  // popover snippet. This keeps the popover lightweight while still using
+  // the same filter pipeline as the ticket view.
+  $body_html = check_markup($row['last_body'], $row['last_format']);
+  $body_text = trim(preg_replace('/\s+/', ' ', strip_tags($body_html)));
+  $snippet   = truncate_utf8($body_text, 400, TRUE, TRUE);
+
+  $attrs = array(
+    'class'              => 'droptickets-comment-cell has-popover',
+    'data-popover-body'  => $snippet,
+    'data-popover-meta'  => t('@author — @when', array('@author' => $row['last_author'], '@when' => $abs)),
+    'data-popover-count' => format_plural($count, '1 comment', '@count comments'),
+  );
+  $attr_str = '';
+  foreach ($attrs as $k => $v) {
+    $attr_str .= ' ' . $k . '="' . check_plain($v) . '"';
+  }
+
+  return '<span' . $attr_str . '>'
+    . '<span class="droptickets-comment-count">' . $count . '</span>'
+    . '<span class="droptickets-comment-when">' . check_plain($rel) . '</span>'
+    . '</span>';
+}
+
+/**
  * Returns the assignee field HTML for the ticket view sidebar.
  *
  * Editors get an inline SELECT; viewers get a static label.
@@ -111,6 +237,7 @@ function droptickets_list_page() {
   $output = array(
     '#attached' => array(
       'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
+      'js'  => array(backdrop_get_path('module', 'droptickets') . '/droptickets.js'),
     ),
   );
 
@@ -362,19 +489,10 @@ function droptickets_list_page() {
     return $output;
   }
 
-  // Load comment counts in bulk for all tickets on this page.
-  $ticket_tids = array_column((array) $tickets, 'tid');
-  $comment_counts = array();
-  if ($ticket_tids) {
-    $count_query = db_select('drop_ticket_comment', 'c')
-      ->fields('c', array('tid'))
-      ->condition('c.tid', $ticket_tids, 'IN')
-      ->groupBy('c.tid');
-    $count_query->addExpression('COUNT(*)', 'cnt');
-    foreach ($count_query->execute()->fetchAll() as $cr) {
-      $comment_counts[$cr->tid] = (int) $cr->cnt;
-    }
-  }
+  // Bulk-load comment info (count + latest comment body/date/author) for
+  // all tickets on this page.
+  $ticket_tids   = array_column((array) $tickets, 'tid');
+  $comment_info  = _droptickets_bulk_comment_info($ticket_tids);
 
   // Load child counts for tickets on this page that are parents.
   $child_counts = array();
@@ -476,10 +594,7 @@ function droptickets_list_page() {
       array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
     );
 
-    $comment_count = isset($comment_counts[$ticket->tid]) ? $comment_counts[$ticket->tid] : 0;
-    $comment_cell = $comment_count > 0
-      ? '<span class="droptickets-comment-count">' . $comment_count . '</span>'
-      : '<span class="droptickets-comment-count droptickets-comment-count--none">—</span>';
+    $comment_cell = _droptickets_comment_cell_markup($ticket->tid, $comment_info);
 
     $row_data[] = array('data' => $assignee);
     $row_data[] = array('data' => $comment_cell, 'class' => array('droptickets-col-comments'));
@@ -878,6 +993,20 @@ function droptickets_kanban_page() {
   );
   $type_options  = droptickets_type_options();
 
+  // Bulk-load comment counts for cards.
+  $kanban_tids = array_column((array) $tickets, 'tid');
+  $kanban_comment_counts = array();
+  if ($kanban_tids) {
+    $kc_query = db_select('drop_ticket_comment', 'c')
+      ->fields('c', array('tid'))
+      ->condition('c.tid', $kanban_tids, 'IN')
+      ->groupBy('c.tid');
+    $kc_query->addExpression('COUNT(*)', 'cnt');
+    foreach ($kc_query->execute()->fetchAll() as $cr) {
+      $kanban_comment_counts[(int) $cr->tid] = (int) $cr->cnt;
+    }
+  }
+
   // Bulk-load parent ticket titles for cards that have a parent.
   $parent_tids = array_filter(array_unique(array_column((array) $tickets, 'parent_tid')));
   $parent_titles = array();
@@ -979,6 +1108,13 @@ function droptickets_kanban_page() {
         $board .= '<div class="droptickets-kanban-card-meta">';
         $board .= '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>';
         $board .= '<span class="droptickets-kanban-assignee">' . $assignee_name . '</span>';
+        $kc = isset($kanban_comment_counts[$ticket->tid]) ? (int) $kanban_comment_counts[$ticket->tid] : 0;
+        if ($kc > 0) {
+          $board .= '<span class="droptickets-kanban-comments" title="' . format_plural($kc, '1 comment', '@count comments') . '">'
+            . icon('chat-circle', array('attributes' => array('width' => 12, 'height' => 12)))
+            . ' ' . $kc
+            . '</span>';
+        }
         $board .= '</div>';
         $board .= '</div>';
       }
@@ -1187,10 +1323,24 @@ function droptickets_modal_data(DropTicket $ticket) {
     $body_html = check_markup($ticket->body, $ticket->body_format);
   }
 
-  // Comment count.
-  $comment_count = (int) db_select('drop_ticket_comment', 'c')
-    ->condition('c.tid', $ticket->tid)
-    ->countQuery()->execute()->fetchField();
+  // Comment count + latest-comment info (for the modal footer popover).
+  $comment_info  = _droptickets_bulk_comment_info(array((int) $ticket->tid));
+  $comment_count = isset($comment_info[$ticket->tid]) ? (int) $comment_info[$ticket->tid]['count'] : 0;
+
+  $last_comment_when   = '';
+  $last_comment_abs    = '';
+  $last_comment_body   = '';
+  $last_comment_author = '';
+  if ($comment_count > 0) {
+    $row = $comment_info[$ticket->tid];
+    $when = (int) $row['last_created'];
+    $last_comment_when   = format_interval(REQUEST_TIME - $when, 1) . ' ' . t('ago');
+    $last_comment_abs    = format_date($when, 'short');
+    $body_html = check_markup($row['last_body'], $row['last_format']);
+    $body_text = trim(preg_replace('/\s+/', ' ', strip_tags($body_html)));
+    $last_comment_body   = truncate_utf8($body_text, 400, TRUE, TRUE);
+    $last_comment_author = $row['last_author'];
+  }
 
   // Assignee info.
   $assignee_value = '';
@@ -1226,9 +1376,13 @@ function droptickets_modal_data(DropTicket $ticket) {
     'assignee'      => $assignee_value,
     'priority'      => (int) $ticket->priority,
     'boards'        => $boards,
-    'comment_count' => $comment_count,
-    'can_edit'      => $can_edit,
-    'view_url'      => url('drop/tickets/' . $ticket->tid),
+    'comment_count'       => $comment_count,
+    'last_comment_when'   => $last_comment_when,
+    'last_comment_abs'    => $last_comment_abs,
+    'last_comment_body'   => $last_comment_body,
+    'last_comment_author' => $last_comment_author,
+    'can_edit'            => $can_edit,
+    'view_url'            => url('drop/tickets/' . $ticket->tid),
   );
 
   print backdrop_json_encode($data);

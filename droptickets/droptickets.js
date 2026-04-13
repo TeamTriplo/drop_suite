@@ -392,3 +392,74 @@
     }
   };
 }(jQuery));
+
+/**
+ * Comment popover: shows the latest comment body on hover / focus of any
+ * element carrying the .has-popover class with data-popover-body /
+ * data-popover-meta attributes.
+ */
+(function ($) {
+  var $pop = null;
+
+  function ensurePopover() {
+    if ($pop) { return $pop; }
+    $pop = $('<div class="droptickets-popover" role="tooltip" aria-hidden="true">'
+      + '<div class="droptickets-popover-count"></div>'
+      + '<div class="droptickets-popover-body"></div>'
+      + '<div class="droptickets-popover-meta"></div>'
+      + '</div>');
+    $('body').append($pop);
+    return $pop;
+  }
+
+  function showPopover(el) {
+    var $el = $(el);
+    var body  = $el.attr('data-popover-body') || '';
+    var meta  = $el.attr('data-popover-meta') || '';
+    var count = $el.attr('data-popover-count') || '';
+    if (!body) { return; }
+
+    var $p = ensurePopover();
+    $p.find('.droptickets-popover-count').text(count).toggle(!!count);
+    $p.find('.droptickets-popover-body').text(body);
+    $p.find('.droptickets-popover-meta').text(meta).toggle(!!meta);
+
+    // Position above the trigger, clamped to viewport.
+    var rect = el.getBoundingClientRect();
+    $p.css({ visibility: 'hidden', display: 'block', left: 0, top: 0 });
+    var pw = $p.outerWidth();
+    var ph = $p.outerHeight();
+    var margin = 8;
+    var left = rect.left + window.pageXOffset + (rect.width / 2) - (pw / 2);
+    var top  = rect.top  + window.pageYOffset - ph - margin;
+    // Clamp horizontally.
+    var maxLeft = window.pageXOffset + document.documentElement.clientWidth - pw - margin;
+    if (left < margin) { left = margin; }
+    if (left > maxLeft) { left = maxLeft; }
+    // Flip below if no room above.
+    if (top < window.pageYOffset + margin) {
+      top = rect.bottom + window.pageYOffset + margin;
+      $p.addClass('droptickets-popover--below');
+    }
+    else {
+      $p.removeClass('droptickets-popover--below');
+    }
+    $p.css({ left: left + 'px', top: top + 'px', visibility: 'visible' });
+    $p.attr('aria-hidden', 'false');
+  }
+
+  function hidePopover() {
+    if (!$pop) { return; }
+    $pop.hide().attr('aria-hidden', 'true');
+  }
+
+  Backdrop.behaviors.dropticketsCommentPopover = {
+    attach: function (context, settings) {
+      $('.has-popover', context).once('droptickets-popover').each(function () {
+        var el = this;
+        $(el).on('mouseenter focus', function () { showPopover(el); });
+        $(el).on('mouseleave blur',  function () { hidePopover(); });
+      });
+    }
+  };
+}(jQuery));

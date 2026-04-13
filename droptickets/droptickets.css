@@ -185,6 +185,23 @@
   font-weight: normal;
 }
 
+.droptickets-comment-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  cursor: default;
+}
+
+.droptickets-comment-cell .droptickets-comment-when {
+  font-size: 0.72rem;
+  color: var(--drop-text-secondary, #888);
+}
+
+.droptickets-comment-cell:hover .droptickets-comment-count,
+.droptickets-comment-cell:focus .droptickets-comment-count {
+  background: #bbdefb;
+}
+
 .droptickets-empty {
   color: var(--drop-text-secondary, #888);
   font-style: italic;
@@ -1270,6 +1287,19 @@ a.droptickets-flag-on svg,
   color: #666;
 }
 
+.droptickets-kanban-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  color: #1565c0;
+  background: #e3f2fd;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
 .droptickets-kanban-flag {
   color: #e53935;
   display: inline-flex;
@@ -1572,9 +1602,71 @@ a.droptickets-flag-on svg,
 .droptickets-modal-comments {
   color: var(--drop-text-muted, #888);
 }
+.droptickets-modal-last-comment {
+  color: var(--drop-text-muted, #888);
+  cursor: default;
+  border-bottom: 1px dotted var(--drop-text-muted, #888);
+}
 .droptickets-modal-view-link {
   margin-left: auto;
   font-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------
+   Comment popover (shared by list + kanban modal)
+   --------------------------------------------------------------------------- */
+.droptickets-popover {
+  position: absolute;
+  display: none;
+  z-index: 10000;
+  max-width: 340px;
+  padding: 0.6rem 0.8rem;
+  background: #fff;
+  color: #333;
+  border: 1px solid var(--drop-border, #d0d0d0);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.droptickets-popover::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #fff;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.08));
+}
+.droptickets-popover.droptickets-popover--below::after {
+  top: -6px;
+  bottom: auto;
+  border-top: none;
+  border-bottom: 6px solid #fff;
+}
+.droptickets-popover-count {
+  font-weight: 600;
+  font-size: 0.74rem;
+  color: #1565c0;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.droptickets-popover-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.droptickets-popover-meta {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--drop-border, #eee);
+  font-size: 0.72rem;
+  color: var(--drop-text-muted, #888);
 }
 
 /* Responsive — stack on narrow screens */

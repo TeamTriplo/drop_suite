@@ -173,14 +173,27 @@
           }
         }
 
-        // Footer: comment count + link to full ticket.
+        // Footer: comment count + latest comment date + popover + link.
         var footer = overlay.querySelector('.droptickets-modal-footer');
-        var commentIcon = '<span class="droptickets-modal-comments">'
+        var footerHtml = '<span class="droptickets-modal-comments">'
           + Backdrop.t('@count comments', {'@count': data.comment_count})
           + '</span>';
-        footer.innerHTML = commentIcon
-          + ' <a href="' + data.view_url + '" class="droptickets-modal-view-link">'
+        if (data.comment_count > 0 && data.last_comment_when) {
+          footerHtml += ' <span class="droptickets-modal-last-comment has-popover"'
+            + ' data-popover-body="' + Backdrop.checkPlain(data.last_comment_body) + '"'
+            + ' data-popover-meta="' + Backdrop.checkPlain(data.last_comment_author + ' — ' + data.last_comment_abs) + '"'
+            + ' data-popover-count="">'
+            + Backdrop.t('last: @when', {'@when': data.last_comment_when})
+            + '</span>';
+        }
+        footerHtml += ' <a href="' + data.view_url + '" class="droptickets-modal-view-link">'
           + Backdrop.t('View full ticket') + ' →</a>';
+        footer.innerHTML = footerHtml;
+        // Re-attach Backdrop behaviors so the comment popover binds to the
+        // newly injected footer element.
+        if (Backdrop.attachBehaviors) {
+          Backdrop.attachBehaviors(footer);
+        }
       }
 
       // --- Description editing ---
