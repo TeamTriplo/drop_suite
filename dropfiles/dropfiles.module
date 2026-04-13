@@ -371,9 +371,9 @@ function dropfiles_generate_pdf_thumbnail($file) {
   }
 
   // Check that ImageMagick is available (prefer magick, fall back to convert).
-  $convert = trim(shell_exec('which magick 2>/dev/null'));
+  $convert = trim((string) shell_exec('which magick 2>/dev/null'));
   if (empty($convert)) {
-    $convert = trim(shell_exec('which convert 2>/dev/null'));
+    $convert = trim((string) shell_exec('which convert 2>/dev/null'));
   }
   if (empty($convert)) {
     return FALSE;

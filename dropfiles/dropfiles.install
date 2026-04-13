@@ -144,14 +144,16 @@ function dropfiles_requirements($phase) {
 
   if ($phase === 'runtime') {
     // Check for ImageMagick (used for PDF thumbnail generation).
-    $convert = trim(shell_exec('which magick 2>/dev/null'));
+    // shell_exec() returns NULL when the binary is not found — coerce to
+    // string so trim() doesn't trigger a PHP 8.1+ deprecation notice.
+    $convert = trim((string) shell_exec('which magick 2>/dev/null'));
     if (empty($convert)) {
-      $convert = trim(shell_exec('which convert 2>/dev/null'));
+      $convert = trim((string) shell_exec('which convert 2>/dev/null'));
     }
     $has_imagemagick = !empty($convert);
 
     // Check for Ghostscript (required by ImageMagick for PDF rendering).
-    $gs = trim(shell_exec('which gs 2>/dev/null'));
+    $gs = trim((string) shell_exec('which gs 2>/dev/null'));
     $has_gs = !empty($gs);
 
     if ($has_imagemagick && $has_gs) {
