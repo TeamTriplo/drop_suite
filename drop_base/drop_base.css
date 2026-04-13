@@ -40,7 +40,22 @@
   --drop-due-soon-bg:              #ffe082;
   --drop-due-today-color:          #e65100;
   --drop-due-today-bg:             #fff8e1;
+
+  /* Per-user display preferences (overridden by body classes below). */
+  --drop-page-width:               1600px;
+  --drop-kanban-col-width:         240px;
 }
+
+/* Per-user page width — set by drop_base_preprocess_html() from user data. */
+body.drop-page-width-narrow { --drop-page-width: 1200px; }
+body.drop-page-width-wide   { --drop-page-width: 1920px; }
+body.drop-page-width-full   { --drop-page-width: 95vw; }
+
+/* Per-user Kanban column width — set by drop_base_preprocess_html(). */
+body.drop-kanban-col-xcompact    { --drop-kanban-col-width: 180px; }
+body.drop-kanban-col-compact     { --drop-kanban-col-width: 200px; }
+body.drop-kanban-col-comfortable { --drop-kanban-col-width: 280px; }
+body.drop-kanban-col-wide        { --drop-kanban-col-width: 320px; }
 
 /* ---------------------------------------------------------------------------
    Priority — text utilities

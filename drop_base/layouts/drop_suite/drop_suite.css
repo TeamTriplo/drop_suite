@@ -18,7 +18,7 @@
 }
 
 .layout--drop-suite .l-wrapper-inner {
-  max-width: 1600px;
+  max-width: var(--drop-page-width, 1600px);
   margin: 0 auto;
   padding: 0 1.5rem;
 }
@@ -28,7 +28,9 @@
   max-width: 95vw;
   margin-left: auto;
   margin-right: auto;
-  justify-content: center;
+  /* Inherit "safe center" from the base rule so overflowing boards remain
+   * scrollable to the first column (plain "center" traps the leftmost items
+   * at a negative offset that cannot be reached by scrolling). */
 }
 
 /* Messages */

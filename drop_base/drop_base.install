@@ -160,6 +160,13 @@ function drop_base_install() {
 
   // Grant drop_base's own permissions to the site administrator role.
   drop_base_grant_admin_permissions('drop_base');
+
+  // The Backdrop home page uses its own layout, so Drop Suite navigation is
+  // not shown there by default. Point the Site Architect at an opt-in page
+  // that can add the nav blocks to the home layout when they're ready.
+  backdrop_set_message(t('The Backdrop home page uses its own layout. If you want Drop Suite navigation to appear there, visit !link.', array(
+    '!link' => l(t('Home page navigation setup'), 'drop/settings/home-nav'),
+  )));
 }
 
 /**

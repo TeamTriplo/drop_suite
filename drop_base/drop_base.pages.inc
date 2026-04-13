@@ -473,3 +473,195 @@ function _drop_base_narrow_wrap($content, $extra_class = '') {
   }
   return '<div class="' . $class . '" style="max-width: ' . (int) $width . 'px; margin: 0 auto;">' . $content . '</div>';
 }
+
+// ---------------------------------------------------------------------------
+// Home page navigation setup
+// ---------------------------------------------------------------------------
+
+/**
+ * The Drop Suite navigation blocks that can be added to the home layout.
+ *
+ * Keyed by plugin name (module:delta) so we can both add and detect them.
+ */
+function _drop_base_home_nav_blocks() {
+  return array(
+    'drop_base:drop_nav'         => t('Drop Navigation'),
+    'drop_base:drop_pin_action'  => t('Drop Pin Action'),
+    'drop_base:drop_section_nav' => t('Drop Section Navigation'),
+  );
+}
+
+/**
+ * Inspects the home layout and returns which Drop nav blocks are present.
+ *
+ * @return array
+ *   Array with keys:
+ *   - layout: Loaded home Layout object (or FALSE if missing).
+ *   - present: Associative array of plugin => uuid for blocks that are in the layout.
+ *   - missing: Associative array of plugin => label for blocks not yet in the layout.
+ */
+function _drop_base_home_nav_state() {
+  $state = array('layout' => FALSE, 'present' => array(), 'missing' => array());
+  $layout = layout_load('home');
+  if (!$layout) {
+    return $state;
+  }
+  $state['layout'] = $layout;
+  $wanted = _drop_base_home_nav_blocks();
+  foreach ($layout->content as $uuid => $block) {
+    if (isset($block->plugin) && isset($wanted[$block->plugin])) {
+      $state['present'][$block->plugin] = $uuid;
+    }
+  }
+  $state['missing'] = array_diff_key($wanted, $state['present']);
+  return $state;
+}
+
+/**
+ * Page callback: drop/settings/home-nav.
+ *
+ * Explains the situation and offers to add or remove Drop Suite navigation
+ * blocks on the Backdrop home page layout.
+ */
+function drop_base_home_nav_page() {
+  backdrop_set_title(t('Home page navigation'));
+  return backdrop_get_form('drop_base_home_nav_form');
+}
+
+/**
+ * Form builder: drop_base_home_nav_form.
+ */
+function drop_base_home_nav_form($form, &$form_state) {
+  $state = _drop_base_home_nav_state();
+  $form['#state'] = $state;
+
+  $form['intro'] = array(
+    '#markup' =>
+      '<p>' . t('The Backdrop home page uses its own layout ("Home page"), so the Drop Suite primary navigation that appears on the rest of your site is not shown there by default. This page can add the Drop Suite navigation blocks to the top of your home layout so people arriving at the home page can reach tickets, tasks, CRM, and other Drop modules without detouring to a content page first.') . '</p>' .
+      '<p>' . t('Nothing changes unless you click the button below. You can revisit this page later to remove the navigation, and you can always fine-tune placement at <em>Structure → Layouts → Home page</em>.') . '</p>',
+  );
+
+  if (!$state['layout']) {
+    $form['no_layout'] = array(
+      '#markup' => '<p><strong>' . t('No home layout was found.') . '</strong> ' . t('This site does not appear to have a layout named "home", so there is nothing for Drop Base to update here.') . '</p>',
+    );
+    return $form;
+  }
+
+  $wanted = _drop_base_home_nav_blocks();
+  $rows = array();
+  foreach ($wanted as $plugin => $label) {
+    $rows[] = array(
+      check_plain($label),
+      isset($state['present'][$plugin]) ? t('Present') : '<em>' . t('Not added') . '</em>',
+    );
+  }
+  $form['status'] = array(
+    '#markup' => theme('table', array(
+      'header' => array(t('Navigation block'), t('Status on home layout')),
+      'rows'   => $rows,
+    )),
+  );
+
+  if (empty($state['missing'])) {
+    $form['already'] = array(
+      '#markup' => '<p>' . t('All Drop Suite navigation blocks are already on the home layout.') . '</p>',
+    );
+    $form['actions'] = array('#type' => 'actions');
+    $form['actions']['remove'] = array(
+      '#type'   => 'submit',
+      '#value'  => t('Remove Drop Suite navigation from home page'),
+      '#submit' => array('drop_base_home_nav_form_remove_submit'),
+    );
+    return $form;
+  }
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['add'] = array(
+    '#type'   => 'submit',
+    '#value'  => t('Add Drop Suite navigation to home page'),
+    '#submit' => array('drop_base_home_nav_form_add_submit'),
+  );
+  if (!empty($state['present'])) {
+    $form['actions']['remove'] = array(
+      '#type'   => 'submit',
+      '#value'  => t('Remove existing Drop Suite navigation'),
+      '#submit' => array('drop_base_home_nav_form_remove_submit'),
+    );
+  }
+  return $form;
+}
+
+/**
+ * Submit handler: add missing Drop Suite nav blocks to the home layout.
+ */
+function drop_base_home_nav_form_add_submit($form, &$form_state) {
+  $state = _drop_base_home_nav_state();
+  if (!$state['layout']) {
+    backdrop_set_message(t('Home layout could not be loaded.'), 'error');
+    return;
+  }
+  $layout = $state['layout'];
+  $region = _drop_base_home_nav_target_region($layout);
+  $added = array();
+  foreach (array_keys($state['missing']) as $plugin) {
+    list($module, $delta) = explode(':', $plugin, 2);
+    $layout->addBlock($module, $delta, $region);
+    $added[] = $plugin;
+  }
+  if ($added) {
+    $layout->save();
+    backdrop_set_message(t('Added @count Drop Suite navigation block(s) to the home layout (@region region).', array(
+      '@count'  => count($added),
+      '@region' => $region,
+    )));
+  }
+  else {
+    backdrop_set_message(t('All Drop Suite navigation blocks were already present.'));
+  }
+  $form_state['redirect'] = 'drop/settings/home-nav';
+}
+
+/**
+ * Submit handler: remove Drop Suite nav blocks from the home layout.
+ */
+function drop_base_home_nav_form_remove_submit($form, &$form_state) {
+  $state = _drop_base_home_nav_state();
+  if (!$state['layout']) {
+    backdrop_set_message(t('Home layout could not be loaded.'), 'error');
+    return;
+  }
+  $layout = $state['layout'];
+  $removed = 0;
+  foreach ($state['present'] as $plugin => $uuid) {
+    $layout->removeBlock($uuid);
+    $removed++;
+  }
+  if ($removed) {
+    $layout->save();
+    backdrop_set_message(t('Removed @count Drop Suite navigation block(s) from the home layout.', array(
+      '@count' => $removed,
+    )));
+  }
+  else {
+    backdrop_set_message(t('No Drop Suite navigation blocks were present on the home layout.'));
+  }
+  $form_state['redirect'] = 'drop/settings/home-nav';
+}
+
+/**
+ * Picks the best region on the home layout to drop Drop Suite nav blocks into.
+ *
+ * Prefers an explicit "navigation" region, then "top", then "header", and
+ * finally falls back to the first positions key.
+ */
+function _drop_base_home_nav_target_region($layout) {
+  foreach (array('navigation', 'top', 'header') as $preferred) {
+    if (isset($layout->positions[$preferred])) {
+      return $preferred;
+    }
+  }
+  $keys = array_keys($layout->positions);
+  return reset($keys);
+}
+

@@ -1095,6 +1095,16 @@ function drop_base_menu() {
     'file'             => 'drop_base.admin.inc',
   );
 
+  // --- Home page navigation setup ---
+  $items['drop/settings/home-nav'] = array(
+    'title'            => 'Home page navigation',
+    'description'      => 'Add Drop Suite navigation blocks to the Backdrop home page.',
+    'page callback'    => 'drop_base_home_nav_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_base.pages.inc',
+  );
+
   // --- Drop Suite modules (scoped enable/disable page) ---
   $items['drop/settings/modules'] = array(
     'title'            => 'Drop Suite modules',
@@ -1352,6 +1362,13 @@ function drop_base_drop_settings_info() {
       'permission' => 'administer drop suite modules',
       'weight' => -10,
     ),
+    'drop_home_nav' => array(
+      'title' => t('Home page navigation'),
+      'description' => t('Add the Drop Suite primary navigation to your Backdrop home page layout.'),
+      'path' => 'drop/settings/home-nav',
+      'permission' => 'administer site configuration',
+      'weight' => 5,
+    ),
   );
 }
 
@@ -1508,6 +1525,112 @@ function drop_base_grant_admin_permissions($module_name) {
     return;
   }
   user_role_grant_permissions($admin_role, array_keys($perms));
+}
+
+/**
+ * Returns per-user display preferences merged with defaults.
+ *
+ * Prefs live in $account->data['drop_display'] so no schema change is needed.
+ *
+ * @param object|null $account
+ *   The user account, or NULL to use the logged-in user.
+ *
+ * @return array
+ *   Array with keys: page_width, kanban_col_width.
+ */
+function drop_base_get_user_display_prefs($account = NULL) {
+  if ($account === NULL) {
+    global $user;
+    $account = $user;
+  }
+  $defaults = array(
+    'page_width' => 'standard',
+    'kanban_col_width' => 'standard',
+  );
+  if (empty($account->uid)) {
+    return $defaults;
+  }
+  $saved = array();
+  if (!empty($account->data) && is_array($account->data) && !empty($account->data['drop_display']) && is_array($account->data['drop_display'])) {
+    $saved = $account->data['drop_display'];
+  }
+  return $saved + $defaults;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Adds body classes reflecting the current user's display preferences so that
+ * CSS custom properties can cascade per-user without page-specific code.
+ * Backdrop adds body classes in template_preprocess_page(), not _html().
+ */
+function drop_base_preprocess_page(&$variables) {
+  $prefs = drop_base_get_user_display_prefs();
+  if ($prefs['page_width'] !== 'standard') {
+    $variables['classes'][] = 'drop-page-width-' . $prefs['page_width'];
+  }
+  if ($prefs['kanban_col_width'] !== 'standard') {
+    $variables['classes'][] = 'drop-kanban-col-' . $prefs['kanban_col_width'];
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for user_profile_form.
+ *
+ * Adds a Display preferences fieldset to the user edit form.
+ */
+function drop_base_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+  $account = isset($form['#user']) ? $form['#user'] : NULL;
+  $prefs = drop_base_get_user_display_prefs($account);
+
+  $form['drop_display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display preferences'),
+    '#description' => t('Controls how Drop Suite pages are laid out for you. Other people see their own preferences.'),
+    '#weight' => 5,
+    '#tree' => TRUE,
+  );
+  $form['drop_display']['page_width'] = array(
+    '#type' => 'select',
+    '#title' => t('Page width'),
+    '#description' => t('Maximum content width on Drop Suite pages.'),
+    '#default_value' => $prefs['page_width'],
+    '#options' => array(
+      'narrow' => t('Narrow (1200px)'),
+      'standard' => t('Standard (1600px)'),
+      'wide' => t('Wide (1920px)'),
+      'full' => t('Full (95% of viewport)'),
+    ),
+  );
+  $form['drop_display']['kanban_col_width'] = array(
+    '#type' => 'select',
+    '#title' => t('Kanban column width'),
+    '#description' => t('Width of columns on the Kanban board.'),
+    '#default_value' => $prefs['kanban_col_width'],
+    '#options' => array(
+      'xcompact' => t('Extra compact (180px)'),
+      'compact' => t('Compact (200px)'),
+      'standard' => t('Standard (240px)'),
+      'comfortable' => t('Comfortable (280px)'),
+      'wide' => t('Wide (320px)'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_user_presave().
+ *
+ * Moves display preferences from the form-value property on the account into
+ * the serialized {users}.data column.
+ */
+function drop_base_user_presave($account) {
+  if (isset($account->drop_display) && is_array($account->drop_display)) {
+    if (empty($account->data) || !is_array($account->data)) {
+      $account->data = array();
+    }
+    $account->data['drop_display'] = $account->drop_display;
+    unset($account->drop_display);
+  }
 }
 
 /**

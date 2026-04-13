@@ -1132,14 +1132,17 @@ a.droptickets-flag-on svg,
   display: flex;
   gap: 1rem;
   align-items: flex-start;
-  justify-content: center;
+  /* "safe center" keeps columns centered when they fit, and falls back to
+   * flex-start when they overflow — otherwise centering pushes the leftmost
+   * column off-screen to a position that can't be reached by scrolling. */
+  justify-content: safe center;
   overflow-x: auto;
   padding-bottom: 1.5rem;
   min-height: 200px;
 }
 
 .droptickets-kanban-col {
-  flex: 0 0 240px;
+  flex: 0 0 var(--drop-kanban-col-width, 240px);
   min-width: 0;
 }
 
