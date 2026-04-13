@@ -263,6 +263,19 @@ a.drop-section-add {
   border-color: var(--drop-primary, #1565c0);
 }
 
+.drop-nav .drop-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.drop-nav .drop-nav-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 /* ===========================================================================
    Drop Admin — layout region chrome
    Applies to the shared header, top, and tab areas used across all Drop pages.

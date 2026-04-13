@@ -217,6 +217,18 @@ function _drop_base_report_pin_action($path) {
 }
 
 /**
+ * Implements hook_theme().
+ */
+function drop_base_theme() {
+  return array(
+    'drop_base_navigation_form' => array(
+      'render element' => 'form',
+      'file' => 'drop_base.nav_admin.inc',
+    ),
+  );
+}
+
+/**
  * Implements hook_block_info().
  *
  * Exposes the Drop nav bar and section nav as placeable layout blocks.
@@ -281,15 +293,111 @@ function drop_base_block_view($delta = '') {
 }
 
 /**
+ * Collects all hook_drop_nav_links() items, keyed by path.
+ *
+ * Results are raw (no permission filter, no overrides applied) so that the
+ * admin UI can show every module-declared item regardless of the viewing
+ * user's role, and so that the renderer has a stable list to reconcile
+ * against config overrides.
+ *
+ * The 'module' key is added so the admin UI can show which module each item
+ * came from.
+ *
+ * @return array
+ *   Associative array keyed by path; each value is the hook item plus a
+ *   'module' key.
+ */
+function _drop_base_hook_nav_items() {
+  $items = &backdrop_static(__FUNCTION__);
+  if (isset($items)) {
+    return $items;
+  }
+  $items = array();
+  foreach (module_implements('drop_nav_links') as $module) {
+    $links = module_invoke($module, 'drop_nav_links');
+    if (!is_array($links)) {
+      continue;
+    }
+    foreach ($links as $link) {
+      if (empty($link['path'])) {
+        continue;
+      }
+      if (!isset($items[$link['path']])) {
+        $link['module'] = $module;
+        if (!isset($link['weight'])) {
+          $link['weight'] = 0;
+        }
+        $items[$link['path']] = $link;
+      }
+    }
+  }
+  return $items;
+}
+
+/**
  * Builds and returns the Drop nav HTML, or FALSE if no links are available.
+ *
+ * Combines hook_drop_nav_links() results with the drop_base.navigation config
+ * overrides and Site Architect shortcuts, then renders the bar.
  *
  * @return string|false
  */
 function _drop_base_render_nav() {
   $path = current_path();
 
-  // Collect links from all modules, filter by access, sort by weight.
-  $links = module_invoke_all('drop_nav_links');
+  // Load hook items, overrides, and shortcuts.
+  $hook_items = _drop_base_hook_nav_items();
+  $config = config('drop_base.navigation');
+  $overrides = $config->get('overrides');
+  $shortcuts = $config->get('shortcuts');
+  if (!is_array($overrides)) {
+    $overrides = array();
+  }
+  if (!is_array($shortcuts)) {
+    $shortcuts = array();
+  }
+
+  // Apply overrides to hook items. Runtime visibility flags from the hook
+  // still win (e.g. "Meeting" hidden when meeting_enabled is off).
+  $links = array();
+  foreach ($hook_items as $item_path => $link) {
+    if (isset($overrides[$item_path])) {
+      $override = $overrides[$item_path];
+      if (!empty($override['hidden'])) {
+        continue;
+      }
+      if (isset($override['title']) && $override['title'] !== '') {
+        $link['title'] = $override['title'];
+      }
+      if (isset($override['icon']) && $override['icon'] !== '') {
+        $link['icon'] = $override['icon'];
+      }
+      if (isset($override['weight'])) {
+        $link['weight'] = (int) $override['weight'];
+      }
+    }
+    $links[] = $link;
+  }
+
+  // Append shortcuts. Shortcuts are Site Architect-authored, so they have no
+  // module-declared permission — they're visible to everyone who can see the
+  // nav itself.
+  foreach ($shortcuts as $shortcut) {
+    if (!is_array($shortcut) || empty($shortcut['path'])) {
+      continue;
+    }
+    if (!empty($shortcut['hidden'])) {
+      continue;
+    }
+    $links[] = array(
+      'title'  => isset($shortcut['title']) && $shortcut['title'] !== '' ? $shortcut['title'] : $shortcut['path'],
+      'path'   => $shortcut['path'],
+      'icon'   => isset($shortcut['icon']) ? $shortcut['icon'] : NULL,
+      'weight' => isset($shortcut['weight']) ? (int) $shortcut['weight'] : 50,
+    );
+  }
+
+  // Filter by access + runtime visibility flags from the hook.
   $links = array_filter($links, function($link) {
     if (isset($link['visible']) && !$link['visible']) {
       return FALSE;
@@ -316,7 +424,16 @@ function _drop_base_render_nav() {
     if (isset($link['badge']) && $link['badge'] !== '' && $link['badge'] !== 0) {
       $badge_html = ' <span class="drop-nav-badge">' . check_plain((string) $link['badge']) . '</span>';
     }
-    $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . check_plain($link['title']) . $badge_html . '</a>';
+    $icon_html = '';
+    if (!empty($link['icon']) && function_exists('icon')) {
+      $rendered = icon(strtolower($link['icon']), array(
+        'attributes' => array('width' => 16, 'height' => 16, 'class' => array('drop-nav-icon-svg')),
+      ));
+      if ($rendered) {
+        $icon_html = '<span class="drop-nav-icon">' . $rendered . '</span>';
+      }
+    }
+    $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . $icon_html . check_plain($link['title']) . $badge_html . '</a>';
   }
 
   // Allow other modules to add content to the right side of the nav.
@@ -1095,6 +1212,16 @@ function drop_base_menu() {
     'file'             => 'drop_base.admin.inc',
   );
 
+  // --- Primary navigation customization ---
+  $items['drop/settings/navigation'] = array(
+    'title'            => 'Primary navigation',
+    'description'      => 'Reorder, rename, hide, and add shortcuts to the Drop Suite nav bar.',
+    'page callback'    => 'drop_base_navigation_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_base.nav_admin.inc',
+  );
+
   // --- Home page navigation setup ---
   $items['drop/settings/home-nav'] = array(
     'title'            => 'Home page navigation',
@@ -1368,6 +1495,13 @@ function drop_base_drop_settings_info() {
       'path' => 'drop/settings/home-nav',
       'permission' => 'administer site configuration',
       'weight' => 5,
+    ),
+    'drop_navigation' => array(
+      'title' => t('Primary navigation'),
+      'description' => t('Reorder, rename, hide, and add shortcuts to the Drop Suite nav bar.'),
+      'path' => 'drop/settings/navigation',
+      'permission' => 'administer site configuration',
+      'weight' => 3,
     ),
   );
 }
