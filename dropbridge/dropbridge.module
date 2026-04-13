@@ -874,6 +874,7 @@ function dropbridge_drop_nav_links() {
       'path'       => 'drop',
       'permission' => 'access dropbridge',
       'weight'     => 0,
+      'icon'       => 'house',
     ),
     array(
       'title'      => t('Calendar'),
@@ -881,12 +882,14 @@ function dropbridge_drop_nav_links() {
       'permission' => 'access dropbridge',
       'weight'     => 75,
       'visible'    => _dropbridge_nav_calendar_visible(),
+      'icon'       => 'calendar',
     ),
     array(
       'title'      => t('Settings'),
       'path'       => 'drop/settings',
       'permission' => 'administer site configuration',
       'weight'     => 100,
+      'icon'       => 'gear',
     ),
   );
 }

@@ -243,6 +243,7 @@ function dropdocs_drop_nav_links() {
       'path'       => 'drop/docs',
       'permission' => 'access dropdocs',
       'weight'     => 50,
+      'icon'       => 'book-open',
     ),
   );
 }

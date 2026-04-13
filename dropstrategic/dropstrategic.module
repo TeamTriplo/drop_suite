@@ -401,6 +401,7 @@ function dropstrategic_drop_nav_links() {
       'path'       => 'drop/strategic',
       'permission' => 'view strategic goals',
       'weight'     => 55,
+      'icon'       => 'compass',
     ),
   );
 }

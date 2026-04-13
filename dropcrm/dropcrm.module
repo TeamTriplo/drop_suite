@@ -1695,6 +1695,7 @@ function dropcrm_drop_nav_links() {
       'path'       => 'drop/crm',
       'permission' => 'access crm',
       'weight'     => 10,
+      'icon'       => 'address-book',
     ),
   );
 }

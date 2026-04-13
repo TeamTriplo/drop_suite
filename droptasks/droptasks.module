@@ -330,6 +330,7 @@ function droptasks_drop_nav_links() {
       'path'       => 'drop/tasks',
       'permission' => 'access tasks',
       'weight'     => 20,
+      'icon'       => 'check-square',
     ),
   );
 }

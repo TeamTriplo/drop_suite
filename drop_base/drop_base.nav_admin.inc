@@ -39,17 +39,24 @@ function drop_base_navigation_form($form, &$form_state) {
     $shortcuts = array();
   }
 
+  $show_icons = $config->get('show_icons');
+  if ($show_icons === NULL) {
+    $show_icons = TRUE;
+  }
+
   // Build a single merged list, sorted by effective weight, for display.
   $rows = array();
   foreach ($hook_items as $path => $item) {
     $override = isset($overrides[$path]) ? $overrides[$path] : array();
+    $default_icon = isset($item['icon']) ? $item['icon'] : '';
     $rows[] = array(
       'kind'      => 'module',
       'row_id'    => 'mod:' . $path,
       'path'      => $path,
       'title'     => isset($override['title']) && $override['title'] !== '' ? $override['title'] : $item['title'],
       'default_title' => $item['title'],
-      'icon'      => isset($override['icon']) ? $override['icon'] : '',
+      'icon'      => isset($override['icon']) ? $override['icon'] : $default_icon,
+      'default_icon' => $default_icon,
       'weight'    => isset($override['weight']) ? (int) $override['weight'] : (int) $item['weight'],
       'hidden'    => !empty($override['hidden']),
       'source_module' => isset($item['module']) ? $item['module'] : '',
@@ -79,9 +86,16 @@ function drop_base_navigation_form($form, &$form_state) {
   $form['intro'] = array(
     '#markup' =>
       '<p>' . t('Reorder by dragging. Rename, hide, or add a Phosphor icon to any item. Module-supplied items cannot be deleted — untick them if you want them hidden. Use the shortcuts section below to add custom links to any path (e.g. <code>drop/tickets/kanban</code> labelled "Boards").') . '</p>' .
-      '<p>' . t('Icon names are the lowercase <a href="@url">Phosphor</a> name, for example <code>kanban</code>, <code>house</code>, <code>ticket</code>. Leave blank for no icon.', array(
+      '<p>' . t('Icon names are the lowercase <a href="@url">Phosphor</a> name, for example <code>kanban</code>, <code>house</code>, <code>ticket</code>. Clear the field to fall back to the module default.', array(
         '@url' => 'https://phosphoricons.com/',
       )) . '</p>',
+  );
+
+  $form['show_icons'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show icons in the primary navigation'),
+    '#description' => t('Turn off to hide all icons site-wide without clearing the per-item icon names.'),
+    '#default_value' => (bool) $show_icons,
   );
 
   $form['items'] = array(
@@ -243,7 +257,15 @@ function theme_drop_base_navigation_form($variables) {
     }
   }
 
-  $output = theme('table', array(
+  $output = '';
+  if (isset($form['intro'])) {
+    $output .= backdrop_render($form['intro']);
+  }
+  if (isset($form['show_icons'])) {
+    $output .= backdrop_render($form['show_icons']);
+  }
+
+  $output .= theme('table', array(
     'header' => $header,
     'rows'   => $rows,
     'empty'  => t('No navigation items.'),
@@ -267,6 +289,9 @@ function drop_base_navigation_form_submit($form, &$form_state) {
   $values = $form_state['values'];
   $config = config('drop_base.navigation');
 
+  $config->set('show_icons', !empty($values['show_icons']));
+
+  $hook_items = _drop_base_hook_nav_items();
   $new_overrides = array();
   $new_shortcuts = array();
 
@@ -275,35 +300,23 @@ function drop_base_navigation_form_submit($form, &$form_state) {
     foreach ($values['items'] as $row_id => $fields) {
       if (strpos($row_id, 'mod:') === 0) {
         $path = substr($row_id, 4);
-        $existing = isset($form['items'][$row_id]) ? $form['items'][$row_id] : array();
-        $default_title = '';
-        // The form element carries the default title via the #default_value.
-        if (isset($existing['title']['#default_value'])) {
-          // Can't compare here — compare below against hook item.
-        }
+        $hook_item = isset($hook_items[$path]) ? $hook_items[$path] : array();
+        $default_title  = isset($hook_item['title']) ? $hook_item['title'] : '';
+        $default_icon   = isset($hook_item['icon']) ? strtolower($hook_item['icon']) : '';
+        $default_weight = isset($hook_item['weight']) ? (int) $hook_item['weight'] : 0;
+
         $override = array();
-        if (isset($fields['title']) && $fields['title'] !== '') {
+        if (isset($fields['title']) && $fields['title'] !== '' && $fields['title'] !== $default_title) {
           $override['title'] = $fields['title'];
         }
-        if (isset($fields['icon']) && $fields['icon'] !== '') {
+        if (isset($fields['icon']) && $fields['icon'] !== '' && strtolower($fields['icon']) !== $default_icon) {
           $override['icon'] = strtolower($fields['icon']);
         }
-        if (isset($fields['weight'])) {
+        if (isset($fields['weight']) && (int) $fields['weight'] !== $default_weight) {
           $override['weight'] = (int) $fields['weight'];
         }
         if (!empty($fields['hidden'])) {
           $override['hidden'] = TRUE;
-        }
-        // Only persist overrides that differ from hook defaults.
-        $hook_items = _drop_base_hook_nav_items();
-        if (isset($hook_items[$path])) {
-          $hook_item = $hook_items[$path];
-          if (isset($override['title']) && $override['title'] === $hook_item['title']) {
-            unset($override['title']);
-          }
-          if (isset($override['weight']) && $override['weight'] === (int) $hook_item['weight']) {
-            unset($override['weight']);
-          }
         }
         if (!empty($override)) {
           $new_overrides[$path] = $override;
@@ -353,6 +366,7 @@ function drop_base_navigation_form_submit($form, &$form_state) {
  */
 function drop_base_navigation_form_reset_submit($form, &$form_state) {
   $config = config('drop_base.navigation');
+  $config->set('show_icons', TRUE);
   $config->set('overrides', array());
   $config->set('shortcuts', array());
   $config->save();

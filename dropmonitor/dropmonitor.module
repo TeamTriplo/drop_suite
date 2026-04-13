@@ -346,6 +346,7 @@ function dropmonitor_drop_nav_links() {
       'title' => t('Monitor'),
       'path' => 'drop/monitor',
       'weight' => 85,
+      'icon' => 'pulse',
     ),
   );
 }

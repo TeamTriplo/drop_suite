@@ -502,6 +502,7 @@ function droptime_drop_nav_links() {
       'path'       => 'drop/time',
       'permission' => 'access droptime',
       'weight'     => 40,
+      'icon'       => 'clock',
     ),
   );
 }

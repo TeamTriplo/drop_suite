@@ -177,6 +177,7 @@ function dropfiles_drop_nav_links() {
       'path'       => 'drop/files',
       'permission' => 'access dropfiles',
       'weight'     => 45,
+      'icon'       => 'paperclip',
     ),
   );
 }

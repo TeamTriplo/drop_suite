@@ -350,6 +350,10 @@ function _drop_base_render_nav() {
   $config = config('drop_base.navigation');
   $overrides = $config->get('overrides');
   $shortcuts = $config->get('shortcuts');
+  $show_icons = $config->get('show_icons');
+  if ($show_icons === NULL) {
+    $show_icons = TRUE;
+  }
   if (!is_array($overrides)) {
     $overrides = array();
   }
@@ -425,7 +429,7 @@ function _drop_base_render_nav() {
       $badge_html = ' <span class="drop-nav-badge">' . check_plain((string) $link['badge']) . '</span>';
     }
     $icon_html = '';
-    if (!empty($link['icon']) && function_exists('icon')) {
+    if ($show_icons && !empty($link['icon']) && function_exists('icon')) {
       $rendered = icon(strtolower($link['icon']), array(
         'attributes' => array('width' => 16, 'height' => 16, 'class' => array('drop-nav-icon-svg')),
       ));
@@ -1453,6 +1457,7 @@ function drop_base_drop_nav_links() {
       'path'       => 'drop/projects',
       'permission' => 'access projects',
       'weight'     => 15,
+      'icon'       => 'folders',
     ),
     array(
       'title'      => t('Meeting'),
@@ -1460,12 +1465,14 @@ function drop_base_drop_nav_links() {
       'weight'     => 80,
       'separator'  => TRUE,
       'hidden'     => !config_get('drop_base.settings', 'meeting_enabled'),
+      'icon'       => 'users-three',
     ),
     array(
       'title'      => t('Team'),
       'path'       => 'drop/team',
       'permission' => 'access drop team',
       'weight'     => 90,
+      'icon'       => 'users',
     ),
   );
 }
@@ -1599,30 +1606,52 @@ function drop_base_platform_options() {
 function drop_base_team_page() {
   backdrop_set_title(t('Team'));
 
-  $accounts = db_select('users', 'u')
-    ->fields('u', array('uid', 'name', 'access'))
+  $uids = db_select('users', 'u')
+    ->fields('u', array('uid'))
     ->condition('u.status', 1)
     ->condition('u.uid', 0, '>')
     ->orderBy('u.access', 'DESC')
     ->execute()
-    ->fetchAll();
+    ->fetchCol();
 
+  $accounts = $uids ? user_load_multiple($uids) : array();
+  $ordered = array();
+  foreach ($uids as $uid) {
+    if (isset($accounts[$uid])) {
+      $ordered[$uid] = $accounts[$uid];
+    }
+  }
+
+  $role_labels = user_roles();
   $can_see_tickets = module_exists('droptickets') && user_access('access droptickets');
 
   $rows = array();
-  foreach ($accounts as $account) {
+  foreach ($ordered as $account) {
     $last_seen = $account->access
       ? t('@time ago', array('@time' => format_interval(REQUEST_TIME - $account->access)))
       : t('Never');
     $name = $can_see_tickets
       ? l($account->name, 'drop/tickets/member/' . $account->uid)
       : check_plain($account->name);
-    $rows[] = array($name, $last_seen);
+
+    $user_role_labels = array();
+    $account_roles = !empty($account->roles) ? $account->roles : array();
+    foreach ($account_roles as $role_name) {
+      if ($role_name === BACKDROP_AUTHENTICATED_ROLE || $role_name === BACKDROP_ANONYMOUS_ROLE) {
+        continue;
+      }
+      if (isset($role_labels[$role_name])) {
+        $user_role_labels[] = check_plain($role_labels[$role_name]);
+      }
+    }
+    $roles_display = $user_role_labels ? implode(', ', $user_role_labels) : '—';
+
+    $rows[] = array($name, $roles_display, $last_seen);
   }
 
   return array(
     '#theme'  => 'table',
-    '#header' => array(t('Name'), t('Last online')),
+    '#header' => array(t('Name'), t('Roles'), t('Last online')),
     '#rows'   => $rows,
     '#attributes' => array('class' => array('drop-team-table')),
   );

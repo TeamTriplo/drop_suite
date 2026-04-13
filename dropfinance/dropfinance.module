@@ -477,6 +477,7 @@ function dropfinance_drop_nav_links() {
       'path'       => 'drop/finance',
       'permission' => 'administer dropfinance',
       'weight'     => 15,
+      'icon'       => 'currency-dollar',
     ),
   );
 }

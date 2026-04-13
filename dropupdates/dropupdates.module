@@ -259,6 +259,7 @@ function dropupdates_drop_nav_links() {
       'path'       => 'drop/updates',
       'permission' => 'view drop updates',
       'weight'     => 15,
+      'icon'       => 'megaphone',
     ),
   );
 }

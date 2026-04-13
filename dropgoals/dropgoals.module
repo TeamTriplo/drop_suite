@@ -323,6 +323,7 @@ function dropgoals_drop_nav_links() {
       'path'       => 'drop/goals',
       'permission' => 'access goals',
       'weight'     => 50,
+      'icon'       => 'target',
     ),
   );
 }

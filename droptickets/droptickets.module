@@ -2220,6 +2220,7 @@ function droptickets_drop_nav_links() {
       'path'       => 'drop/tickets',
       'permission' => 'access droptickets',
       'weight'     => 30,
+      'icon'       => 'ticket',
     ),
   );
 }
