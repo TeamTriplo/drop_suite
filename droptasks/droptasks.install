@@ -9,6 +9,7 @@
  */
 function droptasks_install() {
   _droptasks_ensure_drop_tags_field();
+  drop_base_grant_admin_permissions('droptasks');
 }
 
 /**

@@ -1,6 +1,7 @@
 /**
  * @file
- * DropTickets — datepicker, body toggle, emoji reactions, inline status, activity log.
+ * DropTickets — datepicker, body toggle, inline status, activity log.
+ * Emoji reactions are handled by the shared drop_base.reactions.js behavior.
  */
 
 (function ($) {
@@ -57,56 +58,6 @@
           $card.toggleClass('is-expanded', !expanded);
           $btn.attr('aria-expanded', String(!expanded));
           $btn.text(!expanded ? Backdrop.t('Collapse') : Backdrop.t('Expand'));
-        });
-      });
-    }
-  };
-}(jQuery));
-
-(function ($) {
-  Backdrop.behaviors.dropticketReactions = {
-    attach: function (context, settings) {
-      $('.droptickets-reactions', context).once('reactions').each(function () {
-        var $bar = $(this);
-        var tid  = $bar.data('tid');
-        var tcid = $bar.data('tcid');
-        var entityType = (tcid > 0) ? 'comment' : 'ticket';
-        var entityId   = (tcid > 0) ? tcid : tid;
-
-        $bar.find('.react-btn').on('click', function () {
-          var $btn  = $(this);
-          var emoji = $btn.data('emoji');
-
-          $btn.addClass('is-loading');
-
-          $.ajax({
-            url: Backdrop.settings.basePath + 'drop/tickets/react/' + entityType + '/' + entityId,
-            type: 'POST',
-            data: { emoji: emoji },
-            dataType: 'json',
-            success: function (data) {
-              if (!data.reactions) { return; }
-              var emojis = (Backdrop.settings.droptickets || {}).reactionEmojis || {};
-              $bar.find('.react-btn').each(function () {
-                var $b   = $(this);
-                var code = $b.data('emoji');
-                if (!data.reactions[code]) { return; }
-                var info  = data.reactions[code];
-                var char  = emojis[code] || code;
-                var label = info.count > 0 ? char + ' ' + info.count : char;
-                $b.text(label);
-                $b.toggleClass('is-active', info.user_reacted);
-                // Update tooltip with reactor names.
-                var title = info.names && info.names.length
-                  ? char + ' ' + info.names.join(' · ')
-                  : char;
-                $b.attr('title', title);
-              });
-            },
-            complete: function () {
-              $btn.removeClass('is-loading');
-            }
-          });
         });
       });
     }

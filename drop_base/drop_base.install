@@ -157,6 +157,9 @@ function drop_base_install() {
   // Switch the default layout to the Drop Suite layout template, then add
   // Drop Suite blocks to the TOP region.
   _drop_base_setup_default_layout();
+
+  // Grant drop_base's own permissions to the site administrator role.
+  drop_base_grant_admin_permissions('drop_base');
 }
 
 /**
@@ -326,3 +329,4 @@ function drop_base_update_1202() {
     ));
   }
 }
+

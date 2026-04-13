@@ -662,6 +662,8 @@ function droptickets_install() {
     );
     user_role_grant_permissions($role->rid, $permissions);
   }
+
+  drop_base_grant_admin_permissions('droptickets');
 }
 
 /**

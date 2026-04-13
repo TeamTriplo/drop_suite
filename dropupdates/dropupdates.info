@@ -1,0 +1,7 @@
+name = DropUpdates
+description = Lightweight team updates feed with read tracking and emoji reactions.
+type = module
+backdrop = 1.x
+dependencies[] = drop_base
+version = 1.x-1.0-dev
+package = Drop Suite

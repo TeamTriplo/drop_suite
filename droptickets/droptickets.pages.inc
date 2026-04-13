@@ -1722,7 +1722,7 @@ function droptickets_ticket_view(DropTicket $ticket) {
 
   // Body.
   if (!empty($ticket->body)) {
-    $main .= '<div class="droptickets-card droptickets-body droptickets-body--collapsible">';
+    $main .= '<div class="droptickets-card droptickets-body droptickets-body--collapsible drop-reactions-host">';
     $main .= '<div class="droptickets-section-heading droptickets-body-label">' . t('Description') . '</div>';
     $main .= '<div class="droptickets-body-inner">' . check_markup($ticket->body, $ticket->body_format) . '<div class="droptickets-body-fade"></div></div>';
     $main .= '<button class="droptickets-body-toggle" aria-expanded="false">' . t('Expand') . '</button>';
@@ -1956,7 +1956,7 @@ function droptickets_ticket_view(DropTicket $ticket) {
       $comment = $item['data'];
       $is_unread = $last_read > 0 && $item['created'] > $last_read;
       $source = isset($comment->source) ? $comment->source : 'comment';
-      $comment_classes = 'droptickets-comment';
+      $comment_classes = 'droptickets-comment drop-reactions-host';
       if ($is_unread) {
         $comment_classes .= ' droptickets-comment--unread';
       }
@@ -2011,15 +2011,16 @@ function droptickets_ticket_view(DropTicket $ticket) {
   $main .= '</div>'; // close droptickets-view-main
 
   // Assemble output.
+  $reactions_assets = drop_base_reactions_attached();
   $output = array(
     '#attached' => array(
-      'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
-      'js'  => array(
-        backdrop_get_path('module', 'droptickets') . '/droptickets.js',
-        array(
-          'data' => array('droptickets' => array('reactionEmojis' => droptickets_reaction_emojis())),
-          'type' => 'setting',
-        ),
+      'css' => array_merge(
+        array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
+        $reactions_assets['css']
+      ),
+      'js' => array_merge(
+        array(backdrop_get_path('module', 'droptickets') . '/droptickets.js'),
+        $reactions_assets['js']
       ),
     ),
   );
@@ -2131,38 +2132,21 @@ function droptickets_comment_image_upload() {
 /**
  * Renders the reaction button bar for a ticket or comment.
  *
+ * Delegates to drop_base_render_reactions() so the chip UI is shared across
+ * Drop Suite modules.
+ *
  * @param int $tid
  * @param int $tcid  0 = ticket-level.
  * @param array $reactions  Pre-loaded reactions array from droptickets_reactions_get().
  * @return string HTML
  */
 function droptickets_render_reactions($tid, $tcid, array $reactions, array $accounts = array()) {
-  global $user;
-  $emojis = droptickets_reaction_emojis();
-  $html   = '<div class="droptickets-reactions" data-tid="' . $tid . '" data-tcid="' . $tcid . '">';
-  foreach ($reactions as $code => $uids) {
-    $char   = isset($emojis[$code]) ? $emojis[$code] : $code;
-    $count  = count($uids);
-    $active = in_array((int) $user->uid, $uids) ? ' is-active' : '';
-    $empty  = $count === 0 ? ' react-btn--empty' : '';
-    $label  = $count > 0 ? $char . ' ' . $count : $char;
-
-    // Build tooltip: "You · Rajib · Tim"
-    $names  = array();
-    foreach ($uids as $uid) {
-      if ($uid == $user->uid) {
-        $names[] = t('You');
-      }
-      elseif (isset($accounts[$uid])) {
-        $names[] = check_plain($accounts[$uid]->name);
-      }
-    }
-    $title = $names ? $char . ' ' . implode(' · ', $names) : $char;
-
-    $html .= '<button class="react-btn' . $active . $empty . '" data-emoji="' . check_plain($code) . '" title="' . check_plain($title) . '">' . $label . '</button>';
-  }
-  $html .= '</div>';
-  return $html;
+  $entity_type = $tcid > 0 ? 'comment' : 'ticket';
+  $entity_id   = $tcid > 0 ? $tcid : $tid;
+  return drop_base_render_reactions($reactions, $accounts, array(
+    'react_url' => url('drop/tickets/react/' . $entity_type . '/' . (int) $entity_id),
+    'data'      => array('tid' => (int) $tid, 'tcid' => (int) $tcid),
+  ));
 }
 
 /**
@@ -2272,30 +2256,9 @@ function droptickets_react_ajax($entity_type, $entity_id) {
 
   // Return fresh reaction counts and reactor names for tooltip updates.
   $reactions = droptickets_reactions_get($tid, $tcid);
-  $all_uids  = array();
-  foreach ($reactions as $uids) {
-    $all_uids = array_merge($all_uids, $uids);
-  }
-  $accounts = $all_uids ? user_load_multiple(array_unique($all_uids)) : array();
-
-  $result = array();
-  foreach ($reactions as $code => $uids) {
-    $names = array();
-    foreach ($uids as $uid) {
-      if ($uid == $user->uid) {
-        $names[] = t('You');
-      }
-      elseif (isset($accounts[$uid])) {
-        $names[] = check_plain($accounts[$uid]->name);
-      }
-    }
-    $result[$code] = array(
-      'count'       => count($uids),
-      'user_reacted' => in_array((int) $user->uid, $uids),
-      'names'       => $names,
-    );
-  }
-  backdrop_json_output(array('reactions' => $result));
+  backdrop_json_output(array(
+    'reactions' => drop_base_format_reactions_response($reactions, $user->uid),
+  ));
 }
 
 // ---------------------------------------------------------------------------

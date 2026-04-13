@@ -972,15 +972,11 @@ function droptickets_notify_watchers($tid, $type, $actor_uid, $tcid = NULL) {
 /**
  * Returns the allowed reactions as code => emoji character.
  *
- * Codes are stored in the DB (ASCII-safe); characters are for display only.
+ * Thin forwarder around drop_base_reaction_emojis() so droptickets, dropupdates
+ * and any other Drop Suite consumer share a single palette.
  */
 function droptickets_reaction_emojis() {
-  return array(
-    'thumbsup' => '👍',
-    'heart'    => '❤️',
-    'tada'     => '🎉',
-    'eyes'     => '👀',
-  );
+  return drop_base_reaction_emojis();
 }
 
 /**

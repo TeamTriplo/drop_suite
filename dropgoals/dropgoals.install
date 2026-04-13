@@ -5,6 +5,13 @@
  */
 
 /**
+ * Implements hook_install().
+ */
+function dropgoals_install() {
+  drop_base_grant_admin_permissions('dropgoals');
+}
+
+/**
  * Implements hook_schema().
  */
 function dropgoals_schema() {

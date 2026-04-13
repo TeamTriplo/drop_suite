@@ -309,6 +309,8 @@ function dropcrm_install() {
     $view_config->setData($data);
     $view_config->save();
   }
+
+  drop_base_grant_admin_permissions('dropcrm');
 }
 
 /**

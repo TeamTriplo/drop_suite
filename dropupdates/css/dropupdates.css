@@ -1,0 +1,242 @@
+/**
+ * @file
+ * DropUpdates styles — feed, cards, seen-by list, nav badge.
+ * Reaction chips use shared drop_base.reactions.css.
+ */
+
+/* ---------------------------------------------------------------------------
+   Nav badge
+   --------------------------------------------------------------------------- */
+
+.drop-nav-badge {
+  display: inline-block;
+  min-width: 1.25rem;
+  padding: 0.05rem 0.35rem;
+  margin-left: 0.25rem;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+  background: var(--drop-primary, #e91e63);
+  border-radius: 999px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------------------
+   Post form
+   --------------------------------------------------------------------------- */
+
+.drop-updates-post-form {
+  max-width: 720px;
+  margin: 0 0 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ---------------------------------------------------------------------------
+   Feed
+   --------------------------------------------------------------------------- */
+
+.drop-updates-feed {
+  max-width: 720px;
+}
+
+.drop-updates-empty {
+  max-width: 720px;
+  padding: 2rem;
+  color: var(--drop-text-muted, #777);
+  text-align: center;
+  background: #fafafa;
+  border: 1px dashed var(--drop-border, #e0e0e0);
+  border-radius: 8px;
+}
+
+.drop-updates-day {
+  margin-bottom: 1.5rem;
+}
+
+.drop-updates-day__label {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--drop-text-muted, #666);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Update card
+   --------------------------------------------------------------------------- */
+
+.drop-update--card {
+  margin-bottom: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.drop-update--own {
+  border-left: 3px solid var(--drop-primary, #e91e63);
+}
+
+.drop-update__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.drop-update__avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.drop-update__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.drop-update__author {
+  font-weight: 600;
+  color: var(--drop-text, #222);
+}
+
+.drop-update__time {
+  font-size: 0.85em;
+  color: var(--drop-text-muted, #888);
+}
+
+.drop-update__actions {
+  float: right;
+  font-size: 0.8em;
+}
+
+.drop-update__action {
+  margin-left: 0.5rem;
+  color: var(--drop-text-muted, #888);
+  text-decoration: none;
+}
+
+.drop-update__action:hover {
+  color: var(--drop-primary, #e91e63);
+  text-decoration: underline;
+}
+
+.drop-update__body {
+  margin: 0.25rem 0 0.75rem 0;
+  color: var(--drop-text, #222);
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.drop-update__body p:first-child {
+  margin-top: 0;
+}
+
+.drop-update__body p:last-child {
+  margin-bottom: 0;
+}
+
+.drop-update__footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ---------------------------------------------------------------------------
+   Seen-by
+   --------------------------------------------------------------------------- */
+
+.drop-update__seen {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85em;
+  color: var(--drop-text-muted, #888);
+  margin-left: auto;
+}
+
+.drop-update__seen--empty {
+  font-style: italic;
+}
+
+.drop-update__seen-label {
+  white-space: nowrap;
+}
+
+.drop-update__seen-name {
+  color: var(--drop-text, #444);
+}
+
+.drop-update__seen-name + .drop-update__seen-name::before {
+  content: none;
+}
+
+.drop-update__seen-more {
+  margin-left: 0.15rem;
+  font-weight: 600;
+  color: var(--drop-text-muted, #666);
+}
+
+/* ---------------------------------------------------------------------------
+   DropBridge dashboard recent-updates section
+   --------------------------------------------------------------------------- */
+
+.dropbridge-recent-updates {
+  margin: 1rem 0;
+}
+
+.dropbridge-recent-updates__item {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.35rem;
+  background: #fff;
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+
+.dropbridge-recent-updates__item:hover {
+  border-color: var(--drop-primary, #e91e63);
+}
+
+.dropbridge-recent-updates__item.is-unread::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 1rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--drop-primary, #e91e63);
+}
+
+.dropbridge-recent-updates__author {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.dropbridge-recent-updates__time {
+  font-size: 0.8em;
+  color: var(--drop-text-muted, #888);
+  margin-left: 0.5rem;
+}
+
+.dropbridge-recent-updates__preview {
+  margin-top: 0.2rem;
+  font-size: 0.88em;
+  color: var(--drop-text, #444);
+}

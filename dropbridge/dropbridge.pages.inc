@@ -295,7 +295,99 @@ function dropbridge_daily_list() {
     '#weight'       => 0,
   );
 
+  // ---- DropUpdates: Recent Team Updates section --------------------------
+  if (module_exists('dropupdates') && user_access('view drop updates')) {
+    $recent_html = _dropbridge_render_recent_updates($user);
+    if ($recent_html) {
+      $output['recent_updates'] = array(
+        '#markup' => $recent_html,
+        '#weight' => 5,
+        '#attached' => array(
+          'css' => array(backdrop_get_path('module', 'dropupdates') . '/css/dropupdates.css'),
+        ),
+      );
+    }
+  }
+
   return $output;
+}
+
+/**
+ * Renders the "Recent Team Updates" panel for the /drop dashboard.
+ *
+ * @param object $viewer
+ *   The current user account.
+ *
+ * @return string|false
+ *   HTML markup, or FALSE if there's nothing to show.
+ */
+function _dropbridge_render_recent_updates($viewer) {
+  // Pull the 5 most recent updates authored by someone other than the viewer.
+  $ids = db_select('drop_update', 'u')
+    ->fields('u', array('uid_post'))
+    ->condition('u.uid', $viewer->uid, '<>')
+    ->orderBy('u.created', 'DESC')
+    ->range(0, 5)
+    ->execute()
+    ->fetchCol();
+
+  if (empty($ids)) {
+    return FALSE;
+  }
+
+  $updates = entity_load('drop_update', $ids);
+
+  // Pre-load which of these the viewer has already seen, so we can mark unread.
+  $seen = array();
+  if ($viewer->uid) {
+    $seen = db_select('drop_update_view', 'v')
+      ->fields('v', array('uid_post'))
+      ->condition('v.uid_post', $ids, 'IN')
+      ->condition('v.uid', $viewer->uid)
+      ->execute()
+      ->fetchCol();
+    $seen = array_flip($seen);
+  }
+
+  $items_html = '';
+  foreach ($ids as $id) {
+    if (empty($updates[$id])) {
+      continue;
+    }
+    $u = $updates[$id];
+    $author = user_load($u->uid);
+    $name   = $author ? format_username($author) : t('Someone');
+    $time   = format_date($u->created, 'custom', 'M j, g:i a');
+
+    $plain = trim(strip_tags($u->body));
+    $plain = preg_replace('/\s+/', ' ', $plain);
+    if (backdrop_strlen($plain) > 140) {
+      $plain = backdrop_substr($plain, 0, 140) . '…';
+    }
+
+    $classes = array('dropbridge-recent-updates__item');
+    if (!isset($seen[$id])) {
+      $classes[] = 'is-unread';
+    }
+
+    $items_html .= l(
+      '<span class="dropbridge-recent-updates__author">' . check_plain($name) . '</span>'
+      . '<span class="dropbridge-recent-updates__time">' . check_plain($time) . '</span>'
+      . '<div class="dropbridge-recent-updates__preview">' . check_plain($plain) . '</div>',
+      'drop/updates',
+      array(
+        'html' => TRUE,
+        'fragment' => 'u-' . (int) $id,
+        'attributes' => array('class' => $classes),
+      )
+    );
+  }
+
+  $header = '<div class="dropbridge-section-header"><h3>' . t('Recent Team Updates') . '</h3>'
+    . l(t('View all →'), 'drop/updates', array('attributes' => array('class' => array('dropbridge-section-more'))))
+    . '</div>';
+
+  return '<div class="dropbridge-recent-updates">' . $header . $items_html . '</div>';
 }
 
 /**

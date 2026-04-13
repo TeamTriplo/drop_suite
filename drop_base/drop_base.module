@@ -111,6 +111,11 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/files/\d+/edit$#',
     '#^drop/files/\d+/replace$#',
     '#^drop/files/\d+/delete$#',
+    // Team updates feed and forms.
+    '#^drop/updates$#',
+    '#^drop/updates/add$#',
+    '#^drop/updates/\d+/edit$#',
+    '#^drop/updates/\d+/delete$#',
     // Meeting agenda.
     '#^drop/meeting$#',
     // Settings pages (main dashboard and per-module).
@@ -307,7 +312,11 @@ function _drop_base_render_nav() {
     }
     $is_active = _drop_base_nav_is_active($link['path'], $path);
     $class = $is_active ? ' class="drop-nav-active"' : '';
-    $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . check_plain($link['title']) . '</a>';
+    $badge_html = '';
+    if (isset($link['badge']) && $link['badge'] !== '' && $link['badge'] !== 0) {
+      $badge_html = ' <span class="drop-nav-badge">' . check_plain((string) $link['badge']) . '</span>';
+    }
+    $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . check_plain($link['title']) . $badge_html . '</a>';
   }
 
   // Allow other modules to add content to the right side of the nav.
@@ -1086,6 +1095,15 @@ function drop_base_menu() {
     'file'             => 'drop_base.admin.inc',
   );
 
+  // --- Drop Suite modules (scoped enable/disable page) ---
+  $items['drop/settings/modules'] = array(
+    'title'            => 'Drop Suite modules',
+    'description'      => 'Enable or disable Drop Suite modules.',
+    'page callback'    => 'drop_base_modules_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop suite modules'),
+  );
+
   // --- Meeting agenda ---
   $items['drop/meeting'] = array(
     'title'            => 'Meeting',
@@ -1280,6 +1298,11 @@ function drop_base_permission() {
       'title'       => t('Access team directory'),
       'description' => t('View the team directory showing team members and last online time.'),
     ),
+    'administer drop suite modules' => array(
+      'title'       => t('Administer Drop Suite modules'),
+      'description' => t('Enable and disable Drop Suite modules at <em>drop/settings/modules</em>. Does not grant access to other modules or the main admin toolbar.'),
+      'restrict access' => TRUE,
+    ),
   );
 }
 
@@ -1321,6 +1344,13 @@ function drop_base_drop_settings_info() {
       'path' => 'drop/settings/base',
       'permission' => 'administer site configuration',
       'weight' => 0,
+    ),
+    'drop_modules' => array(
+      'title' => t('Drop Suite modules'),
+      'description' => t('Enable or disable Drop Suite modules.'),
+      'path' => 'drop/settings/modules',
+      'permission' => 'administer drop suite modules',
+      'weight' => -10,
     ),
   );
 }
@@ -1457,6 +1487,157 @@ function drop_base_team_page() {
 function drop_base_permissions_page() {
   module_load_include('inc', 'user', 'user.admin');
   return backdrop_get_form('user_admin_permissions');
+}
+
+/**
+ * Grants all of a module's permissions to the site's administrator role.
+ *
+ * Call from a Drop module's hook_install() so that fresh sites don't require
+ * a manual visit to the permissions page to unlock new permissions. Idempotent.
+ *
+ * @param string $module_name
+ *   Machine name of the module whose permissions should be granted.
+ */
+function drop_base_grant_admin_permissions($module_name) {
+  $admin_role = config_get('system.core', 'user_admin_role');
+  if (!$admin_role || $admin_role === 'anonymous') {
+    return;
+  }
+  $perms = module_invoke($module_name, 'permission');
+  if (empty($perms)) {
+    return;
+  }
+  user_role_grant_permissions($admin_role, array_keys($perms));
+}
+
+/**
+ * Returns the machine names of all modules in the "Drop Suite" package.
+ *
+ * Scanned dynamically from each module's .info file so new Drop modules are
+ * picked up automatically without updating a hardcoded list.
+ *
+ * @return array
+ *   Array of module machine names keyed by machine name (values are TRUE).
+ */
+function drop_base_get_drop_module_names() {
+  $names = &backdrop_static(__FUNCTION__);
+  if (isset($names)) {
+    return $names;
+  }
+  $names = array();
+  $all = system_rebuild_module_data();
+  foreach ($all as $machine_name => $data) {
+    if (!empty($data->info['package']) && $data->info['package'] === 'Drop Suite') {
+      $names[$machine_name] = TRUE;
+    }
+  }
+  return $names;
+}
+
+/**
+ * Page callback: Drop Suite scoped modules form.
+ */
+function drop_base_modules_page() {
+  module_load_include('inc', 'system', 'system.admin');
+  return backdrop_get_form('system_modules');
+}
+
+/**
+ * Implements hook_form_system_modules_alter().
+ *
+ * When rendering at drop/settings/modules, strips all non-Drop packages and
+ * blocks enabling any Drop module whose non-Drop dependencies are not met.
+ */
+function drop_base_form_system_modules_alter(&$form, &$form_state, $form_id) {
+  if (current_path() !== 'drop/settings/modules') {
+    return;
+  }
+
+  backdrop_set_title(t('Drop Suite modules'));
+
+  // Post the form back to our scoped path so users holding only
+  // "administer drop suite modules" can submit it. Core's default action
+  // points at admin/modules/list/confirm, which requires "administer modules".
+  $form['#action'] = url('drop/settings/modules');
+
+  // Hide the core filter reset link's path to stay within our scope.
+  if (isset($form['filter']['reset']['#path'])) {
+    $form['filter']['reset']['#path'] = 'drop/settings/modules';
+  }
+
+  $drop_modules = drop_base_get_drop_module_names();
+  $all          = system_rebuild_module_data();
+
+  // Strip every package fieldset except "Drop Suite".
+  foreach (element_children($form['modules']) as $package) {
+    if ($package !== 'Drop Suite') {
+      unset($form['modules'][$package]);
+    }
+  }
+
+  if (!isset($form['modules']['Drop Suite'])) {
+    // Nothing to show — no Drop modules detected.
+    return;
+  }
+
+  // For each Drop module, disable the checkbox if any non-Drop dependency is
+  // not currently enabled. We do not auto-enable non-Drop modules — doing so
+  // would silently widen the "administer drop suite modules" permission.
+  foreach (element_children($form['modules']['Drop Suite']) as $module_name) {
+    if (empty($all[$module_name]) || empty($all[$module_name]->requires)) {
+      continue;
+    }
+    $missing = array();
+    foreach ($all[$module_name]->requires as $dep => $v) {
+      if (isset($drop_modules[$dep])) {
+        // Drop-to-Drop dependency — core will handle it via its standard
+        // confirmation flow.
+        continue;
+      }
+      if (empty($all[$dep]) || empty($all[$dep]->status)) {
+        $dep_label  = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
+        $missing[] = $dep_label;
+      }
+    }
+    if (!empty($missing)) {
+      $row = &$form['modules']['Drop Suite'][$module_name];
+      if (isset($row['enable']['#type']) && $row['enable']['#type'] === 'checkbox') {
+        $row['enable']['#disabled'] = TRUE;
+      }
+      $row['description']['#markup'] .= '<div class="admin-missing">' . t('Requires: @deps (not enabled). Ask a site administrator to enable these first.', array(
+        '@deps' => implode(', ', $missing),
+      )) . '</div>';
+    }
+  }
+
+  // Defensive validate: refuse to enable anything not in the Drop package.
+  $form['#validate'][] = 'drop_base_modules_form_validate';
+}
+
+/**
+ * Form validation for the scoped modules form.
+ *
+ * Belt-and-suspenders — the form already strips non-Drop packages, but if a
+ * user crafts a POST targeting a non-Drop module we reject it here rather than
+ * hand it to system_modules_submit().
+ */
+function drop_base_modules_form_validate($form, &$form_state) {
+  if (empty($form_state['values']['modules']) || !is_array($form_state['values']['modules'])) {
+    return;
+  }
+  $drop_modules = drop_base_get_drop_module_names();
+  foreach ($form_state['values']['modules'] as $package => $rows) {
+    if ($package !== 'Drop Suite') {
+      form_set_error('modules', t('You do not have permission to modify modules outside the Drop Suite package.'));
+      return;
+    }
+    foreach ($rows as $module_name => $row) {
+      if (!isset($drop_modules[$module_name])) {
+        form_set_error('modules', t('You do not have permission to modify %module.', array('%module' => $module_name)));
+        return;
+      }
+    }
+  }
 }
 
 /**
@@ -1615,4 +1796,130 @@ function drop_base_form_field_ui_display_overview_form_alter(&$form, &$form_stat
   if (strpos(current_path(), 'drop/') === 0) {
     $form['#attached']['css'][] = backdrop_get_path('module', 'drop_base') . '/drop_base.admin.css';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Shared emoji reactions (consumed by droptickets, dropupdates, etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the canonical reaction palette as code => emoji character.
+ *
+ * Codes are ASCII-safe and stored in consumer tables. Characters are display
+ * only. All Drop Suite modules that support reactions should call this so the
+ * palette stays consistent.
+ */
+function drop_base_reaction_emojis() {
+  return array(
+    'thumbsup' => '👍',
+    'heart'    => '❤️',
+    'tada'     => '🎉',
+    'eyes'     => '👀',
+  );
+}
+
+/**
+ * Renders a reaction button bar.
+ *
+ * Returns an HTML string: a `.drop-reactions` container with one `.react-btn`
+ * per emoji in the palette. Empty buttons get the `react-btn--empty` class so
+ * the CSS can hide them until the host element is hovered.
+ *
+ * @param array $reactions
+ *   Reactions keyed by emoji code, each value an array of uids who reacted
+ *   (consumer-provided).
+ * @param array $accounts
+ *   Optional uid => account lookup for building tooltip names.
+ * @param array $options
+ *   - react_url: (required) AJAX endpoint to POST {emoji: code} to.
+ *   - data: optional associative array of extra data-* attributes for the bar.
+ *
+ * @return string
+ */
+function drop_base_render_reactions(array $reactions, array $accounts = array(), array $options = array()) {
+  global $user;
+  $emojis   = drop_base_reaction_emojis();
+  $react_url = isset($options['react_url']) ? $options['react_url'] : '';
+
+  $data_attrs = ' data-react-url="' . check_plain($react_url) . '"';
+  if (!empty($options['data']) && is_array($options['data'])) {
+    foreach ($options['data'] as $key => $val) {
+      $data_attrs .= ' data-' . check_plain($key) . '="' . check_plain((string) $val) . '"';
+    }
+  }
+
+  $html = '<div class="drop-reactions"' . $data_attrs . '>';
+  foreach ($emojis as $code => $char) {
+    $uids   = isset($reactions[$code]) ? $reactions[$code] : array();
+    $count  = count($uids);
+    $active = in_array((int) $user->uid, $uids) ? ' is-active' : '';
+    $empty  = $count === 0 ? ' react-btn--empty' : '';
+    $label  = $count > 0 ? $char . ' ' . $count : $char;
+
+    $names = array();
+    foreach ($uids as $uid) {
+      if ($uid == $user->uid) {
+        $names[] = t('You');
+      }
+      elseif (isset($accounts[$uid])) {
+        $names[] = check_plain($accounts[$uid]->name);
+      }
+    }
+    $title = $names ? $char . ' ' . implode(' · ', $names) : $char;
+
+    $html .= '<button type="button" class="react-btn' . $active . $empty . '"'
+      . ' data-emoji="' . check_plain($code) . '"'
+      . ' data-char="' . check_plain($char) . '"'
+      . ' title="' . check_plain($title) . '">' . $label . '</button>';
+  }
+  $html .= '</div>';
+  return $html;
+}
+
+/**
+ * Formats a reactions payload for the AJAX response.
+ *
+ * Consumers call this from their react AJAX handler after loading the fresh
+ * reaction state from their own table. Returns the normalised shape the
+ * shared JS behavior expects: { code: { count, user_reacted, names } }.
+ */
+function drop_base_format_reactions_response(array $reactions, $current_uid) {
+  $all_uids = array();
+  foreach ($reactions as $uids) {
+    $all_uids = array_merge($all_uids, $uids);
+  }
+  $accounts = $all_uids ? user_load_multiple(array_unique($all_uids)) : array();
+
+  $result = array();
+  foreach ($reactions as $code => $uids) {
+    $names = array();
+    foreach ($uids as $uid) {
+      if ($uid == $current_uid) {
+        $names[] = t('You');
+      }
+      elseif (isset($accounts[$uid])) {
+        $names[] = check_plain($accounts[$uid]->name);
+      }
+    }
+    $result[$code] = array(
+      'count'        => count($uids),
+      'user_reacted' => in_array((int) $current_uid, $uids),
+      'names'        => $names,
+    );
+  }
+  return $result;
+}
+
+/**
+ * Returns the #attached assets for a page that renders a reaction bar.
+ *
+ * Modules using drop_base_render_reactions() should merge this into their
+ * page's #attached so the shared CSS/JS load.
+ */
+function drop_base_reactions_attached() {
+  $path = backdrop_get_path('module', 'drop_base');
+  return array(
+    'css' => array($path . '/drop_base.reactions.css'),
+    'js'  => array($path . '/drop_base.reactions.js'),
+  );
 }

@@ -1,0 +1,62 @@
+/**
+ * @file
+ * Shared emoji reaction chip styles for any Drop Suite module.
+ *
+ * Consumers render via drop_base_render_reactions() and wrap the host
+ * element (comment, card, etc.) with the `.drop-reactions-host` class so
+ * empty buttons reveal on hover.
+ */
+
+.drop-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.4rem 0 0;
+  margin-top: 0.4rem;
+}
+
+.react-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #ddd;
+  border-radius: 1rem;
+  background: #f8f8f8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  user-select: none;
+}
+
+/* Empty picker buttons (no reactions yet) hidden until host is hovered.
+   Buttons with a count, or ones the current user has reacted to, always show. */
+.react-btn--empty:not(.is-active) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.drop-reactions-host:hover .react-btn--empty:not(.is-active),
+.drop-reactions:hover .react-btn--empty:not(.is-active) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.react-btn:hover {
+  background: #eef4ff;
+  border-color: #b0c8f0;
+}
+
+.react-btn.is-active {
+  background: #d0e8ff !important;
+  border-color: #4a90d9 !important;
+  color: #1a5a99 !important;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #4a90d9;
+}
+
+.react-btn.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}

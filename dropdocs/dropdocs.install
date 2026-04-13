@@ -111,14 +111,7 @@ function dropdocs_install() {
     ),
   ));
 
-  // Grant administer dropdocs to the default admin role.
-  $admin_role = config_get('system.core', 'user_admin_role');
-  if ($admin_role) {
-    $perms = user_role_permissions(array($admin_role => $admin_role));
-    $perms[$admin_role]['access dropdocs']      = TRUE;
-    $perms[$admin_role]['administer dropdocs']  = TRUE;
-    user_role_change_permissions($admin_role, $perms[$admin_role]);
-  }
+  drop_base_grant_admin_permissions('dropdocs');
 }
 
 /**

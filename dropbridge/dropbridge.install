@@ -1,0 +1,12 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for DropBridge.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function dropbridge_install() {
+  drop_base_grant_admin_permissions('dropbridge');
+}

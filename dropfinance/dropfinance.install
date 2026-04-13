@@ -5,6 +5,13 @@
  */
 
 /**
+ * Implements hook_install().
+ */
+function dropfinance_install() {
+  drop_base_grant_admin_permissions('dropfinance');
+}
+
+/**
  * Implements hook_schema().
  */
 function dropfinance_schema() {

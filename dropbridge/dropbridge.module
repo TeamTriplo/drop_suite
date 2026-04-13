@@ -456,6 +456,65 @@ function dropbridge_slack_dm($slack_user_id, $bot_token, $message) {
 }
 
 /**
+ * Posts a message to a Slack channel.
+ *
+ * Used for broadcast-style notifications (as opposed to dropbridge_notify()
+ * which sends per-user DMs). The channel is looked up by name or ID; Slack's
+ * API accepts either.
+ *
+ * @param string $channel
+ *   Channel name (e.g. '#team') or ID (e.g. 'C0123ABC456').
+ * @param string $message
+ *   Message text. May contain Slack's mrkdwn formatting.
+ * @param array $options
+ *   Optional keys:
+ *   - blocks: array of Block Kit blocks (takes precedence over $message text).
+ *
+ * @return bool
+ *   TRUE on success, FALSE on failure.
+ */
+function dropbridge_post_channel($channel, $message, $options = array()) {
+  $bot_token = config_get('dropbridge.settings', 'slack_bot_token');
+  if (empty($bot_token) || empty($channel)) {
+    return FALSE;
+  }
+
+  $payload = array(
+    'channel' => $channel,
+    'text'    => $message,
+  );
+  if (!empty($options['blocks'])) {
+    $payload['blocks'] = $options['blocks'];
+  }
+
+  $response = backdrop_http_request('https://slack.com/api/chat.postMessage', array(
+    'method'  => 'POST',
+    'headers' => array(
+      'Content-Type'  => 'application/json; charset=utf-8',
+      'Authorization' => 'Bearer ' . $bot_token,
+    ),
+    'data'    => json_encode($payload),
+    'timeout' => 10,
+  ));
+
+  if ($response->code != 200) {
+    watchdog('dropbridge', 'Slack channel post failed (HTTP @code) to @channel.',
+      array('@code' => $response->code, '@channel' => $channel), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $body = json_decode($response->data, TRUE);
+  if (empty($body['ok'])) {
+    watchdog('dropbridge', 'Slack channel post error for @channel: @error.',
+      array('@channel' => $channel, '@error' => isset($body['error']) ? $body['error'] : 'unknown'),
+      WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
  * Returns the notification prefs array for a given user.
  *
  * @param int $uid

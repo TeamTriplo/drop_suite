@@ -30,6 +30,8 @@ function dropfiles_install() {
 
   // Create the field_file_tags taxonomy reference field and instances.
   _dropfiles_ensure_file_tags_field();
+
+  drop_base_grant_admin_permissions('dropfiles');
 }
 
 /**

@@ -5,6 +5,13 @@
  */
 
 /**
+ * Implements hook_install().
+ */
+function dropmonitor_install() {
+  drop_base_grant_admin_permissions('dropmonitor');
+}
+
+/**
  * Implements hook_schema().
  */
 function dropmonitor_schema() {

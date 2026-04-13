@@ -1,0 +1,519 @@
+<?php
+/**
+ * @file
+ * DropUpdates — Lightweight team updates feed.
+ */
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function dropupdates_autoload_info() {
+  return array(
+    'DropUpdate'           => 'dropupdates.entity.inc',
+    'DropUpdateController' => 'dropupdates.entity.inc',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entity info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_info().
+ */
+function dropupdates_entity_info() {
+  return array(
+    'drop_update' => array(
+      'label'            => t('Update'),
+      'plural label'     => t('Updates'),
+      'description'      => t('A team update post.'),
+      'entity class'     => 'DropUpdate',
+      'controller class' => 'DropUpdateController',
+      'base table'       => 'drop_update',
+      'fieldable'        => TRUE,
+      'entity keys'      => array(
+        'id' => 'uid_post',
+      ),
+      'view modes' => array(
+        'full' => array('label' => t('Full'), 'custom settings' => FALSE),
+      ),
+      'access callback' => 'dropupdates_update_access',
+      'module'          => 'dropupdates',
+      'bundles'         => array(
+        'drop_update' => array(
+          'label' => t('Update'),
+        ),
+      ),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function dropupdates_permission() {
+  return array(
+    'administer drop updates' => array(
+      'title'       => t('Administer drop updates'),
+      'description' => t('Full access to all updates regardless of ownership, plus module settings.'),
+    ),
+    'view drop updates' => array(
+      'title'       => t('View drop updates'),
+      'description' => t('See the team updates feed.'),
+    ),
+    'post drop updates' => array(
+      'title'       => t('Post drop updates'),
+      'description' => t('Create new team updates.'),
+    ),
+    'edit own drop updates' => array(
+      'title'       => t('Edit own drop updates'),
+    ),
+    'delete own drop updates' => array(
+      'title'       => t('Delete own drop updates'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Access
+// ---------------------------------------------------------------------------
+
+/**
+ * Access callback for drop_update entities.
+ *
+ * @param string $op
+ *   One of 'view', 'create', 'update', 'delete'.
+ * @param DropUpdate|null $update
+ *   The update entity, or NULL for create checks.
+ * @param object|null $account
+ *   The user account, or NULL for the current user.
+ *
+ * @return bool
+ */
+function dropupdates_update_access($op, $update = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+
+  if (user_access('administer drop updates', $account)) {
+    return TRUE;
+  }
+
+  switch ($op) {
+    case 'view':
+      return user_access('view drop updates', $account);
+
+    case 'create':
+      return user_access('post drop updates', $account);
+
+    case 'update':
+      return $update
+        && $update->uid == $account->uid
+        && user_access('edit own drop updates', $account);
+
+    case 'delete':
+      return $update
+        && $update->uid == $account->uid
+        && user_access('delete own drop updates', $account);
+  }
+
+  return FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Menu loader
+// ---------------------------------------------------------------------------
+
+/**
+ * Menu loader: load a drop_update by ID.
+ */
+function drop_update_load($uid_post) {
+  $updates = entity_load('drop_update', array($uid_post));
+  return $updates ? reset($updates) : FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function dropupdates_menu() {
+  $items = array();
+
+  $items['drop/updates'] = array(
+    'title'            => 'Updates',
+    'page callback'    => 'dropupdates_feed_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('view drop updates'),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  $items['drop/updates/add'] = array(
+    'title'            => 'Post update',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropupdates_post_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('post drop updates'),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/updates/%drop_update/edit'] = array(
+    'title'            => 'Edit update',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropupdates_post_form', 2),
+    'access callback'  => 'dropupdates_update_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/updates/%drop_update/delete'] = array(
+    'title'            => 'Delete update',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropupdates_delete_confirm', 2),
+    'access callback'  => 'dropupdates_update_access',
+    'access arguments' => array('delete', 2),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // AJAX: mark update as seen.
+  $items['drop/updates/seen/%drop_update'] = array(
+    'page callback'    => 'dropupdates_seen_ajax',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('view drop updates'),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_CALLBACK,
+    'delivery callback' => 'backdrop_json_deliver',
+  );
+
+  // AJAX: toggle a reaction. Emoji is supplied via POST body.
+  $items['drop/updates/react/%drop_update'] = array(
+    'page callback'    => 'dropupdates_react_ajax',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('view drop updates'),
+    'file'             => 'dropupdates.pages.inc',
+    'type'             => MENU_CALLBACK,
+    'delivery callback' => 'backdrop_json_deliver',
+  );
+
+  // Settings.
+  $items['drop/settings/updates'] = array(
+    'title'            => 'Drop Updates',
+    'description'      => 'Slack relay and feed settings.',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropupdates_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop updates'),
+    'file'             => 'dropupdates.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_config_info().
+ */
+function dropupdates_config_info() {
+  return array(
+    'dropupdates.settings' => array(
+      'label' => t('DropUpdates settings'),
+      'group' => t('Drop Suite'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Nav + settings registration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function dropupdates_drop_nav_links() {
+  $count = dropupdates_unread_count();
+  return array(
+    array(
+      'title'      => t('Updates'),
+      'badge'      => $count > 0 ? $count : NULL,
+      'path'       => 'drop/updates',
+      'permission' => 'view drop updates',
+      'weight'     => 15,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function dropupdates_drop_settings_info() {
+  return array(
+    'dropupdates' => array(
+      'title'       => t('Drop Updates'),
+      'description' => t('Team updates feed, Slack relay, and display options.'),
+      'path'        => 'drop/settings/updates',
+      'permission'  => 'administer drop updates',
+      'weight'      => 25,
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: team members, seen/reactions, unread, reactions palette
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the canonical reaction emoji palette.
+ *
+ * @deprecated Use drop_base_reaction_emojis() directly. Kept as a thin
+ *   forwarder for any external callers.
+ * @return array
+ */
+function dropupdates_reaction_emojis() {
+  return drop_base_reaction_emojis();
+}
+
+/**
+ * Returns an array of uid => name for all team members.
+ *
+ * "Team member" is anyone with the 'team_member' role, plus admins
+ * (who implicitly have team member access). Used to filter the seen-by list
+ * and the unread badge so clients never count.
+ *
+ * @return array
+ *   Keyed by uid, values are user names.
+ */
+function dropupdates_team_members() {
+  $members = &backdrop_static(__FUNCTION__);
+  if (isset($members)) {
+    return $members;
+  }
+
+  $role_names = array();
+  foreach (array('admin', 'administrator', 'team_member') as $rn) {
+    if (user_role_load($rn)) {
+      $role_names[] = $rn;
+    }
+  }
+
+  if (empty($role_names)) {
+    $members = array();
+    return $members;
+  }
+
+  $result = db_query(
+    "SELECT DISTINCT u.uid, u.name
+     FROM {users} u
+     INNER JOIN {users_roles} ur ON ur.uid = u.uid
+     WHERE ur.role IN (:roles) AND u.status = 1",
+    array(':roles' => $role_names)
+  );
+
+  $members = array();
+  foreach ($result as $row) {
+    $members[$row->uid] = $row->name;
+  }
+  return $members;
+}
+
+/**
+ * Returns the count of unread updates for the given user.
+ *
+ * Counts posts authored by *other* team members that the given user has not
+ * yet marked seen. A user's own posts never count as unread for that user.
+ * Cached for the duration of a request via backdrop_static().
+ *
+ * @param int|null $uid
+ *   The user to check. Defaults to the current user.
+ *
+ * @return int
+ */
+function dropupdates_unread_count($uid = NULL) {
+  global $user;
+  if ($uid === NULL) {
+    $uid = $user->uid;
+  }
+  if (!$uid) {
+    return 0;
+  }
+
+  $cache = &backdrop_static(__FUNCTION__, array());
+  if (isset($cache[$uid])) {
+    return $cache[$uid];
+  }
+
+  $team = dropupdates_team_members();
+  if (empty($team) || !isset($team[$uid])) {
+    // Non-team viewers never see the badge.
+    $cache[$uid] = 0;
+    return 0;
+  }
+
+  $query = db_select('drop_update', 'u');
+  $query->leftJoin(
+    'drop_update_view',
+    'v',
+    'v.uid_post = u.uid_post AND v.uid = :viewer',
+    array(':viewer' => $uid)
+  );
+  $query->condition('u.uid', $uid, '<>');
+  $query->condition('u.uid', array_keys($team), 'IN');
+  $query->isNull('v.uid_post');
+  $count = (int) $query->countQuery()->execute()->fetchField();
+
+  $cache[$uid] = $count;
+  return $count;
+}
+
+/**
+ * Returns the viewer UIDs that have seen the given update, team-only.
+ *
+ * @param int $uid_post
+ *
+ * @return array
+ *   Array of uids (team members only), ordered by viewed_at ASC.
+ */
+function dropupdates_update_viewers($uid_post) {
+  $team = dropupdates_team_members();
+  if (empty($team)) {
+    return array();
+  }
+  $result = db_select('drop_update_view', 'v')
+    ->fields('v', array('uid', 'viewed_at'))
+    ->condition('v.uid_post', $uid_post)
+    ->condition('v.uid', array_keys($team), 'IN')
+    ->orderBy('v.viewed_at', 'ASC')
+    ->execute();
+  $uids = array();
+  foreach ($result as $row) {
+    $uids[$row->uid] = $row->viewed_at;
+  }
+  return $uids;
+}
+
+/**
+ * Returns aggregated reaction counts and the current user's reactions.
+ *
+ * @param int $uid_post
+ * @param int|null $viewer_uid
+ *
+ * @return array
+ *   array('counts' => array(emoji => count), 'mine' => array(emoji => TRUE))
+ */
+/**
+ * Returns the raw reaction state for one update.
+ *
+ * @param int $uid_post
+ * @return array
+ *   Keyed by emoji code, each value an array of uids that reacted with it.
+ *   Every palette code is present (possibly empty) for rendering consistency.
+ */
+function dropupdates_update_reactions($uid_post) {
+  $reactions = array_fill_keys(array_keys(drop_base_reaction_emojis()), array());
+  $rows = db_select('drop_update_reaction', 'r')
+    ->fields('r', array('uid', 'emoji'))
+    ->condition('r.uid_post', $uid_post)
+    ->execute();
+  foreach ($rows as $row) {
+    if (isset($reactions[$row->emoji])) {
+      $reactions[$row->emoji][] = (int) $row->uid;
+    }
+  }
+  return $reactions;
+}
+
+/**
+ * Bulk-loads raw reaction state for a list of updates.
+ *
+ * @param array $uid_posts
+ * @return array
+ *   uid_post => (code => array(uid, ...))
+ */
+function dropupdates_update_reactions_multiple(array $uid_posts) {
+  $out = array();
+  if (empty($uid_posts)) {
+    return $out;
+  }
+  $empty = array_fill_keys(array_keys(drop_base_reaction_emojis()), array());
+  foreach ($uid_posts as $id) {
+    $out[(int) $id] = $empty;
+  }
+  $rows = db_select('drop_update_reaction', 'r')
+    ->fields('r', array('uid_post', 'uid', 'emoji'))
+    ->condition('r.uid_post', $uid_posts, 'IN')
+    ->execute();
+  foreach ($rows as $row) {
+    $uid_post = (int) $row->uid_post;
+    if (isset($out[$uid_post][$row->emoji])) {
+      $out[$uid_post][$row->emoji][] = (int) $row->uid;
+    }
+  }
+  return $out;
+}
+
+// ---------------------------------------------------------------------------
+// Entity insert: Slack relay
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * When a new update is saved, optionally cross-post a preview to a Slack
+ * channel configured in dropupdates settings.
+ */
+function dropupdates_entity_insert($entity, $type) {
+  if ($type !== 'drop_update') {
+    return;
+  }
+  $channel = config_get('dropupdates.settings', 'slack_channel');
+  if (empty($channel)) {
+    return;
+  }
+  if (!function_exists('dropbridge_post_channel')) {
+    return;
+  }
+
+  $author = user_load($entity->uid);
+  $author_name = $author ? format_username($author) : t('Someone');
+  $preview = _dropupdates_slack_preview($entity);
+  $link = url('drop/updates', array('absolute' => TRUE, 'fragment' => 'u-' . $entity->uid_post));
+
+  $message = t('*@name* posted a team update:', array('@name' => $author_name))
+    . "\n\n> " . $preview
+    . "\n\n<" . $link . '|' . t('Read more →') . '>';
+
+  dropbridge_post_channel($channel, $message);
+}
+
+/**
+ * Returns a one-line preview of an update body for Slack.
+ */
+function _dropupdates_slack_preview($update) {
+  $plain = trim(strip_tags($update->body));
+  // Collapse whitespace.
+  $plain = preg_replace('/\s+/', ' ', $plain);
+  if (backdrop_strlen($plain) > 180) {
+    $plain = backdrop_substr($plain, 0, 180) . '…';
+  }
+  return $plain;
+}
