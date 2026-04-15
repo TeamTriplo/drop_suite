@@ -292,6 +292,7 @@ function dropcrm_schema() {
 function dropcrm_install() {
   _dropcrm_create_fields();
   _dropcrm_ensure_contact_tags();
+  _dropcrm_ensure_contact_types();
 
   module_load_include('inc', 'dropcrm', 'dropcrm.admin');
   $config = config('dropcrm.settings');
@@ -384,6 +385,191 @@ function _dropcrm_ensure_contact_tags() {
       taxonomy_term_save($term);
     }
   }
+}
+
+/**
+ * Creates the contact_types vocabulary and field_contact_type, attached to
+ * all CRM contact bundles. Distinct from field_drop_tags (free-form tagging)
+ * — this is a bounded categorization of how each contact relates to us.
+ *
+ * Multi-value: a person can be both Client and Personal, or Prospect and
+ * Partner. Querying "all clients" becomes a clean entity query against this
+ * field instead of a substring match against the generic tags.
+ */
+function _dropcrm_ensure_contact_types() {
+  // Ensure the contact_types vocabulary exists.
+  $vocab = taxonomy_vocabulary_machine_name_load('contact_types');
+  if (!$vocab) {
+    $vocab = new TaxonomyVocabulary(array(
+      'name'         => 'Contact Types',
+      'machine_name' => 'contact_types',
+      'description'  => 'Bounded categorization of how a CRM contact relates to us (Client, Prospect, Partner, etc.). Distinct from free-form Tags.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  // Ensure the field_contact_type field base exists.
+  if (!field_info_field('field_contact_type')) {
+    field_create_field(array(
+      'field_name'  => 'field_contact_type',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'contact_types', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  // Attach to each crm_contact bundle.
+  $bundles = array('crm_person', 'crm_organization', 'crm_household');
+  foreach ($bundles as $bundle) {
+    if (!field_info_instance('crm_contact', 'field_contact_type', $bundle)) {
+      field_create_instance(array(
+        'field_name'  => 'field_contact_type',
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => 'Contact type',
+        'required'    => FALSE,
+        'description' => 'How this contact relates to us. Pick all that apply.',
+        'widget'      => array(
+          'type'   => 'options_buttons',
+          'weight' => -5,
+        ),
+        'display' => array(
+          'default' => array(
+            'label'  => 'inline',
+            'type'   => 'taxonomy_term_reference_link',
+            'weight' => 4,
+          ),
+        ),
+      ));
+    }
+  }
+
+  // Seed default terms. Note: parent must be set explicitly to [0] — without
+  // it, taxonomy_term_save() does not write a row to taxonomy_term_hierarchy,
+  // and the term overview page (which JOINs that table) shows nothing.
+  $default_types = array(
+    'Client',
+    'Past Client',
+    'Prospect',
+    'Partner',
+    'Vendor',
+    'Personal',
+    'Internal',
+  );
+  foreach ($default_types as $type_name) {
+    $existing = taxonomy_term_load_multiple(array(), array(
+      'name'       => $type_name,
+      'vocabulary' => $vocab->machine_name,
+    ));
+    if (empty($existing)) {
+      $term = new TaxonomyTerm(array(
+        'name'       => $type_name,
+        'vocabulary' => $vocab->machine_name,
+        'parent'     => array(0),
+      ));
+      taxonomy_term_save($term);
+    }
+  }
+}
+
+/**
+ * Migrates contact-type-ish values from field_drop_tags to field_contact_type.
+ *
+ * For each contact, looks at their drop_tags terms; any whose name matches a
+ * known synonym for a contact_types term gets copied into the new field. The
+ * original tag is left in place — the user can clean up the old tags manually
+ * once they have confirmed the migration looks right.
+ *
+ * Synonym map is intentionally generous so common variations like "Current
+ * Client" / "Former Client" / "Family" are caught without manual cleanup.
+ *
+ * @return int
+ *   Count of contacts that received at least one new contact_type value.
+ */
+function _dropcrm_migrate_drop_tags_to_contact_types() {
+  if (!taxonomy_vocabulary_machine_name_load('contact_types')) {
+    return 0;
+  }
+
+  // Map drop_tags term names (lowercased) → contact_types term names.
+  $synonyms = array(
+    'client'         => 'Client',
+    'current client' => 'Client',
+    'active client'  => 'Client',
+    'past client'    => 'Past Client',
+    'former client'  => 'Past Client',
+    'previous client' => 'Past Client',
+    'prospect'       => 'Prospect',
+    'lead'           => 'Prospect',
+    'partner'        => 'Partner',
+    'vendor'         => 'Vendor',
+    'supplier'       => 'Vendor',
+    'personal'       => 'Personal',
+    'family'         => 'Personal',
+    'friend'         => 'Personal',
+    'internal'       => 'Internal',
+    'staff'          => 'Internal',
+    'team'           => 'Internal',
+  );
+
+  // Load all contact_types terms keyed by name.
+  $contact_type_terms = array();
+  $terms = entity_load('taxonomy_term', FALSE, array('vocabulary' => 'contact_types'));
+  foreach ($terms as $term) {
+    $contact_type_terms[$term->name] = $term->tid;
+  }
+  if (empty($contact_type_terms)) {
+    return 0;
+  }
+
+  $migrated = 0;
+  $contacts = entity_load('crm_contact', FALSE);
+  foreach ($contacts as $contact) {
+    if (empty($contact->field_drop_tags[LANGUAGE_NONE])) {
+      continue;
+    }
+
+    $existing_type_tids = array();
+    if (!empty($contact->field_contact_type[LANGUAGE_NONE])) {
+      foreach ($contact->field_contact_type[LANGUAGE_NONE] as $item) {
+        $existing_type_tids[] = (int) $item['tid'];
+      }
+    }
+
+    $added = FALSE;
+    foreach ($contact->field_drop_tags[LANGUAGE_NONE] as $item) {
+      $tag_term = taxonomy_term_load($item['tid']);
+      if (!$tag_term) {
+        continue;
+      }
+      $key = strtolower(trim($tag_term->name));
+      if (!isset($synonyms[$key])) {
+        continue;
+      }
+      $target_name = $synonyms[$key];
+      if (!isset($contact_type_terms[$target_name])) {
+        continue;
+      }
+      $target_tid = (int) $contact_type_terms[$target_name];
+      if (in_array($target_tid, $existing_type_tids, TRUE)) {
+        continue;
+      }
+      $contact->field_contact_type[LANGUAGE_NONE][] = array('tid' => $target_tid);
+      $existing_type_tids[] = $target_tid;
+      $added = TRUE;
+    }
+
+    if ($added) {
+      entity_plus_save('crm_contact', $contact);
+      $migrated++;
+    }
+  }
+
+  return $migrated;
 }
 
 /**
@@ -1405,4 +1591,29 @@ function dropcrm_update_1024() {
     }
   }
   return t('crm_contacts view already exists.');
+}
+
+/**
+ * Create the contact_types vocabulary, attach field_contact_type to all CRM
+ * contact bundles, seed default terms, and migrate matching drop_tags values
+ * into the new field.
+ */
+function dropcrm_update_1025() {
+  _dropcrm_ensure_contact_types();
+  $migrated = _dropcrm_migrate_drop_tags_to_contact_types();
+  return t('Created contact_types vocabulary and field_contact_type. Migrated @count contact(s) from drop_tags.', array(
+    '@count' => $migrated,
+  ));
+}
+
+/**
+ * Re-run the drop_tags → contact_type migration with an expanded synonym map
+ * so common variants like "Current Client", "Former Client", and "Family"
+ * get categorized without manual cleanup.
+ */
+function dropcrm_update_1026() {
+  $migrated = _dropcrm_migrate_drop_tags_to_contact_types();
+  return t('Re-ran contact_type migration with expanded synonyms. Migrated @count additional contact(s).', array(
+    '@count' => $migrated,
+  ));
 }

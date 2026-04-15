@@ -119,6 +119,12 @@ function dropcrm_contact_view(CrmContact $contact) {
   // For person contacts, the hero renders specific fields manually.
   // Render remaining Field API fields so custom fields are visible.
   if ($contact->bundle() === 'crm_person') {
+    // Required before field_attach_view() — taxonomy term reference
+    // formatters look up $item['taxonomy_term'] which is only populated by
+    // field_attach_prepare_view(). Without this, any taxonomy field that
+    // isn't manually unset below crashes with "Undefined array key
+    // taxonomy_term" in taxonomy_field_formatter_view().
+    field_attach_prepare_view('crm_contact', array($contact->cid => $contact), 'default');
     $field_output = field_attach_view('crm_contact', $contact, 'default');
     // Remove fields already rendered in the hero to avoid duplication.
     $hero_fields = array('field_crm_rating', 'field_crm_job_title', 'field_crm_employer', 'field_crm_tags', 'field_crm_warmth', 'field_drop_tags');
@@ -506,6 +512,9 @@ function dropcrm_activity_view(CrmActivity $activity) {
   }
 
   // Render any additional Field API fields not already shown above.
+  // field_attach_prepare_view() is required before field_attach_view() so
+  // taxonomy term reference formatters have $item['taxonomy_term'] populated.
+  field_attach_prepare_view('crm_activity', array($activity->aid => $activity), 'default');
   $field_output = field_attach_view('crm_activity', $activity, 'default');
   $manual_fields = array('field_crm_contacts', 'field_crm_activity_body', 'field_crm_meeting_notes');
   foreach ($manual_fields as $mf) {
@@ -1104,4 +1113,20 @@ function dropcrm_review_clear() {
   drop_base_review_clear('organizations', $user->uid);
   backdrop_set_message(t('Review flags cleared.'));
   backdrop_goto('drop/crm/review');
+}
+
+/**
+ * Page callback: mark a CRM activity as completed, then return to the daily list.
+ *
+ * Used by the Drop Dashboard daily list's one-click done link.
+ *
+ * @param CrmActivity $activity
+ *   The activity entity.
+ */
+function dropcrm_activity_done(CrmActivity $activity) {
+  $activity->status = 'completed';
+  $activity->save();
+  $link = l($activity->subject, 'drop/crm/activity/' . $activity->aid);
+  backdrop_set_message(t('!link marked as done.', array('!link' => $link)));
+  backdrop_goto('drop');
 }

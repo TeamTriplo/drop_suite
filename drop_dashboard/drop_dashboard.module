@@ -1,0 +1,62 @@
+<?php
+/**
+ * @file
+ * Drop Dashboard — unified daily to-do list at /drop.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function drop_dashboard_permission() {
+  return array(
+    'access drop_dashboard' => array(
+      'title'       => t('Access Drop dashboard'),
+      'description' => t('View and act on the unified daily to-do list at /drop.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_dashboard_menu() {
+  $items = array();
+
+  $items['drop'] = array(
+    'title'            => 'Drop Suite',
+    'page callback'    => 'drop_dashboard_daily_list',
+    'access callback'  => 'user_access',
+    'access arguments' => array('access drop_dashboard'),
+    'file'             => 'drop_dashboard.pages.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function drop_dashboard_theme() {
+  return array(
+    'drop_dashboard_daily_list' => array(
+      'variables' => array('items' => array(), 'preview_date' => NULL, 'is_past' => FALSE),
+      'file'      => 'drop_dashboard.pages.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function drop_dashboard_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Dashboard'),
+      'path'       => 'drop',
+      'permission' => 'access drop_dashboard',
+      'weight'     => 0,
+      'icon'       => 'house',
+    ),
+  );
+}

@@ -1,11 +1,11 @@
 <?php
 /**
  * @file
- * Tests for the DropDocs module.
+ * Tests for the DropDocs module (post Book-module refactor).
  */
 
 /**
- * Shared base class: helpers for creating doc nodes.
+ * Shared base class: helpers for creating book-enabled doc nodes.
  */
 abstract class DropDocsTestBase extends BackdropWebTestCase {
 
@@ -19,16 +19,20 @@ abstract class DropDocsTestBase extends BackdropWebTestCase {
   protected $viewerUser;
 
   /**
-   * Creates and saves a doc node.
+   * Creates and saves a doc node, optionally enrolled in a book.
    *
-   * @param string   $title
-   * @param int|null $parent_nid  NID of parent doc, or NULL for root.
-   * @param string   $body        Body text.
-   * @param int|null $uid         Author UID (defaults to adminUser).
+   * If $parent is NULL, the doc becomes its own book root. If $parent is a
+   * loaded doc node that has $node->book set, the new doc is added as a child
+   * of that parent within the same book.
    *
-   * @return object  Saved node.
+   * @param string      $title
+   * @param object|null $parent  Parent doc node (with book) or NULL for a new book root.
+   * @param string      $body    Body text.
+   * @param int|null    $uid     Author UID (defaults to adminUser).
+   *
+   * @return object  Saved node with $node->book populated.
    */
-  protected function createTestDoc($title, $parent_nid = NULL, $body = 'Test content.', $uid = NULL) {
+  protected function createTestDoc($title, $parent = NULL, $body = 'Test content.', $uid = NULL) {
     $node         = new Node();
     $node->type   = 'doc';
     $node->title  = $title;
@@ -38,168 +42,18 @@ abstract class DropDocsTestBase extends BackdropWebTestCase {
       'value'  => $body,
       'format' => filter_default_format(),
     );
-    if ($parent_nid) {
-      $node->field_doc_parent[LANGUAGE_NONE][0]['target_id'] = (int) $parent_nid;
+
+    module_load_include('module', 'book');
+    $node->book = _book_link_defaults('new');
+    if ($parent && !empty($parent->book['bid'])) {
+      $node->book['bid']  = $parent->book['bid'];
+      $node->book['plid'] = $parent->book['mlid'];
+    }
+    else {
+      $node->book['bid'] = 'new';
     }
     node_save($node);
     return $node;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Tree builder unit tests
-// ---------------------------------------------------------------------------
-
-/**
- * Tests dropdocs_build_tree() with in-memory data (no DB required).
- */
-class DropDocsTreeTest extends BackdropWebTestCase {
-
-  public static function getInfo() {
-    return array(
-      'name'        => 'DropDocs Tree Builder',
-      'description' => 'Verifies dropdocs_build_tree() builds and sorts nested trees correctly.',
-      'group'       => 'DropDocs',
-    );
-  }
-
-  public function setUp() {
-    parent::setUp('drop_base', 'entityreference', 'dropdocs');
-  }
-
-  /**
-   * Constructs a minimal doc row object for passing to dropdocs_build_tree().
-   */
-  protected function makeDoc($nid, $title, $parent_nid = NULL, $weight = NULL) {
-    return (object) array(
-      'nid'        => $nid,
-      'title'      => $title,
-      'parent_nid' => $parent_nid,
-      'weight'     => $weight,
-    );
-  }
-
-  /**
-   * Empty doc list returns an empty tree array.
-   */
-  public function testEmptyDocListReturnsEmptyTree() {
-    $result = dropdocs_build_tree(array());
-    $this->assertEqual(array(), $result, 'Empty doc list returns empty tree.');
-  }
-
-  /**
-   * A single root doc appears at the top level with no children.
-   */
-  public function testSingleRootDocAppearsInTree() {
-    $docs = array(1 => $this->makeDoc(1, 'Getting Started'));
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual(1, count($tree), 'One root doc in tree.');
-    $this->assertEqual('Getting Started', $tree[0]->title);
-    $this->assertEqual(0, count($tree[0]->children), 'Root doc has no children.');
-  }
-
-  /**
-   * A child doc is nested under its parent, not at the top level.
-   */
-  public function testChildDocNestedUnderParent() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Parent Doc'),
-      2 => $this->makeDoc(2, 'Child Doc', 1),
-    );
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual(1, count($tree), 'Only one root-level item.');
-    $this->assertEqual('Parent Doc', $tree[0]->title);
-    $this->assertEqual(1, count($tree[0]->children), 'Parent has one child.');
-    $this->assertEqual('Child Doc', $tree[0]->children[0]->title);
-  }
-
-  /**
-   * Three levels of nesting are built correctly.
-   */
-  public function testMultipleLevelsOfNesting() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Root'),
-      2 => $this->makeDoc(2, 'Level 2', 1),
-      3 => $this->makeDoc(3, 'Level 3', 2),
-    );
-    $tree   = dropdocs_build_tree($docs);
-    $level2 = $tree[0]->children;
-    $level3 = $level2[0]->children;
-    $this->assertEqual(1, count($tree), 'One root.');
-    $this->assertEqual(1, count($level2), 'One level-2 item.');
-    $this->assertEqual(1, count($level3), 'One level-3 item.');
-    $this->assertEqual('Level 3', $level3[0]->title);
-  }
-
-  /**
-   * Multiple root docs are all returned at the top level.
-   */
-  public function testMultipleRootDocsAllAtTopLevel() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Alpha'),
-      2 => $this->makeDoc(2, 'Beta'),
-      3 => $this->makeDoc(3, 'Gamma'),
-    );
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual(3, count($tree), 'Three root docs at top level.');
-  }
-
-  /**
-   * Siblings with different weights are ordered lowest weight first.
-   */
-  public function testSiblingsOrderedByWeight() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Heavy', NULL, 10),
-      2 => $this->makeDoc(2, 'Light', NULL, -5),
-      3 => $this->makeDoc(3, 'Middle', NULL, 0),
-    );
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual('Light', $tree[0]->title, 'Lowest weight comes first.');
-    $this->assertEqual('Middle', $tree[1]->title);
-    $this->assertEqual('Heavy', $tree[2]->title, 'Highest weight comes last.');
-  }
-
-  /**
-   * Siblings with the same weight are ordered alphabetically by title.
-   */
-  public function testSiblingsWithSameWeightOrderedAlphabetically() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Zebra', NULL, 0),
-      2 => $this->makeDoc(2, 'Apple', NULL, 0),
-      3 => $this->makeDoc(3, 'Mango', NULL, 0),
-    );
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual('Apple', $tree[0]->title);
-    $this->assertEqual('Mango', $tree[1]->title);
-    $this->assertEqual('Zebra', $tree[2]->title);
-  }
-
-  /**
-   * Weight sorts before title: a lower weight doc beats an alphabetically
-   * earlier doc with higher weight.
-   */
-  public function testWeightTakesPrecedenceOverTitle() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Apple', NULL, 10),
-      2 => $this->makeDoc(2, 'Zebra', NULL, 0),
-    );
-    $tree = dropdocs_build_tree($docs);
-    $this->assertEqual('Zebra', $tree[0]->title, 'Lower weight beats alphabetical order.');
-    $this->assertEqual('Apple', $tree[1]->title);
-  }
-
-  /**
-   * Docs with NULL weight are treated as weight 0.
-   */
-  public function testNullWeightTreatedAsZero() {
-    $docs = array(
-      1 => $this->makeDoc(1, 'Null weight doc', NULL, NULL),
-      2 => $this->makeDoc(2, 'Zero weight doc', NULL, 0),
-    );
-    $tree = dropdocs_build_tree($docs);
-    // Both have effective weight 0, so alphabetical: Null < Zero.
-    $this->assertEqual('Null weight doc', $tree[0]->title);
-    $this->assertEqual('Zero weight doc', $tree[1]->title);
   }
 }
 
@@ -216,13 +70,13 @@ class DropDocsAccessTest extends DropDocsTestBase {
   public static function getInfo() {
     return array(
       'name'        => 'DropDocs Access Control',
-      'description' => 'Verifies that permissions gate the docs index, view, and reorder pages.',
+      'description' => 'Verifies that permissions gate the docs index and view pages.',
       'group'       => 'DropDocs',
     );
   }
 
   public function setUp() {
-    parent::setUp('drop_base', 'entityreference', 'dropdocs');
+    parent::setUp('drop_base', 'book', 'dropdocs');
 
     $this->adminUser = $this->backdropCreateUser(array(
       'access dropdocs',
@@ -230,11 +84,14 @@ class DropDocsAccessTest extends DropDocsTestBase {
       'create doc content',
       'edit any doc content',
       'delete any doc content',
+      'add content to books',
+      'administer book outlines',
     ));
     $this->editorUser = $this->backdropCreateUser(array(
       'access dropdocs',
       'create doc content',
       'edit own doc content',
+      'add content to books',
     ));
     $this->viewerUser = $this->backdropCreateUser(array(
       'access dropdocs',
@@ -275,21 +132,21 @@ class DropDocsAccessTest extends DropDocsTestBase {
     $doc = $this->createTestDoc('Viewer Doc Test');
 
     $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $doc->nid);
+    $this->backdropGet('node/' . $doc->nid);
     $this->assertResponse(200);
     $this->assertText('Viewer Doc Test');
   }
 
   /**
-   * The Reorder tab requires 'administer dropdocs'.
+   * The settings page requires 'administer dropdocs'.
    */
-  public function testReorderRequiresAdminPermission() {
+  public function testSettingsRequiresAdminPermission() {
     $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/docs/reorder');
+    $this->backdropGet('drop/docs/settings');
     $this->assertResponse(403);
 
     $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/docs/reorder');
+    $this->backdropGet('drop/docs/settings');
     $this->assertResponse(200);
   }
 
@@ -313,24 +170,24 @@ class DropDocsAccessTest extends DropDocsTestBase {
 }
 
 // ---------------------------------------------------------------------------
-// CRUD tests
+// Book integration tests
 // ---------------------------------------------------------------------------
 
 /**
- * Tests creating, viewing, and deleting doc nodes via the DropDocs UI.
+ * Tests that DropDocs correctly integrates with the core Book module.
  */
-class DropDocsCRUDTest extends DropDocsTestBase {
+class DropDocsBookIntegrationTest extends DropDocsTestBase {
 
   public static function getInfo() {
     return array(
-      'name'        => 'DropDocs CRUD',
-      'description' => 'Create, view, and delete doc nodes; verify they appear on the index.',
+      'name'        => 'DropDocs Book Integration',
+      'description' => 'Verifies doc nodes are book-enabled, render with the book sidebar, and preserve book ancestry.',
       'group'       => 'DropDocs',
     );
   }
 
   public function setUp() {
-    parent::setUp('drop_base', 'entityreference', 'dropdocs');
+    parent::setUp('drop_base', 'book', 'dropdocs');
 
     $this->adminUser = $this->backdropCreateUser(array(
       'access dropdocs',
@@ -338,6 +195,8 @@ class DropDocsCRUDTest extends DropDocsTestBase {
       'create doc content',
       'edit any doc content',
       'delete any doc content',
+      'add content to books',
+      'administer book outlines',
     ));
     $this->viewerUser = $this->backdropCreateUser(array(
       'access dropdocs',
@@ -345,7 +204,131 @@ class DropDocsCRUDTest extends DropDocsTestBase {
   }
 
   /**
-   * Index shows the empty message using the default display name.
+   * hook_install registers 'doc' in book.settings.book_allowed_types.
+   */
+  public function testDocIsRegisteredAsBookAllowedType() {
+    $allowed = config_get('book.settings', 'book_allowed_types');
+    $this->assertTrue(is_array($allowed), 'book_allowed_types is an array.');
+    $this->assertTrue(in_array('doc', $allowed), "'doc' is registered as a book-allowed type.");
+  }
+
+  /**
+   * A newly-created doc becomes its own book when bid is 'new'.
+   */
+  public function testNewDocBecomesOwnBook() {
+    $doc = $this->createTestDoc('Standalone Doc');
+    $this->assertTrue(!empty($doc->book['bid']), 'Doc has a book bid after save.');
+    $this->assertEqual($doc->nid, $doc->book['bid'], 'Standalone doc is its own book root.');
+  }
+
+  /**
+   * A child doc is enrolled in its parent's book with the parent as plid.
+   */
+  public function testChildDocJoinsParentBook() {
+    $parent = $this->createTestDoc('Book Parent');
+    $child  = $this->createTestDoc('Book Child', $parent);
+
+    $this->assertEqual($parent->book['bid'], $child->book['bid'], 'Child shares parent bid.');
+    $this->assertEqual($parent->book['mlid'], $child->book['plid'], 'Child plid matches parent mlid.');
+  }
+
+  /**
+   * The docs index page lists the titles of top-level doc books.
+   */
+  public function testIndexListsDocBooks() {
+    $this->createTestDoc('First Book');
+    $this->createTestDoc('Second Book');
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('First Book');
+    $this->assertText('Second Book');
+  }
+
+  /**
+   * Children in a book appear nested under their parent on the index.
+   */
+  public function testChildDocsShowUnderParentOnIndex() {
+    $parent = $this->createTestDoc('Parent Section');
+    $this->createTestDoc('Nested Child', $parent);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+
+    $content = $this->backdropGetContent();
+    $parent_pos = strpos($content, 'Parent Section');
+    $child_pos  = strpos($content, 'Nested Child');
+    $this->assertTrue($parent_pos !== FALSE, 'Parent appears on index.');
+    $this->assertTrue($child_pos !== FALSE, 'Child appears on index.');
+    $this->assertTrue($parent_pos < $child_pos, 'Parent renders before child.');
+  }
+
+  /**
+   * A doc view page shows the book navigation with other entries in the book.
+   *
+   * The dropdocs layout ships a book:navigation sidebar block that renders
+   * on node/% for any book or doc bundle. The ancestor's title should be
+   * visible in the rendered page (via the sidebar tree and/or breadcrumb).
+   */
+  public function testDocViewRendersBookSidebar() {
+    $root  = $this->createTestDoc('Sidebar Root');
+    $child = $this->createTestDoc('Sidebar Child', $root);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('node/' . $child->nid);
+    $this->assertResponse(200);
+    $this->assertText('Sidebar Root');
+    $this->assertText('Sidebar Child');
+  }
+
+  /**
+   * The breadcrumb on a nested doc view page links to its ancestor doc.
+   */
+  public function testChildDocBreadcrumbIncludesAncestor() {
+    $root  = $this->createTestDoc('Breadcrumb Root');
+    $child = $this->createTestDoc('Breadcrumb Child', $root);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('node/' . $child->nid);
+    $this->assertResponse(200);
+    $this->assertLinkByHref(url('node/' . $root->nid));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Display name + empty state tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests the configurable display_name setting and empty-state messaging.
+ */
+class DropDocsDisplayNameTest extends DropDocsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropDocs Display Name',
+      'description' => 'Verifies the display_name config changes nav, empty state, and sidebar heading.',
+      'group'       => 'DropDocs',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_base', 'book', 'dropdocs');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+      'administer dropdocs',
+      'create doc content',
+      'edit any doc content',
+      'add content to books',
+    ));
+    $this->viewerUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+    ));
+  }
+
+  /**
+   * The index shows the default empty message when no docs exist.
    */
   public function testIndexShowsEmptyMessage() {
     $this->backdropLogin($this->viewerUser);
@@ -354,328 +337,19 @@ class DropDocsCRUDTest extends DropDocsTestBase {
   }
 
   /**
-   * The configurable display name changes the empty message and sidebar title.
+   * Changing display_name changes the empty message and sidebar heading.
    */
   public function testDisplayNameConfig() {
-    // Change the display name to "Knowledge Base".
     $config = config('dropdocs.settings');
     $config->set('display_name', 'Knowledge Base');
     $config->save();
 
-    // Empty message should reflect the new name.
     $this->backdropLogin($this->viewerUser);
     $this->backdropGet('drop/docs');
     $this->assertText('No knowledge base yet.');
 
-    // Create a doc and verify the sidebar uses the full display name.
     $doc = $this->createTestDoc('KB Article');
-    $this->backdropGet('drop/doc/' . $doc->nid);
+    $this->backdropGet('node/' . $doc->nid);
     $this->assertText('Knowledge Base');
-  }
-
-  /**
-   * A created doc appears by title on the index page.
-   */
-  public function testCreatedDocAppearsOnIndex() {
-    $this->createTestDoc('Installation Guide');
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/docs');
-    $this->assertText('Installation Guide');
-  }
-
-  /**
-   * The doc view page renders the doc title and body content.
-   */
-  public function testDocViewPageRendersContent() {
-    $doc = $this->createTestDoc('API Reference', NULL, 'Detailed API docs here.');
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $doc->nid);
-    $this->assertResponse(200);
-    $this->assertText('API Reference');
-    $this->assertText('Detailed API docs here.');
-  }
-
-  /**
-   * Multiple docs all appear on the index.
-   */
-  public function testMultipleDocsAppearOnIndex() {
-    $this->createTestDoc('First Doc');
-    $this->createTestDoc('Second Doc');
-    $this->createTestDoc('Third Doc');
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/docs');
-    $this->assertText('First Doc');
-    $this->assertText('Second Doc');
-    $this->assertText('Third Doc');
-  }
-
-  /**
-   * The doc view page shows the sidebar tree navigation.
-   */
-  public function testDocViewPageShowsSidebar() {
-    $doc = $this->createTestDoc('Sidebar Test Doc');
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $doc->nid);
-    // Default display name maps to "Documentation" for the sidebar heading.
-    $this->assertText(dropdocs_display_name('full'));
-    $this->assertRaw('dropdocs-sidebar');
-  }
-
-  /**
-   * Visiting a non-doc node at the doc view path returns 404.
-   */
-  public function testNonDocNodeReturnsNotFound() {
-    // Create a basic page node (not a doc).
-    $node         = new Node();
-    $node->type   = 'post';
-    $node->title  = 'A regular post';
-    $node->status = 1;
-    $node->uid    = $this->adminUser->uid;
-    node_save($node);
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $node->nid);
-    $this->assertResponse(404);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hierarchy tests
-// ---------------------------------------------------------------------------
-
-/**
- * Tests parent-child hierarchy: tree rendering, breadcrumbs, and ancestry.
- */
-class DropDocsHierarchyTest extends DropDocsTestBase {
-
-  public static function getInfo() {
-    return array(
-      'name'        => 'DropDocs Hierarchy',
-      'description' => 'Verifies parent-child doc relationships, tree rendering, and breadcrumbs.',
-      'group'       => 'DropDocs',
-    );
-  }
-
-  public function setUp() {
-    parent::setUp('drop_base', 'entityreference', 'dropdocs');
-
-    $this->adminUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'administer dropdocs',
-      'create doc content',
-      'edit any doc content',
-      'delete any doc content',
-    ));
-    $this->viewerUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-    ));
-  }
-
-  /**
-   * A child doc appears nested under its parent in the index tree.
-   */
-  public function testChildDocAppearsUnderParentOnIndex() {
-    $parent = $this->createTestDoc('Parent Section');
-    $this->createTestDoc('Child Page', $parent->nid);
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/docs');
-
-    // Both titles should appear; the HTML order shows parent before child.
-    $content = $this->backdropGetContent();
-    $parent_pos = strpos($content, 'Parent Section');
-    $child_pos  = strpos($content, 'Child Page');
-    $this->assertTrue($parent_pos !== FALSE, 'Parent section appears on index.');
-    $this->assertTrue($child_pos !== FALSE, 'Child page appears on index.');
-    $this->assertTrue($parent_pos < $child_pos, 'Parent appears before child in markup.');
-  }
-
-  /**
-   * The doc view page sidebar marks the active doc distinctively.
-   */
-  public function testActiveDocMarkedInSidebar() {
-    $parent = $this->createTestDoc('Active Parent');
-    $child  = $this->createTestDoc('Active Child', $parent->nid);
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $child->nid);
-
-    $this->assertRaw('dropdocs-tree-active');
-  }
-
-  /**
-   * The breadcrumb on a child doc view page includes the parent title as a link.
-   */
-  public function testChildDocBreadcrumbIncludesParent() {
-    $parent = $this->createTestDoc('Breadcrumb Parent');
-    $child  = $this->createTestDoc('Breadcrumb Child', $parent->nid);
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $child->nid);
-
-    $this->assertText('Breadcrumb Parent');
-    // The breadcrumb and/or sidebar should include a link to the parent doc.
-    $this->assertRaw('drop/doc/' . $parent->nid);
-  }
-
-  /**
-   * A root doc's breadcrumb contains Docs but no parent doc link.
-   */
-  public function testRootDocBreadcrumbContainsDocs() {
-    $root = $this->createTestDoc('Root Breadcrumb Doc');
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $root->nid);
-
-    // Docs index link appears in the breadcrumb.
-    $this->assertRaw('drop/docs');
-  }
-
-  /**
-   * The "Add child page" tab redirects to node/add/doc with parent param.
-   */
-  public function testAddChildTabRedirectsWithParentParam() {
-    $creator = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'create doc content',
-    ));
-    $parent = $this->createTestDoc('Redirect Parent');
-
-    $this->backdropLogin($creator);
-    $this->backdropGet('drop/doc/' . $parent->nid . '/add-child');
-
-    // Should redirect to node/add/doc?parent={nid}.
-    $this->assertUrl('node/add/doc', array('query' => array('parent' => $parent->nid)));
-  }
-
-  /**
-   * The tree sidebar shows docs at all nesting levels.
-   */
-  public function testSidebarShowsMultiLevelTree() {
-    $root   = $this->createTestDoc('Root Section');
-    $level2 = $this->createTestDoc('Sub Section', $root->nid);
-    $level3 = $this->createTestDoc('Deep Page', $level2->nid);
-
-    $this->backdropLogin($this->viewerUser);
-    $this->backdropGet('drop/doc/' . $level3->nid);
-
-    $this->assertText('Root Section');
-    $this->assertText('Sub Section');
-    $this->assertText('Deep Page');
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Reorder tests
-// ---------------------------------------------------------------------------
-
-/**
- * Tests that the reorder form saves weights and affects display order.
- */
-class DropDocsReorderTest extends DropDocsTestBase {
-
-  public static function getInfo() {
-    return array(
-      'name'        => 'DropDocs Reorder',
-      'description' => 'Verifies that the reorder form saves weights and changes display order.',
-      'group'       => 'DropDocs',
-    );
-  }
-
-  public function setUp() {
-    parent::setUp('drop_base', 'entityreference', 'dropdocs');
-
-    $this->adminUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'administer dropdocs',
-      'create doc content',
-      'edit any doc content',
-      'delete any doc content',
-    ));
-  }
-
-  /**
-   * The reorder form shows "No docs to reorder." when no docs exist.
-   */
-  public function testReorderFormShowsEmptyMessage() {
-    $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/docs/reorder');
-    $this->assertText('No docs to reorder.');
-  }
-
-  /**
-   * The reorder form lists all existing docs.
-   */
-  public function testReorderFormListsDocs() {
-    $this->createTestDoc('Doc Alpha');
-    $this->createTestDoc('Doc Beta');
-
-    $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/docs/reorder');
-    $this->assertText('Doc Alpha');
-    $this->assertText('Doc Beta');
-  }
-
-  /**
-   * Submitting the reorder form saves successfully and shows a confirmation.
-   */
-  public function testReorderFormSubmitSucceeds() {
-    $doc = $this->createTestDoc('Reorder Save Test');
-
-    $this->backdropLogin($this->adminUser);
-    $this->backdropPost('drop/docs/reorder', array(
-      'groups[0][' . $doc->nid . '][weight]' => 5,
-    ), t('Save order'));
-
-    $this->assertText('Doc order saved.');
-  }
-
-  /**
-   * After saving a weight, the dropdocs_weight table is updated.
-   */
-  public function testReorderFormPersistsWeightToDatabase() {
-    $doc = $this->createTestDoc('Weight Persist Test');
-
-    $this->backdropLogin($this->adminUser);
-    $this->backdropPost('drop/docs/reorder', array(
-      'groups[0][' . $doc->nid . '][weight]' => 7,
-    ), t('Save order'));
-
-    $saved_weight = db_select('dropdocs_weight', 'w')
-      ->fields('w', array('weight'))
-      ->condition('nid', $doc->nid)
-      ->execute()
-      ->fetchField();
-
-    $this->assertEqual(7, (int) $saved_weight,
-      'Weight 7 is persisted to dropdocs_weight table after form submit.');
-  }
-
-  /**
-   * The reorder page shows a "Top-level pages" group label.
-   */
-  public function testReorderFormShowsGroupLabels() {
-    $this->createTestDoc('Grouped Doc');
-
-    $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/docs/reorder');
-    $this->assertText('Top-level pages');
-  }
-
-  /**
-   * Child docs produce a "Children of …" group label on the reorder page.
-   */
-  public function testReorderFormShowsChildGroupLabel() {
-    $parent = $this->createTestDoc('Parent Group Label');
-    $this->createTestDoc('Child in group', $parent->nid);
-
-    $this->backdropLogin($this->adminUser);
-    $this->backdropGet('drop/docs/reorder');
-    $this->assertText('Children of');
-    $this->assertText('Parent Group Label');
   }
 }

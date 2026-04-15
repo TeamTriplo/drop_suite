@@ -25,16 +25,25 @@
  * Implements hook_preprocess_layout().
  *
  * On most Drop admin pages: suppresses Backdrop's hardcoded $action_links
- * because modules render their own inline action bars. On report sub-tab pages:
- * replaces action_links with a pin/unpin button instead.
+ * because modules render their own inline action bars. On report sub-tab
+ * pages: replaces action_links with a pin/unpin button.
  */
 function drop_base_preprocess_layout(&$variables) {
   $path = current_path();
+
+  // Narrow-page detection runs for ALL paths, since a few matched routes
+  // live outside drop/* (e.g. node/add/doc).
+  if (_drop_base_is_narrow_page($path)) {
+    $variables['classes'][] = 'drop-narrow-page';
+    $width = config_get('drop_base.settings', 'narrow_page_width');
+    if ($width) {
+      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . (int) $width . 'px; margin: 0 auto; }', 'inline');
+    }
+  }
+
   if ($path !== 'drop' && strpos($path, 'drop/') !== 0) {
     return;
   }
-
-  // No-op: pin action is now delivered via the Drop Pin Action block.
 
   // If no sidebar regions have content, add a class so CSS can expand the
   // main content column to full width.
@@ -48,15 +57,84 @@ function drop_base_preprocess_layout(&$variables) {
   if (!$has_sidebar) {
     $variables['classes'][] = 'layout--no-sidebar';
   }
+}
 
-  // Apply narrow page width to individual entity view pages.
-  if (_drop_base_is_narrow_page($path)) {
-    $variables['classes'][] = 'drop-narrow-page';
-    $width = config_get('drop_base.settings', 'narrow_page_width');
-    if ($width) {
-      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . (int) $width . 'px; margin: 0 auto; }', 'inline');
-    }
+/**
+ * Implements hook_theme_registry_alter().
+ *
+ * Ensures drop_base_preprocess_page_components() runs *after*
+ * system_preprocess_page_components(), which sets $variables['messages']
+ * via theme('status_messages'). Without this re-ordering our preprocess
+ * would run first and then get overwritten.
+ */
+function drop_base_theme_registry_alter(&$registry) {
+  if (!isset($registry['page_components']['preprocess functions'])) {
+    return;
   }
+  $funcs = &$registry['page_components']['preprocess functions'];
+  $ours  = 'drop_base_preprocess_page_components';
+  $funcs = array_values(array_diff($funcs, array($ours)));
+  $funcs[] = $ours;
+}
+
+/**
+ * Implements hook_preprocess_page_components().
+ *
+ * Prepends the dismissible site announcement banner to the messages
+ * page-components block. The banner text comes from
+ * dropbridge.settings:announcement_text (config kept in dropbridge for
+ * backwards compatibility — the admin form still lives there). Each message
+ * is hashed; dismissing sets a per-user state flag so the banner stays gone
+ * until the admin changes the text.
+ */
+function drop_base_preprocess_page_components(&$variables) {
+  global $user;
+
+  if ($variables['child_delta'] !== 'messages') {
+    return;
+  }
+  if (!backdrop_is_html() || !$user->uid) {
+    return;
+  }
+
+  $text = (string) config_get('dropbridge.settings', 'announcement_text');
+  if (empty(trim($text))) {
+    return;
+  }
+
+  $hash = substr(md5($text), 0, 8);
+  $dismissed = state_get('drop_base.announcement_dismissed_' . $user->uid, '');
+  if ($dismissed === $hash) {
+    return;
+  }
+
+  $dismiss_url = url('drop/announcement/dismiss', array(
+    'query' => array('h' => $hash, 'destination' => current_path()),
+  ));
+
+  $banner  = '<div class="drop-announcement" id="drop-announcement">';
+  $banner .= '<span class="drop-announcement-text">' . check_plain($text) . '</span>';
+  $banner .= '<a class="drop-announcement-dismiss" href="' . $dismiss_url . '" title="' . t('Dismiss') . '">&#x2715;</a>';
+  $banner .= '</div>';
+
+  backdrop_add_css(backdrop_get_path('module', 'drop_base') . '/drop_base.css');
+
+  $existing = isset($variables['messages']) ? $variables['messages'] : '';
+  $variables['messages'] = $banner . $existing;
+}
+
+/**
+ * Page callback: dismiss the current site announcement for the current user.
+ */
+function drop_base_announcement_dismiss() {
+  global $user;
+
+  $hash = isset($_GET['h']) ? preg_replace('/[^a-f0-9]/', '', $_GET['h']) : '';
+  if ($hash && $user->uid) {
+    state_set('drop_base.announcement_dismissed_' . $user->uid, $hash);
+  }
+
+  backdrop_goto(isset($_GET['destination']) ? $_GET['destination'] : 'drop');
 }
 
 /**
@@ -75,6 +153,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/tickets/\d+$#',
     '#^drop/tickets/add$#',
     '#^drop/tickets/\d+/edit$#',
+    // Comment edit form on a ticket: drop/tickets/{tid}/comment/{tcid}/edit.
+    '#^drop/tickets/\d+/comment/\d+/edit$#',
     // CRM contact view: drop/crm/contact/{cid}
     '#^drop/crm/contact/\d+$#',
     // CRM activity view: drop/crm/activity/{aid}
@@ -92,9 +172,10 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/goals/manage/\d+/edit$#',
     // Time entry edit.
     '#^drop/time/entry/\d+/edit$#',
-    // Docs list and individual doc view.
+    // Docs list and add form. The canonical doc view path is node/{nid},
+    // which is handled by the dropdocs sidebar layout (not narrow).
     '#^drop/docs$#',
-    '#^drop/doc/\d+$#',
+    '#^node/add/doc$#',
     // Project view and forms: drop/projects/{pid}, add, edit.
     '#^drop/projects/\d+$#',
     '#^drop/projects/add$#',
@@ -1276,6 +1357,13 @@ function drop_base_menu() {
     'access callback' => 'user_is_logged_in',
     'type'            => MENU_CALLBACK,
   );
+
+  // Dismiss site announcement (per-user).
+  $items['drop/announcement/dismiss'] = array(
+    'page callback'   => 'drop_base_announcement_dismiss',
+    'access callback' => 'user_is_logged_in',
+    'type'            => MENU_CALLBACK,
+  );
   return $items;
 }
 
@@ -1473,6 +1561,13 @@ function drop_base_drop_nav_links() {
       'permission' => 'access drop team',
       'weight'     => 90,
       'icon'       => 'users',
+    ),
+    array(
+      'title'      => t('Settings'),
+      'path'       => 'drop/settings',
+      'permission' => 'administer site configuration',
+      'weight'     => 100,
+      'icon'       => 'gear',
     ),
   );
 }
@@ -1797,7 +1892,14 @@ function drop_base_user_presave($account) {
 }
 
 /**
- * Returns the machine names of all modules in the "Drop Suite" package.
+ * Returns the package names recognized as Drop Suite modules.
+ */
+function drop_base_get_drop_package_names() {
+  return array('Drop Suites', 'Drop Suites Lab');
+}
+
+/**
+ * Returns the machine names of all modules in a Drop Suite package.
  *
  * Scanned dynamically from each module's .info file so new Drop modules are
  * picked up automatically without updating a hardcoded list.
@@ -1811,9 +1913,10 @@ function drop_base_get_drop_module_names() {
     return $names;
   }
   $names = array();
+  $packages = array_flip(drop_base_get_drop_package_names());
   $all = system_rebuild_module_data();
   foreach ($all as $machine_name => $data) {
-    if (!empty($data->info['package']) && $data->info['package'] === 'Drop Suite') {
+    if (!empty($data->info['package']) && isset($packages[$data->info['package']])) {
       $names[$machine_name] = TRUE;
     }
   }
@@ -1851,48 +1954,49 @@ function drop_base_form_system_modules_alter(&$form, &$form_state, $form_id) {
     $form['filter']['reset']['#path'] = 'drop/settings/modules';
   }
 
-  $drop_modules = drop_base_get_drop_module_names();
-  $all          = system_rebuild_module_data();
+  $drop_modules  = drop_base_get_drop_module_names();
+  $drop_packages = drop_base_get_drop_package_names();
+  $all           = system_rebuild_module_data();
 
-  // Strip every package fieldset except "Drop Suite".
+  // Strip every package fieldset except our Drop packages.
   foreach (element_children($form['modules']) as $package) {
-    if ($package !== 'Drop Suite') {
+    if (!in_array($package, $drop_packages, TRUE)) {
       unset($form['modules'][$package]);
     }
   }
 
-  if (!isset($form['modules']['Drop Suite'])) {
-    // Nothing to show — no Drop modules detected.
-    return;
-  }
-
-  // For each Drop module, disable the checkbox if any non-Drop dependency is
-  // not currently enabled. We do not auto-enable non-Drop modules — doing so
-  // would silently widen the "administer drop suite modules" permission.
-  foreach (element_children($form['modules']['Drop Suite']) as $module_name) {
-    if (empty($all[$module_name]) || empty($all[$module_name]->requires)) {
+  // For each Drop module (across all Drop packages), disable the checkbox if
+  // any non-Drop dependency is not currently enabled. We do not auto-enable
+  // non-Drop modules — doing so would silently widen the
+  // "administer drop suite modules" permission.
+  foreach ($drop_packages as $package) {
+    if (!isset($form['modules'][$package])) {
       continue;
     }
-    $missing = array();
-    foreach ($all[$module_name]->requires as $dep => $v) {
-      if (isset($drop_modules[$dep])) {
-        // Drop-to-Drop dependency — core will handle it via its standard
-        // confirmation flow.
+    foreach (element_children($form['modules'][$package]) as $module_name) {
+      if (empty($all[$module_name]) || empty($all[$module_name]->requires)) {
         continue;
       }
-      if (empty($all[$dep]) || empty($all[$dep]->status)) {
-        $dep_label  = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
-        $missing[] = $dep_label;
+      $missing = array();
+      foreach ($all[$module_name]->requires as $dep => $v) {
+        if (isset($drop_modules[$dep])) {
+          continue;
+        }
+        if (empty($all[$dep]) || empty($all[$dep]->status)) {
+          $dep_label = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
+          $missing[] = $dep_label;
+        }
       }
-    }
-    if (!empty($missing)) {
-      $row = &$form['modules']['Drop Suite'][$module_name];
-      if (isset($row['enable']['#type']) && $row['enable']['#type'] === 'checkbox') {
-        $row['enable']['#disabled'] = TRUE;
+      if (!empty($missing)) {
+        $row = &$form['modules'][$package][$module_name];
+        if (isset($row['enable']['#type']) && $row['enable']['#type'] === 'checkbox') {
+          $row['enable']['#disabled'] = TRUE;
+        }
+        $row['description']['#markup'] .= '<div class="admin-missing">' . t('Requires: @deps (not enabled). Ask a site administrator to enable these first.', array(
+          '@deps' => implode(', ', $missing),
+        )) . '</div>';
+        unset($row);
       }
-      $row['description']['#markup'] .= '<div class="admin-missing">' . t('Requires: @deps (not enabled). Ask a site administrator to enable these first.', array(
-        '@deps' => implode(', ', $missing),
-      )) . '</div>';
     }
   }
 
@@ -1911,10 +2015,11 @@ function drop_base_modules_form_validate($form, &$form_state) {
   if (empty($form_state['values']['modules']) || !is_array($form_state['values']['modules'])) {
     return;
   }
-  $drop_modules = drop_base_get_drop_module_names();
+  $drop_modules  = drop_base_get_drop_module_names();
+  $drop_packages = array_flip(drop_base_get_drop_package_names());
   foreach ($form_state['values']['modules'] as $package => $rows) {
-    if ($package !== 'Drop Suite') {
-      form_set_error('modules', t('You do not have permission to modify modules outside the Drop Suite package.'));
+    if (!isset($drop_packages[$package])) {
+      form_set_error('modules', t('You do not have permission to modify modules outside the Drop Suite packages.'));
       return;
     }
     foreach ($rows as $module_name => $row) {

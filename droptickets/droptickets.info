@@ -1,8 +1,9 @@
 name = DropTickets
 description = Lightweight ticket tracking for small teams.
-package = Drop Suite
+package = Drop Suites
 version = 1.x-1.0.0
 backdrop = 1.x
 
 dependencies[] = drop_base
 dependencies[] = entity_plus
+dependencies[] = colorfield

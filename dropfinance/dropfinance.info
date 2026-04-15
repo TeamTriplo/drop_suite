@@ -1,8 +1,0 @@
-name = Drop Finance
-description = Financial tools: budgeting, invoicing, and client data import from other Drop Suite sites.
-type = module
-backdrop = 1.x
-version = 1.x-1.0-dev
-package = Drop Suite
-dependencies[] = drop_base
-dependencies[] = dropcrm

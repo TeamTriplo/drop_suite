@@ -236,15 +236,16 @@ a.drop-section-add {
 
 /* The primary nav block escapes whatever page-width wrapper it's in so the
  * bar stays a consistent wide width regardless of the per-user page width
- * preference or one-off narrow form wrappers. Inner items remain centered
- * via flex justify-content; the hard cap of 1920px keeps the bar from
- * spanning ultra-wide displays. */
-.layout--drop-suite .block-drop-base-drop-nav {
+ * preference, one-off narrow form wrappers, or alternative layout templates
+ * (e.g. the DropDocs moscone-based layout). Inner items remain centered via
+ * flex justify-content; the hard cap of 1920px keeps the bar from spanning
+ * ultra-wide displays. */
+.block-drop-base-drop-nav {
   margin-left: calc(-50vw + 50%);
   margin-right: calc(-50vw + 50%);
 }
 
-.layout--drop-suite .block-drop-base-drop-nav .drop-nav {
+.block-drop-base-drop-nav .drop-nav {
   max-width: 1920px;
   margin-left: auto;
   margin-right: auto;
@@ -763,4 +764,37 @@ span.drop-pin-link.drop-pin-disabled {
   padding: 0 1rem 0.6rem;
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+/* ---------------------------------------------------------------------------
+   Site announcement banner
+   --------------------------------------------------------------------------- */
+
+.drop-announcement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #1565c0;
+  color: #fff;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.95em;
+  position: relative;
+}
+
+.drop-announcement-text {
+  flex: 1;
+}
+
+.drop-announcement-dismiss {
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.drop-announcement-dismiss:hover {
+  opacity: 1;
 }

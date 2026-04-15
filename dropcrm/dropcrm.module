@@ -984,6 +984,17 @@ function dropcrm_menu() {
     'file'             => 'dropcrm.admin.inc',
   );
 
+  // One-click "mark done" used by the Drop Dashboard daily list.
+  // %crm_activity is at arg position 2.
+  $items['drop/activity/%crm_activity/done'] = array(
+    'page callback'    => 'dropcrm_activity_done',
+    'page arguments'   => array(2),
+    'access callback'  => 'dropcrm_activity_access',
+    'access arguments' => array('edit', 2),
+    'file'             => 'dropcrm.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   // Reports section.
   $items['drop/crm/reports'] = array(
     'title'            => 'Reports',

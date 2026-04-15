@@ -7,7 +7,9 @@
 /**
  * Page callback: renders the docs index at drop/docs.
  *
- * Displays all docs in a hierarchical tree with an add-doc action.
+ * Lists every book whose top-level node is of type 'doc', rendering each
+ * book's outline as a nested link tree. Ordering and nesting are managed
+ * entirely by the core Book module.
  *
  * @return array  Backdrop render array.
  */
@@ -29,259 +31,87 @@ function dropdocs_index_page() {
     );
   }
 
-  $docs = dropdocs_load_all();
+  $doc_books = _dropdocs_get_doc_books();
 
-  if (empty($docs)) {
+  if (empty($doc_books)) {
     $output['empty'] = array(
       '#markup' => '<p class="dropdocs-empty">' . t('No @name yet.', array('@name' => strtolower(dropdocs_display_name()))) . '</p>',
     );
     return $output;
   }
 
-  $tree = dropdocs_build_tree($docs);
+  $markup = '';
+  foreach ($doc_books as $bid => $book) {
+    $tree = menu_tree_all_data($book['menu_name']);
+    $markup .= _dropdocs_render_book_tree($tree);
+  }
+
   $output['tree'] = array(
-    '#markup'   => '<div class="dropdocs-index-tree">' . dropdocs_render_tree($tree) . '</div>',
+    '#markup'   => '<div class="dropdocs-index-tree">' . $markup . '</div>',
     '#attached' => array(
       'css' => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.css'),
-      'js'  => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.js'),
     ),
   );
 
   return $output;
 }
 
-/**
- * Page callback: renders a single doc with sidebar tree navigation.
- *
- * @param object $node  The loaded doc node.
- *
- * @return array  Backdrop render array.
- */
-function dropdocs_doc_view($node) {
-  // Only show doc nodes here.
-  if ($node->type !== 'doc') {
-    return MENU_NOT_FOUND;
-  }
-
-  backdrop_set_title($node->title);
-
-  // Build breadcrumb with ancestor chain.
-  $crumb = array(
-    l(t('Home'), '<front>'),
-    l(t('Drop Suite'), 'drop'),
-    l(dropdocs_display_name(), 'drop/docs'),
-  );
-  $ancestors = dropdocs_get_ancestors($node->nid);
-  foreach ($ancestors as $ancestor) {
-    $crumb[] = l($ancestor->title, 'drop/doc/' . $ancestor->nid);
-  }
-  backdrop_set_breadcrumb($crumb);
-
-  // Sidebar: full doc tree with active item highlighted.
-  $docs    = dropdocs_load_all();
-  $tree    = dropdocs_build_tree($docs);
-  $sidebar = '<aside class="dropdocs-sidebar">'
-    . '<h3 class="dropdocs-sidebar-title">' . dropdocs_display_name('full') . '</h3>'
-    . dropdocs_render_tree($tree, $node->nid)
-    . '</aside>';
-
-  // Main content: render node in full view mode.
-  $node_view = node_view($node, 'full');
-  $main = '<div class="dropdocs-body">' . backdrop_render($node_view) . '</div>';
-
-  return array(
-    '#markup'   => '<div class="dropdocs-view-layout">' . $sidebar . $main . '</div>',
-    '#attached' => array(
-      'css' => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.css'),
-      'js'  => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.js'),
-    ),
-  );
-}
-
-/**
- * Page callback: redirects to node/add/doc with the parent nid pre-filled.
- *
- * @param object $node  The parent doc node.
- */
-function dropdocs_add_child_redirect($node) {
-  backdrop_goto('node/add/doc', array('query' => array('parent' => $node->nid)));
-}
-
 // ---------------------------------------------------------------------------
-// Reorder form
+// Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Form builder: drag-and-drop doc reorder page.
+ * Renders a book menu tree as a nested <ul> of node/{nid} links.
  *
- * Renders one draggable table per sibling group (top-level docs, plus one
- * section per parent that has children). Weights are stored in the
- * dropdocs_weight table.
+ * Backdrop's path aliases apply to node/{nid} automatically, so users see
+ * friendly URLs in the tree without us hard-coding any custom route.
+ *
+ * @param array $tree
+ *   Output of menu_tree_all_data() for a book menu.
+ *
+ * @return string  HTML markup (empty string if $tree is empty).
  */
-function dropdocs_reorder_form($form, &$form_state) {
-  backdrop_set_title(t('Reorder @name', array('@name' => strtolower(dropdocs_display_name()))));
-  backdrop_set_breadcrumb(array(
-    l(t('Home'), '<front>'),
-    l(t('Drop Suite'), 'drop'),
-    l(dropdocs_display_name(), 'drop/docs'),
-  ));
-
-  $docs = dropdocs_load_all();
-
-  if (empty($docs)) {
-    $form['empty'] = array('#markup' => '<p>' . t('No @name to reorder.', array('@name' => strtolower(dropdocs_display_name()))) . '</p>');
-    return $form;
+function _dropdocs_render_book_tree(array $tree) {
+  if (empty($tree)) {
+    return '';
   }
-
-  // Group docs by parent_nid. Key 0 = root level.
-  $groups = array();
-  foreach ($docs as $nid => $doc) {
-    $parent_key = $doc->parent_nid ? (int) $doc->parent_nid : 0;
-    $groups[$parent_key][$nid] = $doc;
-  }
-
-  // Root group (key 0) first, then child groups sorted by parent nid.
-  ksort($groups);
-
-  // Sort each group by current weight then title.
-  foreach ($groups as $parent_key => &$group) {
-    uasort($group, function($a, $b) {
-      $wa = ($a->weight !== NULL) ? (int) $a->weight : 0;
-      $wb = ($b->weight !== NULL) ? (int) $b->weight : 0;
-      return ($wa !== $wb) ? ($wa - $wb) : strcmp($a->title, $b->title);
-    });
-  }
-  unset($group);
-
-  // Build per-group form elements. The theme function renders these into tables.
-  $form['groups'] = array('#tree' => TRUE);
-
-  foreach ($groups as $parent_nid => $group_docs) {
-    $form['groups'][$parent_nid] = array(
-      '#parent_nid'   => $parent_nid,
-      '#parent_label' => _dropdocs_group_label($parent_nid, $docs),
-      '#tree'         => TRUE,
-    );
-    foreach ($group_docs as $nid => $doc) {
-      $form['groups'][$parent_nid][$nid] = array(
-        'title'  => array('#markup' => check_plain($doc->title)),
-        'weight' => array(
-          '#type'              => 'weight',
-          '#title'             => t('Weight'),
-          '#title_display'     => 'invisible',
-          '#default_value'     => ($doc->weight !== NULL) ? (int) $doc->weight : 0,
-          '#delta'             => 50,
-          '#attributes'        => array('class' => array('dropdocs-w-' . $parent_nid)),
-        ),
-      );
+  $output = '<ul class="dropdocs-tree">';
+  foreach ($tree as $data) {
+    if (empty($data['link']) || !empty($data['link']['hidden'])) {
+      continue;
     }
-  }
-
-  $form['#theme']    = 'dropdocs_reorder_form';
-  $form['#attached'] = array(
-    'css' => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.css'),
-  );
-
-  $form['actions'] = array(
-    '#type'   => 'actions',
-    '#weight' => 100,
-    'submit'  => array(
-      '#type'       => 'submit',
-      '#value'      => t('Save order'),
-      '#attributes' => array('class' => array('button-primary')),
-    ),
-  );
-
-  return $form;
-}
-
-/**
- * Returns a human-readable label for a sibling group.
- *
- * @param int   $parent_nid  0 for root, otherwise the parent doc nid.
- * @param array $docs        Flat doc list from dropdocs_load_all().
- *
- * @return string
- */
-function _dropdocs_group_label($parent_nid, array $docs) {
-  if ($parent_nid === 0) {
-    return t('Top-level pages');
-  }
-  $parent = isset($docs[$parent_nid]) ? $docs[$parent_nid] : NULL;
-  return $parent
-    ? t('Children of %title', array('%title' => $parent->title))
-    : t('Orphaned pages');
-}
-
-/**
- * Theme function: renders dropdocs_reorder_form as draggable group tables.
- *
- * Uses array references so that backdrop_render() correctly marks each element
- * as #printed, preventing backdrop_render_children() from emitting them again.
- */
-function theme_dropdocs_reorder_form($variables) {
-  $form   = &$variables['form'];
-  $output = '';
-
-  if (empty($form['groups'])) {
-    return backdrop_render_children($form);
-  }
-
-  foreach (element_children($form['groups']) as $parent_nid) {
-    $group    = &$form['groups'][$parent_nid];
-    $label    = $group['#parent_label'];
-    $table_id = 'dropdocs-reorder-' . $parent_nid;
-    $wclass   = 'dropdocs-w-' . $parent_nid;
-
-    $rows = array();
-    foreach (element_children($group) as $nid) {
-      $rows[] = array(
-        'data'  => array(
-          array('class' => array('tabledrag-handle')),
-          backdrop_render($group[$nid]['title']),
-          backdrop_render($group[$nid]['weight']),
-        ),
-        'class' => array('draggable'),
-      );
+    $link = $data['link'];
+    if (!preg_match('#^node/(\d+)$#', $link['link_path'], $m)) {
+      continue;
     }
-    unset($group);
-
-    $output .= '<h3 class="dropdocs-reorder-label">' . $label . '</h3>';
-    $output .= theme('table', array(
-      'header' => array(
-        array('data' => '', 'class' => array('tabledrag-hide')),
-        t('Page'),
-        array('data' => t('Weight'), 'class' => array('tabledrag-hide')),
-      ),
-      'rows'       => $rows,
-      'attributes' => array('id' => $table_id),
-      'sticky'     => FALSE,
-    ));
-
-    drupal_add_tabledrag($table_id, 'order', 'sibling', $wclass);
+    $nid          = (int) $m[1];
+    $has_children = !empty($data['below']);
+    $class_attr   = $has_children ? ' class="dropdocs-has-children"' : '';
+    $output .= '<li' . $class_attr . ' data-nid="' . $nid . '">';
+    $output .= l($link['link_title'], 'node/' . $nid);
+    if ($has_children) {
+      $output .= _dropdocs_render_book_tree($data['below']);
+    }
+    $output .= '</li>';
   }
-
-  $output .= backdrop_render_children($form);
+  $output .= '</ul>';
   return $output;
 }
 
 /**
- * Submit handler: persist new weights to the dropdocs_weight table.
+ * Returns all books whose top-level node is a doc node, keyed by bid.
+ *
+ * @return array
  */
-function dropdocs_reorder_form_submit($form, &$form_state) {
-  foreach ($form_state['values']['groups'] as $parent_nid => $group) {
-    foreach ($group as $nid => $values) {
-      if (!is_array($values) || !isset($values['weight'])) {
-        continue;
-      }
-      db_merge('dropdocs_weight')
-        ->key(array('nid' => (int) $nid))
-        ->fields(array('weight' => (int) $values['weight']))
-        ->execute();
+function _dropdocs_get_doc_books() {
+  $doc_books = array();
+  foreach (book_get_books() as $bid => $book) {
+    $root = node_load($book['nid']);
+    if ($root && $root->type === 'doc' && node_access('view', $root)) {
+      $doc_books[$bid] = $book;
     }
   }
-  backdrop_set_message(t('@name order saved.', array('@name' => dropdocs_display_name('singular'))));
-  $form_state['redirect'] = 'drop/docs';
+  return $doc_books;
 }
 
 // ---------------------------------------------------------------------------

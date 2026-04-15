@@ -1,8 +1,0 @@
-name = Drop Monitor
-description = Server and site health monitoring dashboard for Drop Suite.
-package = Drop Suite
-type = module
-backdrop = 1.x
-version = 1.x-1.0.0
-
-dependencies[] = drop_base

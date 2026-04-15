@@ -1,5 +1,0 @@
-[DropBridgeInboundSettingsTest]
-name = DropBridge Inbound Settings
-description = Webhook token can be saved, cleared, and empty token disables webhook.
-group = DropBridge
-file = dropbridge.test

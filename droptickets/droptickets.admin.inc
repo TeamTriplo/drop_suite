@@ -889,6 +889,10 @@ function droptickets_settings_form($form, &$form_state) {
     '#markup' => '<p>' . l(t('Manage statuses and Kanban lanes'), 'drop/tickets/settings/statuses') . '</p>',
     '#weight' => -100,
   );
+  $form['bulk_link'] = array(
+    '#markup' => '<p>' . l(t('Bulk tickets tool — apply flags, boards, or tags to many tickets at once'), 'drop/tickets/bulk') . '</p>',
+    '#weight' => -99,
+  );
 
   // --- Notifications ---
   $form['notifications'] = array(
@@ -1003,6 +1007,30 @@ function droptickets_settings_form($form, &$form_state) {
     '#title'         => t('Enable Kanban card modals'),
     '#description'   => t('Click a Kanban card to open a quick-view modal with description, assignee, and priority editing. Also adds an express "Add ticket" button to each column.'),
     '#default_value' => $config->get('kanban_modals'),
+  );
+  // Default kanban board. Pulled from the drop_boards vocabulary. The "All"
+  // board is always an option; additional terms appear as you add them.
+  $board_options = array();
+  if (taxonomy_vocabulary_load('drop_boards')) {
+    $board_terms = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid', 'name'))
+      ->condition('d.vocabulary', 'drop_boards')
+      ->orderBy('d.weight')
+      ->orderBy('d.name')
+      ->execute()->fetchAllKeyed();
+    foreach ($board_terms as $tid => $name) {
+      $board_options[(int) $tid] = $name;
+    }
+  }
+  $form['display']['default_board_tid'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Default Kanban board'),
+    '#description'   => t('Which board loads when someone clicks "Kanban" without selecting one. Manage boards at <a href="@url">taxonomy admin</a>.', array(
+      '@url' => url('admin/structure/taxonomy/drop_boards'),
+    )),
+    '#options'       => $board_options,
+    '#default_value' => (int) ($config->get('default_board_tid') ?: droptickets_all_board_tid()),
+    '#empty_option'  => t('— None —'),
   );
   $form['display']['flag_soft_limit'] = array(
     '#type'          => 'select',

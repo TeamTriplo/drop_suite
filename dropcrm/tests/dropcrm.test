@@ -172,7 +172,7 @@ class DropCRMContactCRUDTest extends DropCRMTestBase {
     $this->backdropLogin($this->crmUser);
     $this->backdropPost('drop/crm/contacts/' . $contact->cid . '/edit', array(
       'name' => 'New Name Org',
-    ), t('Save Contact'));
+    ), t('Save contact'));
 
     // After save, the form redirects to the contact view page.
     $this->assertResponse(200);
@@ -213,7 +213,7 @@ class DropCRMContactCRUDTest extends DropCRMTestBase {
     $this->backdropLogin($this->crmUser);
     $this->backdropPost('drop/crm/contacts/add/crm_organization', array(
       'name' => 'Form Created Org',
-    ), t('Add Contact'));
+    ), t('Add contact'));
 
     // After save, the form redirects to the new contact's view page.
     $this->assertResponse(200);
@@ -419,7 +419,7 @@ class DropCRMActivityCRUDTest extends DropCRMTestBase {
     $this->backdropPost('drop/crm/activities/manage/' . $activity->aid . '/edit', array(
       'subject'       => 'Updated subject',
       'activity_date' => date('Y-m-d'),
-    ), t('Save Activity'));
+    ), t('Save activity'));
 
     $this->assertText('saved');
     $this->backdropGet('drop/crm/activity/' . $activity->aid);
@@ -457,7 +457,7 @@ class DropCRMActivityCRUDTest extends DropCRMTestBase {
       'type'          => 'note',
       'status'        => 'completed',
       'activity_date' => date('Y-m-d'),
-    ), t('Add Activity'));
+    ), t('Add activity'));
 
     $this->assertText('saved');
     $aid = db_select('crm_activity', 'a')

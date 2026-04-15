@@ -1,0 +1,7 @@
+name = Drop Dashboard
+description = Unified daily to-do list at /drop — the landing page for Drop Suite. Aggregates goals, tasks, tickets, CRM activities, and calendar events for the day.
+type = module
+backdrop = 1.x
+dependencies[] = drop_base
+version = 1.x-1.0-dev
+package = Drop Suites

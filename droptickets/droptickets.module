@@ -435,9 +435,20 @@ function droptickets_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Toggle a single (ticket, flag type) pair. The optional 5th URL piece
+  // is a flag type tid; if omitted, falls back to the Priority term so old
+  // links and bookmarks keep working.
   $items['drop/tickets/%drop_ticket/flag'] = array(
     'page callback'    => 'droptickets_ticket_flag_toggle',
     'page arguments'   => array(2),
+    'access callback'  => 'user_access',
+    'access arguments' => array('flag droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/tickets/%drop_ticket/flag/%'] = array(
+    'page callback'    => 'droptickets_ticket_flag_toggle',
+    'page arguments'   => array(2, 4),
     'access callback'  => 'user_access',
     'access arguments' => array('flag droptickets'),
     'file'             => 'droptickets.pages.inc',
@@ -450,6 +461,18 @@ function droptickets_menu() {
     'page arguments'   => array('droptickets_flags_clear_form'),
     'access callback'  => 'user_access',
     'access arguments' => array('flag droptickets'),
+    'file'             => 'droptickets.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Bulk tickets tool — filter, select, and apply a single action (add or
+  // remove a flag / board / tag) to many tickets at once. Intentionally
+  // gated by the admin permission; individual actions check finer perms.
+  $items['drop/tickets/bulk'] = array(
+    'title'            => 'Bulk tickets tool',
+    'description'      => 'Apply a flag, board, or tag to many tickets at once.',
+    'page callback'    => 'droptickets_bulk_page',
+    'access arguments' => array('administer droptickets'),
     'file'             => 'droptickets.pages.inc',
     'type'             => MENU_CALLBACK,
   );
@@ -805,6 +828,286 @@ function droptickets_menu_local_tasks_alter(&$data, $router_item, $root_path) {
   // lives in the Drop Section Navigation block; admin links (Settings, Field UI)
   // are accessible via the settings dashboard (drop/settings).
   $data['tabs'][0]['output'] = array();
+}
+
+// ---------------------------------------------------------------------------
+// Board helpers — the "All" board and the default-board setting.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the tid of the "All" board in the drop_boards vocabulary.
+ *
+ * The All board is stored as a regular taxonomy term like any other board,
+ * but it has a special semantic: when selected, the kanban query shows ALL
+ * tickets regardless of their field_drop_board value (no scoping).
+ *
+ * The tid is cached in the droptickets.settings config so we don't have to
+ * look it up by name every request. Falls back to a name-match lookup if
+ * the config is empty (first run on an upgraded site).
+ *
+ * @return int
+ *   The tid of the All board, or 0 if it doesn't exist yet.
+ */
+function droptickets_all_board_tid() {
+  $cached = &backdrop_static(__FUNCTION__);
+  if ($cached !== NULL) {
+    return $cached;
+  }
+  $tid = (int) config_get('droptickets.settings', 'all_board_tid');
+  if ($tid > 0) {
+    $cached = $tid;
+    return $tid;
+  }
+  // Fallback: look up "All" (and legacy "General") by name.
+  $found = db_query(
+    "SELECT tid FROM {taxonomy_term_data} WHERE vocabulary = 'drop_boards' AND (LOWER(name) = 'all' OR LOWER(name) = 'general') ORDER BY LOWER(name) = 'all' DESC LIMIT 1"
+  )->fetchField();
+  $cached = (int) $found;
+  return $cached;
+}
+
+/**
+ * Returns the configured default kanban board tid.
+ *
+ * Falls back to the All board when unset.
+ */
+function droptickets_default_board_tid() {
+  $tid = (int) config_get('droptickets.settings', 'default_board_tid');
+  return $tid > 0 ? $tid : droptickets_all_board_tid();
+}
+
+// ---------------------------------------------------------------------------
+// Flag types — helpers for the typed flag system.
+//
+// Flags are stored in {drop_ticket_flag} as (tid, type_tid) pairs. Flag
+// "types" are taxonomy terms in the ticket_flag_types vocabulary; each term
+// can carry a color (field_flag_color) and an optional Phosphor icon name
+// (field_flag_icon). Multiple flags can be applied to a single ticket.
+// ---------------------------------------------------------------------------
+
+/**
+ * Loads all available flag types from the ticket_flag_types vocabulary.
+ *
+ * @return array
+ *   Array keyed by tid, each value an object with: tid, name, color, icon,
+ *   weight. Sorted by term weight ascending.
+ */
+function droptickets_flag_types_load() {
+  $cached = &backdrop_static(__FUNCTION__);
+  if ($cached !== NULL) {
+    return $cached;
+  }
+  $cached = array();
+
+  $vocab = taxonomy_vocabulary_load('ticket_flag_types');
+  if (!$vocab) {
+    return $cached;
+  }
+
+  $terms = entity_load('taxonomy_term', FALSE, array('vocabulary' => 'ticket_flag_types'));
+  foreach ($terms as $term) {
+    $color = '';
+    if (!empty($term->field_flag_color[LANGUAGE_NONE][0]['value'])) {
+      $color = $term->field_flag_color[LANGUAGE_NONE][0]['value'];
+    }
+    $icon = '';
+    if (!empty($term->field_flag_icon[LANGUAGE_NONE][0]['value'])) {
+      $icon = $term->field_flag_icon[LANGUAGE_NONE][0]['value'];
+    }
+    $cached[(int) $term->tid] = (object) array(
+      'tid'    => (int) $term->tid,
+      'name'   => $term->name,
+      'color'  => $color,
+      'icon'   => $icon,
+      'weight' => (int) $term->weight,
+    );
+  }
+
+  uasort($cached, function ($a, $b) {
+    if ($a->weight !== $b->weight) {
+      return $a->weight - $b->weight;
+    }
+    return strcasecmp($a->name, $b->name);
+  });
+
+  return $cached;
+}
+
+/**
+ * Returns the type_tids currently flagged on a single ticket.
+ */
+function droptickets_ticket_flags_load($tid) {
+  $tid = (int) $tid;
+  if ($tid <= 0) {
+    return array();
+  }
+  return db_query(
+    'SELECT type_tid FROM {drop_ticket_flag} WHERE tid = :tid ORDER BY created ASC, type_tid ASC',
+    array(':tid' => $tid)
+  )->fetchCol();
+}
+
+/**
+ * Bulk loader: returns map of tid → array of type_tids for many tickets.
+ *
+ * Used by listing pages to avoid N+1 queries against {drop_ticket_flag}.
+ */
+function droptickets_ticket_flags_load_multiple(array $tids) {
+  $tids = array_filter(array_map('intval', $tids));
+  if (empty($tids)) {
+    return array();
+  }
+  $rows = db_query(
+    'SELECT tid, type_tid FROM {drop_ticket_flag} WHERE tid IN (:tids) ORDER BY tid, created ASC, type_tid ASC',
+    array(':tids' => $tids)
+  )->fetchAll();
+  $map = array();
+  foreach ($rows as $row) {
+    $map[(int) $row->tid][] = (int) $row->type_tid;
+  }
+  return $map;
+}
+
+/**
+ * Sets a flag on a ticket. No-op if the flag is already set.
+ */
+function droptickets_ticket_flag_set($tid, $type_tid) {
+  global $user;
+  $tid = (int) $tid;
+  $type_tid = (int) $type_tid;
+  if ($tid <= 0 || $type_tid <= 0) {
+    return;
+  }
+  db_merge('drop_ticket_flag')
+    ->key(array('tid' => $tid, 'type_tid' => $type_tid))
+    ->insertFields(array(
+      'tid'        => $tid,
+      'type_tid'   => $type_tid,
+      'created'    => REQUEST_TIME,
+      'flagged_by' => (int) $user->uid,
+    ))
+    ->execute();
+}
+
+/**
+ * Removes a flag from a ticket. No-op if the flag isn't set.
+ */
+function droptickets_ticket_flag_unset($tid, $type_tid) {
+  $tid = (int) $tid;
+  $type_tid = (int) $type_tid;
+  if ($tid <= 0 || $type_tid <= 0) {
+    return;
+  }
+  db_delete('drop_ticket_flag')
+    ->condition('tid', $tid)
+    ->condition('type_tid', $type_tid)
+    ->execute();
+}
+
+/**
+ * Toggles a single (ticket, flag type) pair. Returns the new state:
+ * TRUE if the flag is now set, FALSE if it is now removed.
+ */
+function droptickets_ticket_flag_toggle_type($tid, $type_tid) {
+  $tid = (int) $tid;
+  $type_tid = (int) $type_tid;
+  $exists = (bool) db_query(
+    'SELECT 1 FROM {drop_ticket_flag} WHERE tid = :tid AND type_tid = :type_tid',
+    array(':tid' => $tid, ':type_tid' => $type_tid)
+  )->fetchField();
+  if ($exists) {
+    droptickets_ticket_flag_unset($tid, $type_tid);
+    return FALSE;
+  }
+  droptickets_ticket_flag_set($tid, $type_tid);
+  return TRUE;
+}
+
+/**
+ * Renders a chip row for a ticket's current flags.
+ *
+ * @param int|array $tid_or_type_tids
+ *   Either a ticket ID (we look up its flags) or a pre-loaded list of
+ *   type_tids. Bulk loaders use the latter form to avoid N+1.
+ * @param string $size
+ *   'normal' or 'compact'. Compact omits the chip text and shows just the
+ *   icon (or nothing if no icon), for tight spaces like kanban cards.
+ *
+ * @return string
+ *   Rendered HTML, or empty string if no flags.
+ */
+function droptickets_ticket_flags_render($tid_or_type_tids, $size = 'normal') {
+  if (is_array($tid_or_type_tids)) {
+    $type_tids = $tid_or_type_tids;
+  }
+  else {
+    $type_tids = droptickets_ticket_flags_load((int) $tid_or_type_tids);
+  }
+  if (empty($type_tids)) {
+    return '';
+  }
+
+  $types = droptickets_flag_types_load();
+  $chips = array();
+  foreach ($type_tids as $type_tid) {
+    $type_tid = (int) $type_tid;
+    if (!isset($types[$type_tid])) {
+      continue;
+    }
+    $chips[] = _droptickets_render_flag_chip($types[$type_tid], $size);
+  }
+  if (empty($chips)) {
+    return '';
+  }
+  $class = 'droptickets-flag-chips droptickets-flag-chips--' . check_plain($size);
+  return '<span class="' . $class . '">' . implode('', $chips) . '</span>';
+}
+
+/**
+ * Renders a single flag chip from a type object.
+ */
+function _droptickets_render_flag_chip($type, $size = 'normal') {
+  $color = $type->color !== '' ? $type->color : '#888888';
+  $text_color = _droptickets_chip_text_color($color);
+  $style = 'background-color: ' . check_plain($color) . '; color: ' . $text_color . ';';
+
+  $icon_html = '';
+  if ($type->icon !== '' && function_exists('icon')) {
+    $icon_html = icon($type->icon, array('attributes' => array(
+      'width'  => $size === 'compact' ? 12 : 13,
+      'height' => $size === 'compact' ? 12 : 13,
+      'class'  => array('droptickets-flag-chip__icon'),
+    )));
+  }
+
+  $name_html = '';
+  if ($size !== 'compact') {
+    $name_html = '<span class="droptickets-flag-chip__name">' . check_plain($type->name) . '</span>';
+  }
+
+  return '<span class="droptickets-flag-chip" style="' . $style . '" title="' . check_plain($type->name) . '">'
+    . $icon_html
+    . $name_html
+    . '</span>';
+}
+
+/**
+ * Picks readable text color (black or white) for a given background hex.
+ *
+ * Uses the perceived-luminance shortcut (Rec. 601) — anything above mid-grey
+ * gets black text, anything below gets white. Good enough for chip
+ * readability without computing full WCAG contrast ratios.
+ */
+function _droptickets_chip_text_color($hex) {
+  $hex = ltrim((string) $hex, '#');
+  if (strlen($hex) !== 6) {
+    return '#000';
+  }
+  $r = hexdec(substr($hex, 0, 2));
+  $g = hexdec(substr($hex, 2, 2));
+  $b = hexdec(substr($hex, 4, 2));
+  $lum = ($r * 299 + $g * 587 + $b * 114) / 1000;
+  return $lum >= 140 ? '#000' : '#fff';
 }
 
 // ---------------------------------------------------------------------------

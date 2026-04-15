@@ -341,7 +341,7 @@ function droptickets_schema() {
   );
 
   $schema['drop_ticket_flag'] = array(
-    'description' => 'Tickets flagged as current team priorities.',
+    'description' => 'Flags applied to tickets. Each row is one (ticket, flag type) pair. Flag types are taxonomy terms in the ticket_flag_types vocabulary.',
     'fields' => array(
       'tid' => array(
         'type'     => 'int',
@@ -349,14 +349,31 @@ function droptickets_schema() {
         'not null' => TRUE,
         'default'  => 0,
       ),
+      'type_tid' => array(
+        'description' => 'Foreign key to taxonomy_term_data.tid for the flag type.',
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
+      ),
       'created' => array(
+        'description' => 'When the flag was applied (Unix timestamp).',
         'type'     => 'int',
         'not null' => TRUE,
         'default'  => 0,
-        'description' => 'When the ticket was flagged.',
+      ),
+      'flagged_by' => array(
+        'description' => 'UID of the user who applied the flag.',
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default'  => 0,
       ),
     ),
-    'primary key' => array('tid'),
+    'primary key' => array('tid', 'type_tid'),
+    'indexes' => array(
+      'type_tid' => array('type_tid'),
+    ),
   );
 
   $schema['drop_ticket_reaction'] = array(
@@ -562,11 +579,23 @@ function _droptickets_ensure_boards_field() {
     ));
     taxonomy_vocabulary_save($vocab);
 
+    // Seed the special "All" board — the unscoped view that shows every
+    // ticket. Its tid is cached in droptickets.settings.all_board_tid so the
+    // kanban page can recognize it without name matching.
     $term = new TaxonomyTerm(array(
-      'name'       => 'General',
-      'vocabulary' => 'drop_boards',
+      'name'        => 'All',
+      'vocabulary'  => 'drop_boards',
+      'description' => 'Shows every ticket, regardless of which board it is tagged with.',
+      'parent'      => array(0),
     ));
     taxonomy_term_save($term);
+
+    $config = config('droptickets.settings');
+    $config->set('all_board_tid', (int) $term->tid);
+    if (!$config->get('default_board_tid')) {
+      $config->set('default_board_tid', (int) $term->tid);
+    }
+    $config->save();
   }
 
   if (!field_info_field('field_drop_board')) {
@@ -606,6 +635,99 @@ function _droptickets_ensure_boards_field() {
 }
 
 /**
+ * Creates the ticket_flag_types vocabulary, attaches color/icon fields to its
+ * terms, and seeds a default Priority term. Site Architects can add new flag
+ * types from the standard taxonomy admin without touching code — flag types
+ * are taxonomy terms, plain and simple.
+ *
+ * Two term-level fields are attached:
+ * - field_flag_color (colorfield) — hex color for the chip background
+ * - field_flag_icon  (text)       — optional Phosphor icon name (e.g.
+ *                                   "warning", "star", "lock") rendered
+ *                                   inside the chip
+ *
+ * Requires the colorfield contrib module — declared as a dependency in
+ * droptickets.info so fresh installs pull it in automatically.
+ */
+function _droptickets_ensure_flag_types_vocabulary() {
+  // 1. Vocabulary.
+  if (!taxonomy_vocabulary_load('ticket_flag_types')) {
+    $vocab = new TaxonomyVocabulary(array(
+      'machine_name' => 'ticket_flag_types',
+      'name'         => 'Ticket Flag Types',
+      'description'  => 'Flag types that can be applied to tickets. Each term defines a flag — its name, color, and optional icon. Add or remove terms to customize available flags.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  // 2. Color field on terms.
+  if (!field_info_field('field_flag_color')) {
+    field_create_field(array(
+      'field_name'  => 'field_flag_color',
+      'type'        => 'colorfield',
+      'cardinality' => 1,
+    ));
+  }
+  if (!field_info_instance('taxonomy_term', 'field_flag_color', 'ticket_flag_types')) {
+    field_create_instance(array(
+      'field_name'  => 'field_flag_color',
+      'entity_type' => 'taxonomy_term',
+      'bundle'      => 'ticket_flag_types',
+      'label'       => 'Chip color',
+      'required'    => FALSE,
+      'description' => 'Hex color used as the background of the chip. Defaults to neutral grey if blank.',
+      'widget'      => array('type' => 'colorfield_widget', 'weight' => 5),
+      'display'     => array('default' => array('type' => 'hidden')),
+    ));
+  }
+
+  // 3. Icon field on terms (Phosphor icon name, optional).
+  if (!field_info_field('field_flag_icon')) {
+    field_create_field(array(
+      'field_name'  => 'field_flag_icon',
+      'type'        => 'text',
+      'cardinality' => 1,
+      'settings'    => array('max_length' => 64),
+    ));
+  }
+  if (!field_info_instance('taxonomy_term', 'field_flag_icon', 'ticket_flag_types')) {
+    field_create_instance(array(
+      'field_name'  => 'field_flag_icon',
+      'entity_type' => 'taxonomy_term',
+      'bundle'      => 'ticket_flag_types',
+      'label'       => 'Icon',
+      'required'    => FALSE,
+      'description' => 'Optional Phosphor icon name (e.g. "star", "warning", "lock"). Leave blank for a chip with no icon.',
+      'widget'      => array('type' => 'text_textfield', 'weight' => 6),
+      'display'     => array('default' => array('type' => 'hidden')),
+    ));
+  }
+
+  // 4. Seed a default Priority term so existing flag rows have something to
+  // migrate to. Site Architects can rename or delete it later.
+  $existing = taxonomy_term_load_multiple(array(), array(
+    'name'       => 'Priority',
+    'vocabulary' => 'ticket_flag_types',
+  ));
+  if (empty($existing)) {
+    $term = new TaxonomyTerm(array(
+      'name'        => 'Priority',
+      'vocabulary'  => 'ticket_flag_types',
+      'description' => 'Tickets the team should focus on first.',
+      // parent => array(0) is REQUIRED — without it the term is invisible
+      // in the term overview admin page (taxonomy_term_save does not insert
+      // a hierarchy row otherwise).
+      'parent'      => array(0),
+    ));
+    // Set the colorfield value on the term object before saving so it
+    // persists as a field item.
+    $term->field_flag_color[LANGUAGE_NONE][0]['value'] = '#dc3545';
+    $term->field_flag_icon[LANGUAGE_NONE][0]['value']  = 'star';
+    taxonomy_term_save($term);
+  }
+}
+
+/**
  * Implements hook_install().
  *
  * Adds prefix and ticket_counter columns to drop_project, and creates the
@@ -640,6 +762,10 @@ function droptickets_install() {
 
   // Create the Kanban boards vocabulary, default "General" term, and field.
   _droptickets_ensure_boards_field();
+
+  // Create the ticket_flag_types vocabulary, the color/icon term fields,
+  // and seed a Priority term.
+  _droptickets_ensure_flag_types_vocabulary();
 
   // Create the Team Member role if it doesn't already exist.
   $role = user_role_load_by_name('team_member');
@@ -1284,6 +1410,140 @@ function droptickets_update_1009() {
       ),
     ));
   }
+}
+
+/**
+ * Refactor drop_ticket_flag from binary (one flag per ticket) to typed
+ * (multiple flag types per ticket). Adds type_tid + flagged_by columns,
+ * creates the ticket_flag_types vocabulary with a Priority term, and
+ * migrates every existing flag row to point at that Priority term.
+ */
+function droptickets_update_1028() {
+  // Create the vocab + term fields + Priority seed term first so we have
+  // something to migrate existing rows into.
+  _droptickets_ensure_flag_types_vocabulary();
+
+  $priority_terms = taxonomy_term_load_multiple(array(), array(
+    'name'       => 'Priority',
+    'vocabulary' => 'ticket_flag_types',
+  ));
+  $priority_term = reset($priority_terms);
+  if (!$priority_term) {
+    throw new BackdropUpdateException('Failed to seed Priority flag type — cannot migrate existing flag rows safely.');
+  }
+  $priority_tid = (int) $priority_term->tid;
+
+  // Add type_tid column with a temporary default so existing rows are
+  // populated. We then change the default to 0 (composite PK requires it).
+  if (!db_field_exists('drop_ticket_flag', 'type_tid')) {
+    db_add_field('drop_ticket_flag', 'type_tid', array(
+      'description' => 'Foreign key to taxonomy_term_data.tid for the flag type.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+    ));
+    // Backfill existing rows with the Priority term id.
+    db_update('drop_ticket_flag')
+      ->fields(array('type_tid' => $priority_tid))
+      ->condition('type_tid', 0)
+      ->execute();
+  }
+
+  if (!db_field_exists('drop_ticket_flag', 'flagged_by')) {
+    db_add_field('drop_ticket_flag', 'flagged_by', array(
+      'description' => 'UID of the user who applied the flag.',
+      'type'        => 'int',
+      'unsigned'    => TRUE,
+      'not null'    => TRUE,
+      'default'     => 0,
+    ));
+  }
+
+  // Recreate the primary key as composite (tid, type_tid). Wrapped in a
+  // try/catch so a partial prior run can re-run without exploding — if the
+  // PK is already composite, db_drop_primary_key may complain depending on
+  // how far the previous attempt got.
+  try {
+    db_drop_primary_key('drop_ticket_flag');
+  }
+  catch (Exception $e) {
+    // PK may not exist (partial state). Safe to continue.
+  }
+  try {
+    db_add_primary_key('drop_ticket_flag', array('tid', 'type_tid'));
+  }
+  catch (Exception $e) {
+    // PK may already be the composite (prior successful partial run).
+  }
+
+  // Add a secondary index on type_tid for "show me all Priority flags"
+  // style queries.
+  if (!db_index_exists('drop_ticket_flag', 'type_tid')) {
+    db_add_index('drop_ticket_flag', 'type_tid', array('type_tid'));
+  }
+
+  $migrated = db_query('SELECT COUNT(*) FROM {drop_ticket_flag}')->fetchField();
+  return t('Migrated @count existing flag row(s) to the Priority flag type.', array(
+    '@count' => (int) $migrated,
+  ));
+}
+
+/**
+ * Rename the "General" board term to "All", remember its tid in config, and
+ * set it as the default board. Existing ticket→board tag assignments are
+ * untouched; only the term name and description change.
+ */
+function droptickets_update_1029() {
+  // Find the existing General term, if any.
+  $general = db_query(
+    "SELECT tid FROM {taxonomy_term_data} WHERE vocabulary = :v AND LOWER(name) = 'general' LIMIT 1",
+    array(':v' => 'drop_boards')
+  )->fetchField();
+
+  $all_tid = 0;
+  if ($general) {
+    $term = taxonomy_term_load((int) $general);
+    if ($term) {
+      $term->name        = 'All';
+      $term->description = 'Shows every ticket, regardless of which board it is tagged with. This is the unscoped view — new boards you create filter to a subset of tickets.';
+      taxonomy_term_save($term);
+      $all_tid = (int) $term->tid;
+    }
+  }
+
+  // If there was no General term (e.g. fresh site), create an All term.
+  if (!$all_tid) {
+    $existing_all = db_query(
+      "SELECT tid FROM {taxonomy_term_data} WHERE vocabulary = :v AND LOWER(name) = 'all' LIMIT 1",
+      array(':v' => 'drop_boards')
+    )->fetchField();
+    if ($existing_all) {
+      $all_tid = (int) $existing_all;
+    }
+    else {
+      $term = new TaxonomyTerm(array(
+        'name'        => 'All',
+        'vocabulary'  => 'drop_boards',
+        'description' => 'Shows every ticket, regardless of which board it is tagged with.',
+        'parent'      => array(0),
+      ));
+      taxonomy_term_save($term);
+      $all_tid = (int) $term->tid;
+    }
+  }
+
+  // Cache the tid in config and default the default-board setting to it.
+  $config = config('droptickets.settings');
+  $config->set('all_board_tid', $all_tid);
+  if (!$config->get('default_board_tid')) {
+    $config->set('default_board_tid', $all_tid);
+  }
+  $config->save();
+
+  return t('Renamed the General board to All (tid @tid) and set it as the default Kanban board.', array(
+    '@tid' => $all_tid,
+  ));
 }
 
 /**

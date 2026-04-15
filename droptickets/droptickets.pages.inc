@@ -519,10 +519,39 @@ function droptickets_list_page() {
   $priority_labels  = drop_base_priority_labels();
 
   // Load current flags for quick lookup.
-  $flagged_tids = db_select('drop_ticket_flag', 'f')->fields('f', array('tid'))->execute()->fetchCol();
-  $flagged_tids = array_flip($flagged_tids);
+  // Bulk-load the flag map: tid → list of type_tids. Old code loaded just a
+  // tid array (binary on/off); now each ticket can carry multiple flag types.
+  $flag_rows = db_query('SELECT tid, type_tid FROM {drop_ticket_flag} ORDER BY created ASC')->fetchAll();
+  $ticket_flags_map = array();
+  foreach ($flag_rows as $_fr) {
+    $ticket_flags_map[(int) $_fr->tid][] = (int) $_fr->type_tid;
+  }
+  $flagged_tids = array_flip(array_keys($ticket_flags_map));
   $can_flag     = user_access('flag droptickets');
   $flag_count   = count($flagged_tids);
+
+  // Bulk-load board tags per ticket so we can render the Boards column.
+  // The "All" board tid is excluded — every ticket implicitly belongs to
+  // All, so showing it as a tag would add noise with no information.
+  $ticket_boards_map = array();
+  $visible_tids = array_column((array) $tickets, 'tid');
+  if (!empty($visible_tids)) {
+    $all_board_tid_for_list = (int) droptickets_all_board_tid();
+    $board_query = db_select('field_data_field_drop_board', 'fb')
+      ->fields('fb', array('entity_id', 'field_drop_board_tid'))
+      ->condition('fb.entity_type', 'drop_ticket')
+      ->condition('fb.deleted', 0)
+      ->condition('fb.entity_id', $visible_tids, 'IN');
+    $board_query->innerJoin('taxonomy_term_data', 'd', 'd.tid = fb.field_drop_board_tid');
+    $board_query->fields('d', array('name', 'weight'));
+    $board_query->orderBy('d.weight')->orderBy('d.name');
+    foreach ($board_query->execute() as $br) {
+      if ((int) $br->field_drop_board_tid === $all_board_tid_for_list) {
+        continue;
+      }
+      $ticket_boards_map[(int) $br->entity_id][] = $br->name;
+    }
+  }
 
   // Bulk-load parent ticket titles.
   $list_parent_tids = array_filter(array_unique(array_column((array) $tickets, 'parent_tid')));
@@ -553,27 +582,14 @@ function droptickets_list_page() {
     $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
     $priority_class = 'drop-priority-' . drop_base_priority_class($ticket->priority);
 
-    $is_flagged = isset($flagged_tids[$ticket->tid]);
-    if ($can_flag) {
-      $flag_icon = $is_flagged
-        ? icon('flag-fill', array('attributes' => array('width' => 16, 'height' => 16)))
-        : icon('flag', array('attributes' => array('width' => 16, 'height' => 16)));
-      $dest_query = array_diff_key($_GET, array('q' => 1));
-      $destination = current_path() . ($dest_query ? '?' . http_build_query($dest_query) : '');
-      $flag_cell = l($flag_icon, 'drop/tickets/' . $ticket->tid . '/flag', array(
-        'html'       => TRUE,
-        'query'      => array('destination' => $destination),
-        'attributes' => array(
-          'class' => array($is_flagged ? 'droptickets-flag-on' : 'droptickets-flag-off'),
-          'title' => $is_flagged ? t('Remove flag') : t('Flag as priority'),
-        ),
-      ));
-    }
-    else {
-      $flag_cell = $is_flagged
-        ? icon('flag-fill', array('attributes' => array('width' => 16, 'height' => 16, 'class' => array('droptickets-flag-on'))))
-        : '';
-    }
+    // Flags column: render the chip row (term-driven color + optional icon).
+    // For users with the flag permission, the cell is wrapped in a link to
+    // the ticket's edit page where the full flag picker lives. Bare display
+    // (no link) for users without the permission.
+    $flag_chips = isset($ticket_flags_map[$ticket->tid])
+      ? droptickets_ticket_flags_render($ticket_flags_map[$ticket->tid], 'compact')
+      : '';
+    $flag_cell = $flag_chips;
 
     $priority_dot = '<span class="droptickets-priority-dot drop-priority-' . check_plain(drop_base_priority_class($ticket->priority)) . '" title="' . check_plain(isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '') . '"></span>';
 
@@ -585,6 +601,16 @@ function droptickets_list_page() {
         . '</span>';
     }
 
+    // Board chips cell — one small pill per board tag, excluding All.
+    $board_cell = '';
+    if (!empty($ticket_boards_map[$ticket->tid])) {
+      $board_pieces = array();
+      foreach ($ticket_boards_map[$ticket->tid] as $board_name) {
+        $board_pieces[] = '<span class="droptickets-board-tag">' . check_plain($board_name) . '</span>';
+      }
+      $board_cell = implode(' ', $board_pieces);
+    }
+
     $row_data = array(
       array('data' => $flag_cell, 'class' => array('droptickets-col-flag')),
       array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>', 'class' => array('droptickets-col-id')),
@@ -592,6 +618,7 @@ function droptickets_list_page() {
       array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid) . _droptickets_child_count_badge($child_counts, $ticket->tid) . $parent_indicator, 'class' => array('droptickets-col-title')),
       array('data' => $priority_dot, 'class' => array('droptickets-col-priority')),
       array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
+      array('data' => $board_cell, 'class' => array('droptickets-col-boards')),
     );
 
     $comment_cell = _droptickets_comment_cell_markup($ticket->tid, $comment_info);
@@ -606,7 +633,7 @@ function droptickets_list_page() {
     );
   }
 
-  $header = array('', t('ID'), t('Project'), t('Title'), t('P'), t('Status'));
+  $header = array('', t('ID'), t('Project'), t('Title'), t('P'), t('Status'), t('Boards'));
   $header[] = t('Assignee');
   $header[] = icon('chat-circle', array('attributes' => array('width' => 14, 'height' => 14, 'title' => t('Comments'))));
   $header[] = t('Actions');
@@ -775,9 +802,11 @@ function droptickets_kanban_page() {
     $js_settings['tokenAssignee']       = backdrop_get_token('droptickets_inline_assignee');
     $js_settings['tokenPriority']       = backdrop_get_token('droptickets_inline_priority');
 
-    // Board options for modal (only if taxonomy and field exist).
-    // Exclude "General" — tickets appear on General by default.
+    // Board options for modal (only if taxonomy and field exist). The
+    // "All" board is filtered out because it's the unscoped view — tagging
+    // a ticket with "All" would be meaningless.
     $board_list = array();
+    $modal_all_tid = (int) droptickets_all_board_tid();
     if (field_info_field('field_drop_board') && taxonomy_vocabulary_load('drop_boards')) {
       $modal_boards = db_select('taxonomy_term_data', 'd')
         ->fields('d', array('tid', 'name'))
@@ -786,7 +815,7 @@ function droptickets_kanban_page() {
         ->orderBy('d.name')
         ->execute()->fetchAllKeyed();
       foreach ($modal_boards as $tid => $name) {
-        if (strtolower(trim($name)) === 'general') {
+        if ((int) $tid === $modal_all_tid) {
           continue;
         }
         $board_list[] = array('value' => (string) $tid, 'label' => $name);
@@ -810,7 +839,18 @@ function droptickets_kanban_page() {
   $kanban_statuses = droptickets_kanban_statuses();
 
   // --- Board filter ---
-  $board_filter = (!empty($_GET['board']) && is_numeric($_GET['board'])) ? (int) $_GET['board'] : 0;
+  // Precedence: explicit ?board=N in the URL, otherwise the configured
+  // default board. If the default isn't set either, fall back to the All
+  // board. The All board is a special term whose tid is cached in config.
+  $all_board_tid = (int) droptickets_all_board_tid();
+  $default_board_tid = (int) droptickets_default_board_tid();
+
+  if (isset($_GET['board']) && is_numeric($_GET['board'])) {
+    $board_filter = (int) $_GET['board'];
+  }
+  else {
+    $board_filter = $default_board_tid ?: $all_board_tid;
+  }
 
   // Load all boards from the drop_boards vocabulary.
   $all_boards = db_select('taxonomy_term_data', 'd')
@@ -820,23 +860,21 @@ function droptickets_kanban_page() {
     ->orderBy('d.name')
     ->execute()->fetchAllKeyed();
 
-  // Identify the "General" board TID (first term named "General", case-insensitive).
-  $general_tid = 0;
-  foreach ($all_boards as $tid => $name) {
-    if (strtolower(trim($name)) === 'general') {
-      $general_tid = (int) $tid;
-      break;
-    }
-  }
+  // Is the current selection the All board? "All" means show every ticket,
+  // no scoping. Anything else is a focused board and runs the field filter.
+  $is_all_board = ($board_filter === $all_board_tid) && $all_board_tid > 0;
 
-  // Board switcher pills.
-  $is_general = (!$board_filter || $board_filter === $general_tid);
+  // Board switcher pills. The All board always renders first.
   $switcher = '<div class="droptickets-board-switcher">'
     . '<span class="droptickets-board-switcher-label">' . t('Board:') . '</span>';
-  $switcher .= '<a href="' . url('drop/tickets/kanban') . '" class="droptickets-board-pill'
-    . ($is_general ? ' droptickets-board-pill--active' : '') . '">' . t('General') . '</a>';
+  if ($all_board_tid > 0 && isset($all_boards[$all_board_tid])) {
+    $switcher .= '<a href="' . url('drop/tickets/kanban', array('query' => array('board' => $all_board_tid))) . '"'
+      . ' class="droptickets-board-pill' . ($is_all_board ? ' droptickets-board-pill--active' : '') . '">'
+      . check_plain($all_boards[$all_board_tid])
+      . '</a>';
+  }
   foreach ($all_boards as $tid => $name) {
-    if ((int) $tid === $general_tid) { continue; }
+    if ((int) $tid === $all_board_tid) { continue; }
     $active    = ($board_filter === (int) $tid);
     $switcher .= '<a href="' . url('drop/tickets/kanban', array('query' => array('board' => $tid))) . '"'
       . ' class="droptickets-board-pill' . ($active ? ' droptickets-board-pill--active' : '') . '">'
@@ -939,9 +977,10 @@ function droptickets_kanban_page() {
   }
 
   // --- Board scoping ---
-  // Use PHP set operations on pre-fetched TID lists to avoid JOIN/DISTINCT complexity.
-  if (!$is_general) {
-    // Focused board: tickets explicitly assigned to this board.
+  // The "All" board means no scoping — every ticket shows regardless of its
+  // field_drop_board value. A focused board filters to tickets explicitly
+  // tagged with that board.
+  if (!$is_all_board) {
     $board_tids = db_select('field_data_field_drop_board', 'fb')
       ->fields('fb', array('entity_id'))
       ->condition('fb.entity_type', 'drop_ticket')
@@ -954,32 +993,7 @@ function droptickets_kanban_page() {
     }
     $query->condition('t.tid', $board_tids, 'IN');
   }
-  else {
-    // General board: tickets with no board assignment, OR explicitly tagged "General".
-    // Exclude tickets that have a non-General board assignment but no General assignment.
-    $all_boarded = db_select('field_data_field_drop_board', 'fb')
-      ->fields('fb', array('entity_id'))
-      ->condition('fb.entity_type', 'drop_ticket')
-      ->condition('fb.deleted', 0)
-      ->execute()->fetchCol();
-
-    if (!empty($all_boarded)) {
-      $general_boarded = $general_tid
-        ? db_select('field_data_field_drop_board', 'fb')
-            ->fields('fb', array('entity_id'))
-            ->condition('fb.entity_type', 'drop_ticket')
-            ->condition('fb.deleted', 0)
-            ->condition('fb.field_drop_board_tid', $general_tid)
-            ->execute()->fetchCol()
-        : array();
-
-      // Tickets that have board tags but NOT the General tag are excluded.
-      $exclude_tids = array_values(array_unique(array_diff($all_boarded, $general_boarded)));
-      if (!empty($exclude_tids)) {
-        $query->condition('t.tid', $exclude_tids, 'NOT IN');
-      }
-    }
-  }
+  // else: All board selected — no board condition on the query.
 
   $tickets = $query->execute()->fetchAll();
 
@@ -991,6 +1005,12 @@ function droptickets_kanban_page() {
   $flagged_tids  = array_flip(
     db_select('drop_ticket_flag', 'f')->fields('f', array('tid'))->execute()->fetchCol()
   );
+  // Bulk-load full flag map (tid → list of type_tids) for chip rendering.
+  $kanban_flag_rows = db_query('SELECT tid, type_tid FROM {drop_ticket_flag} ORDER BY created ASC')->fetchAll();
+  $kanban_flags_map = array();
+  foreach ($kanban_flag_rows as $_kfr) {
+    $kanban_flags_map[(int) $_kfr->tid][] = (int) $_kfr->type_tid;
+  }
   $type_options  = droptickets_type_options();
 
   // Bulk-load comment counts for cards.
@@ -1084,9 +1104,12 @@ function droptickets_kanban_page() {
           $assignee_name = '—';
         }
 
-        $flag_html = $is_flagged
-          ? ' <span class="droptickets-kanban-flag">' . icon('flag-fill', array('attributes' => array('width' => 11, 'height' => 11))) . '</span>'
-          : '';
+        // Compact flag chips next to the ticket id. Empty string when the
+        // ticket has no flags — no whitespace, no placeholder.
+        $flag_html = '';
+        if (isset($kanban_flags_map[$ticket->tid])) {
+          $flag_html = ' ' . droptickets_ticket_flags_render($kanban_flags_map[$ticket->tid], 'compact');
+        }
 
         $parent_html = '';
         if (!empty($ticket->parent_tid) && isset($parent_titles[$ticket->parent_tid])) {
@@ -1700,20 +1723,46 @@ function droptickets_ticket_view(DropTicket $ticket) {
     $sidebar .= '</div>';
   }
 
-  // Flag toggle — visible to anyone with 'flag droptickets' permission.
+  // Flag picker — visible to anyone with the flag droptickets permission.
+  // Each available flag type renders as a toggleable chip; clicking a chip
+  // toggles that single (ticket, flag type) pair via the route handler.
   if (user_access('flag droptickets')) {
-    $is_flagged = (bool) db_select('drop_ticket_flag', 'f')
-      ->condition('f.tid', $ticket->tid)
-      ->countQuery()->execute()->fetchField();
-    $flag_icon  = icon($is_flagged ? 'flag-fill' : 'flag', array('attributes' => array('width' => 14, 'height' => 14)));
-    $flag_label = $is_flagged ? t('Remove flag') : t('Add flag');
-    $sidebar .= '<div class="droptickets-sidebar-flag">'
-      . l($flag_icon . ' ' . $flag_label, 'drop/tickets/' . $ticket->tid . '/flag', array(
+    $current_type_tids = droptickets_ticket_flags_load($ticket->tid);
+    $current_set = array_flip($current_type_tids);
+    $available_types = droptickets_flag_types_load();
+
+    $sidebar .= '<div class="droptickets-sidebar-flags">';
+    $sidebar .= '<div class="droptickets-sidebar-flags-label">' . t('Flags') . '</div>';
+    if (empty($available_types)) {
+      $sidebar .= '<div class="droptickets-sidebar-flags-empty">'
+        . t('No flag types defined. <a href="!url">Add some</a>.', array(
+            '!url' => url('admin/structure/taxonomy/ticket_flag_types'),
+          ))
+        . '</div>';
+    }
+    else {
+      $sidebar .= '<div class="droptickets-sidebar-flags-list">';
+      foreach ($available_types as $type) {
+        $is_set = isset($current_set[$type->tid]);
+        $chip_html = _droptickets_render_flag_chip($type, 'normal');
+        $url_path = 'drop/tickets/' . $ticket->tid . '/flag/' . $type->tid;
+        $sidebar .= l($chip_html, $url_path, array(
           'html'       => TRUE,
           'query'      => backdrop_get_destination(),
-          'attributes' => array('class' => array($is_flagged ? 'droptickets-flag-on' : 'droptickets-flag-off')),
-        ))
-      . '</div>';
+          'attributes' => array(
+            'class' => array(
+              'droptickets-flag-toggle',
+              $is_set ? 'droptickets-flag-toggle--on' : 'droptickets-flag-toggle--off',
+            ),
+            'title' => $is_set
+              ? t('Click to remove flag: @name', array('@name' => $type->name))
+              : t('Click to add flag: @name', array('@name' => $type->name)),
+          ),
+        ));
+      }
+      $sidebar .= '</div>';
+    }
+    $sidebar .= '</div>';
   }
 
   // Build status field: inline select for editors, static badge for viewers.
@@ -2664,26 +2713,53 @@ function droptickets_watch_toggle(DropTicket $ticket) {
 }
 
 /**
- * Page callback: toggle flag on a ticket.
+ * Page callback: toggle a single (ticket, flag type) pair.
+ *
+ * @param DropTicket $ticket
+ *   The ticket loaded by the menu wildcard.
+ * @param string|int|null $type_tid
+ *   The flag type tid to toggle. If NULL or 0, falls back to the Priority
+ *   term so old "/flag" links keep working as before.
  */
-function droptickets_ticket_flag_toggle(DropTicket $ticket) {
-  $is_flagged = db_select('drop_ticket_flag', 'f')
-    ->condition('tid', $ticket->tid)
-    ->countQuery()->execute()->fetchField();
+function droptickets_ticket_flag_toggle(DropTicket $ticket, $type_tid = NULL) {
+  $type_tid = (int) $type_tid;
 
-  if ($is_flagged) {
-    db_delete('drop_ticket_flag')->condition('tid', $ticket->tid)->execute();
+  // Backwards-compat: no type_tid → toggle the Priority term so existing
+  // bookmarks and inline links continue to work.
+  if ($type_tid <= 0) {
+    $priority_terms = taxonomy_term_load_multiple(array(), array(
+      'name'       => 'Priority',
+      'vocabulary' => 'ticket_flag_types',
+    ));
+    $priority = reset($priority_terms);
+    if (!$priority) {
+      backdrop_set_message(t('No Priority flag type is defined. Add one at @url.', array(
+        '@url' => url('admin/structure/taxonomy/ticket_flag_types'),
+      )), 'error');
+      backdrop_goto(isset($_GET['destination']) ? $_GET['destination'] : 'drop/tickets/flagged');
+    }
+    $type_tid = (int) $priority->tid;
   }
-  else {
-    // Soft limit warning.
+
+  // Validate the type belongs to our vocabulary — refuses arbitrary tids
+  // so a stray URL can't apply a non-flag taxonomy term.
+  $types = droptickets_flag_types_load();
+  if (!isset($types[$type_tid])) {
+    backdrop_set_message(t('Unknown flag type.'), 'error');
+    backdrop_goto(isset($_GET['destination']) ? $_GET['destination'] : 'drop/tickets/flagged');
+  }
+
+  $now_set = droptickets_ticket_flag_toggle_type((int) $ticket->tid, $type_tid);
+
+  // Soft-limit warning fires only when adding a flag (not when removing).
+  if ($now_set) {
     $count = db_select('drop_ticket_flag', 'f')->countQuery()->execute()->fetchField();
     $soft_limit = (int) config_get('droptickets.settings', 'flag_soft_limit');
     if ($soft_limit > 0 && $count >= $soft_limit) {
-      backdrop_set_message(t('You now have more than @limit flagged tickets. Consider clearing some to keep the list focused.', array('@limit' => $soft_limit)), 'warning');
+      backdrop_set_message(t('You now have more than @limit flagged tickets. Consider clearing some to keep the list focused.', array(
+        '@limit' => $soft_limit,
+      )), 'warning');
     }
-    db_insert('drop_ticket_flag')
-      ->fields(array('tid' => $ticket->tid, 'created' => REQUEST_TIME))
-      ->execute();
   }
 
   $destination = isset($_GET['destination']) ? $_GET['destination'] : 'drop/tickets/flagged';
@@ -2885,8 +2961,12 @@ function droptickets_recent_page() {
 
   $status_options   = droptickets_all_status_options();
   $priority_labels  = drop_base_priority_labels();
-  $flagged_tids     = db_select('drop_ticket_flag', 'f')->fields('f', array('tid'))->execute()->fetchCol();
-  $flagged_tids     = array_flip($flagged_tids);
+  // Bulk-load flag map for chip rendering.
+  $recent_flag_rows = db_query('SELECT tid, type_tid FROM {drop_ticket_flag} ORDER BY created ASC')->fetchAll();
+  $recent_flags_map = array();
+  foreach ($recent_flag_rows as $_rfr) {
+    $recent_flags_map[(int) $_rfr->tid][] = (int) $_rfr->type_tid;
+  }
 
   $rows = array();
   foreach ($results as $row) {
@@ -2906,8 +2986,8 @@ function droptickets_recent_page() {
     $status_label = isset($status_options[$row->status]) ? $status_options[$row->status] : $row->status;
     $priority_class = 'drop-priority-' . drop_base_priority_class($ticket->priority);
     $priority_dot = '<span class="droptickets-priority-dot ' . $priority_class . '" title="' . check_plain(isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '') . '"></span>';
-    $flag_icon = isset($flagged_tids[$row->tid])
-      ? icon('flag-fill', array('attributes' => array('width' => 16, 'height' => 16, 'class' => array('droptickets-flag-on'))))
+    $flag_icon = isset($recent_flags_map[$row->tid])
+      ? droptickets_ticket_flags_render($recent_flags_map[$row->tid], 'compact')
       : '';
 
     // Determine who made the most recent activity.
@@ -2959,23 +3039,76 @@ function droptickets_flagged_page() {
     ),
   );
 
-  $flags = db_select('drop_ticket_flag', 'f')
-    ->fields('f')
-    ->orderBy('f.created', 'ASC')
-    ->execute()->fetchAll();
+  // ---- Type filter from query string ----
+  $filter_tid = isset($_GET['type']) ? (int) $_GET['type'] : 0;
 
-  $count = count($flags);
+  // ---- Counts per flag type for the filter pills + the badge ----
+  $flag_types = droptickets_flag_types_load();
+  $counts_by_type = array();
+  $count_query = db_query('SELECT type_tid, COUNT(*) AS c FROM {drop_ticket_flag} GROUP BY type_tid');
+  foreach ($count_query as $cr) {
+    $counts_by_type[(int) $cr->type_tid] = (int) $cr->c;
+  }
+  $total_count = array_sum($counts_by_type);
 
+  // ---- Filter pills ----
+  $pills = array();
+  $all_classes = array('droptickets-flag-pill');
+  if ($filter_tid === 0) {
+    $all_classes[] = 'droptickets-flag-pill--active';
+  }
+  $pills[] = l(
+    t('All') . ' <span class="droptickets-flag-pill-count">' . $total_count . '</span>',
+    'drop/tickets/flagged',
+    array('html' => TRUE, 'attributes' => array('class' => $all_classes))
+  );
+  foreach ($flag_types as $type) {
+    $count = isset($counts_by_type[$type->tid]) ? $counts_by_type[$type->tid] : 0;
+    $classes = array('droptickets-flag-pill');
+    if ($filter_tid === $type->tid) {
+      $classes[] = 'droptickets-flag-pill--active';
+    }
+    $color = $type->color !== '' ? $type->color : '#888';
+    $pills[] = l(
+      '<span class="droptickets-flag-pill-dot" style="background-color: ' . check_plain($color) . ';"></span>'
+        . check_plain($type->name)
+        . ' <span class="droptickets-flag-pill-count">' . $count . '</span>',
+      'drop/tickets/flagged',
+      array(
+        'html' => TRUE,
+        'query' => array('type' => $type->tid),
+        'attributes' => array('class' => $classes),
+      )
+    );
+  }
+  $output['pills'] = array(
+    '#markup' => '<div class="droptickets-flag-pills">' . implode(' ', $pills) . '</div>',
+    '#weight' => -10,
+  );
+
+  // ---- Soft-limit warning (totals across all types) ----
   $soft_limit = (int) config_get('droptickets.settings', 'flag_soft_limit');
-  if ($soft_limit > 0 && $count > $soft_limit) {
+  if ($soft_limit > 0 && $total_count > $soft_limit) {
     $output['warning'] = array(
-      '#markup' => '<p class="messages warning">' . t('You have @count flagged tickets. Try to keep it to @limit or fewer.', array('@count' => $count, '@limit' => $soft_limit)) . '</p>',
+      '#markup' => '<p class="messages warning">' . t('You have @count flagged tickets across all types. Try to keep it to @limit or fewer.', array(
+        '@count' => $total_count,
+        '@limit' => $soft_limit,
+      )) . '</p>',
     );
   }
 
-  if (empty($flags)) {
+  // ---- Load matching flag rows (filtered by type if requested) ----
+  $flag_query = db_select('drop_ticket_flag', 'f')
+    ->fields('f')
+    ->orderBy('f.created', 'ASC');
+  if ($filter_tid > 0) {
+    $flag_query->condition('f.type_tid', $filter_tid);
+  }
+  $flag_rows = $flag_query->execute()->fetchAll();
+
+  if (empty($flag_rows)) {
     $output['empty'] = array(
-      '#markup' => '<p class="droptickets-empty">' . t('No tickets are currently flagged. Click the flag icon on any ticket to add it here.') . '</p>',
+      '#markup' => '<p class="droptickets-empty">' . t('No tickets match this filter. Click <em>All</em> to see every flagged ticket, or apply a flag from any ticket\'s sidebar.') . '</p>',
     );
     return $output;
   }
@@ -2987,12 +3120,21 @@ function droptickets_flagged_page() {
     );
   }
 
-  $tids     = array_column((array) $flags, 'tid');
-  $tickets  = entity_load('drop_ticket', $tids);
+  // ---- Group flag rows by ticket so we can render the chip column ----
+  $tids_in_order = array();
+  $flags_by_tid = array();
+  foreach ($flag_rows as $row) {
+    $tid = (int) $row->tid;
+    if (!isset($flags_by_tid[$tid])) {
+      $tids_in_order[] = $tid;
+      $flags_by_tid[$tid] = array();
+    }
+    $flags_by_tid[$tid][] = (int) $row->type_tid;
+  }
+  $tickets = entity_load('drop_ticket', $tids_in_order);
 
-  // Preserve flag order (oldest first = order they were added).
   $ordered = array();
-  foreach ($tids as $tid) {
+  foreach ($tids_in_order as $tid) {
     if (isset($tickets[$tid])) {
       $ordered[] = $tickets[$tid];
     }
@@ -3005,9 +3147,30 @@ function droptickets_flagged_page() {
   $all_uids      = array_unique(array_merge($assignee_uids, $owner_uids));
   $accounts      = $all_uids ? user_load_multiple($all_uids) : array();
 
+  // Bulk-load board tags per ticket for the Boards column. The All tid is
+  // excluded — every ticket implicitly belongs to All, so showing it would
+  // add noise with no information.
+  $flagged_boards_map = array();
+  if (!empty($tids_in_order)) {
+    $all_board_tid_for_flagged = (int) droptickets_all_board_tid();
+    $flagged_board_query = db_select('field_data_field_drop_board', 'fb')
+      ->fields('fb', array('entity_id', 'field_drop_board_tid'))
+      ->condition('fb.entity_type', 'drop_ticket')
+      ->condition('fb.deleted', 0)
+      ->condition('fb.entity_id', $tids_in_order, 'IN');
+    $flagged_board_query->innerJoin('taxonomy_term_data', 'd', 'd.tid = fb.field_drop_board_tid');
+    $flagged_board_query->fields('d', array('name', 'weight'));
+    $flagged_board_query->orderBy('d.weight')->orderBy('d.name');
+    foreach ($flagged_board_query->execute() as $fbr) {
+      if ((int) $fbr->field_drop_board_tid === $all_board_tid_for_flagged) {
+        continue;
+      }
+      $flagged_boards_map[(int) $fbr->entity_id][] = $fbr->name;
+    }
+  }
+
   $type_options   = droptickets_type_options();
   $status_options = droptickets_all_status_options();
-  $can_flag       = user_access('flag droptickets');
 
   $rows = array();
   $i    = 1;
@@ -3019,20 +3182,30 @@ function droptickets_flagged_page() {
     $type_label   = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
     $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
 
-    $unflag = $can_flag ? ' ' . l(
-      icon('flag-fill', array('attributes' => array('width' => 16, 'height' => 16))),
-      'drop/tickets/' . $ticket->tid . '/flag',
-      array('html' => TRUE, 'query' => array('destination' => 'drop/tickets/flagged'), 'attributes' => array('class' => array('droptickets-flag-on'), 'title' => t('Remove flag')))
-    ) : '';
+    // Render all flag chips for this ticket (not just the filter type) so
+    // multi-flag tickets show their full state even on a filtered view.
+    $flags_cell = droptickets_ticket_flags_render($flags_by_tid[$ticket->tid], 'normal');
+
+    // Board chips cell — same pattern as /drop/tickets, All board excluded.
+    $board_cell = '';
+    if (!empty($flagged_boards_map[$ticket->tid])) {
+      $board_pieces = array();
+      foreach ($flagged_boards_map[$ticket->tid] as $board_name) {
+        $board_pieces[] = '<span class="droptickets-board-tag">' . check_plain($board_name) . '</span>';
+      }
+      $board_cell = implode(' ', $board_pieces);
+    }
 
     $rows[] = array(
       'data' => array(
         array('data' => '<strong>' . $i . '</strong>', 'class' => array('droptickets-flag-rank')),
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
         array('data' => $proj_name),
-        array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid) . $unflag, 'class' => array('droptickets-col-title')),
+        array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid), 'class' => array('droptickets-col-title')),
+        array('data' => $flags_cell, 'class' => array('droptickets-col-flag')),
         array('data' => '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>'),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
+        array('data' => $board_cell, 'class' => array('droptickets-col-boards')),
         array('data' => $assignee),
       ),
     );
@@ -3041,7 +3214,7 @@ function droptickets_flagged_page() {
 
   $output['table'] = array(
     '#theme'      => 'table',
-    '#header'     => array(t('#'), t('ID'), t('Project'), t('Title'), t('Type'), t('Status'), t('Assignee')),
+    '#header'     => array(t('#'), t('ID'), t('Project'), t('Title'), t('Flags'), t('Type'), t('Status'), t('Boards'), t('Assignee')),
     '#rows'       => $rows,
     '#attributes' => array('class' => array('droptickets-list', 'droptickets-flagged-list')),
   );
@@ -3070,6 +3243,712 @@ function droptickets_flags_clear_form_submit($form, &$form_state) {
   db_delete('drop_ticket_flag')->execute();
   backdrop_set_message(t('All flags cleared.'));
   $form_state['redirect'] = 'drop/tickets/flagged';
+}
+
+// ---------------------------------------------------------------------------
+// Bulk tickets tool
+//
+// Filter the ticket list, pick some rows, and apply a single flag / board /
+// tag action to all selected tickets at once. Two forms on one page:
+//
+//   1. A raw GET filter form that reloads the page with query parameters.
+//   2. A POST form built via backdrop_get_form() containing the ticket
+//      checkboxes and the action dropdown.
+//
+// Gated by 'administer droptickets' at the route level. Individual action
+// handlers re-check the finer permission (e.g. 'flag droptickets') so a
+// grant change takes effect immediately without needing to clear access
+// caches.
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: drop/tickets/bulk
+ */
+function droptickets_bulk_page() {
+  backdrop_set_title(t('Bulk tickets tool'));
+
+  $output = array(
+    '#attached' => array(
+      'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
+    ),
+  );
+
+  $output['intro'] = array(
+    '#type' => 'help',
+    '#markup' => t('Filter the list below, pick the tickets you want, then choose an action from the dropdown at the bottom. Actions are applied immediately — there is no undo, but nothing destructive is offered here.'),
+    '#weight' => -100,
+  );
+
+  // ---- Filters (GET form, raw HTML) ----
+  $filters = _droptickets_bulk_read_filters();
+
+  $projects = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name'))
+    ->condition('p.active', 1)
+    ->orderBy('p.name')
+    ->execute()->fetchAllKeyed();
+
+  $assignee_uids = db_select('drop_ticket', 't')
+    ->fields('t', array('assignee_uid'))
+    ->condition('t.assignee_mode', 'user')
+    ->isNotNull('t.assignee_uid')
+    ->distinct()
+    ->execute()->fetchCol();
+  $assignee_accounts = $assignee_uids ? user_load_multiple($assignee_uids) : array();
+  uasort($assignee_accounts, function ($a, $b) { return strcasecmp($a->name, $b->name); });
+
+  $status_options = droptickets_all_status_options();
+  $type_options   = droptickets_type_options();
+  $all_board_tid  = (int) droptickets_all_board_tid();
+  $boards         = array();
+  if (taxonomy_vocabulary_load('drop_boards')) {
+    $board_rows = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid', 'name'))
+      ->condition('d.vocabulary', 'drop_boards')
+      ->orderBy('d.weight')
+      ->orderBy('d.name')
+      ->execute()->fetchAllKeyed();
+    foreach ($board_rows as $tid => $name) {
+      if ((int) $tid === $all_board_tid) {
+        continue;
+      }
+      $boards[(int) $tid] = $name;
+    }
+  }
+  $flag_types = droptickets_flag_types_load();
+  $tag_terms  = array();
+  if (taxonomy_vocabulary_load('drop_tags')) {
+    $tag_terms = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid', 'name'))
+      ->condition('d.vocabulary', 'drop_tags')
+      ->orderBy('d.name')
+      ->execute()->fetchAllKeyed();
+  }
+
+  $filter_html = '<form method="get" class="droptickets-bulk-filters" action="' . url('drop/tickets/bulk') . '">';
+  $filter_html .= '<div class="droptickets-bulk-filter-row">';
+
+  // Helper closure: render a filter group with a label, a select, and
+  // an inline "not" checkbox. Keeps the markup DRY so eight filters don't
+  // produce eighty lines of copy-paste.
+  $render_filter = function ($field_key, $label_text, $options, $current_value, $not_key, $not_checked, $empty_label = '— Any —') use (&$filter_html) {
+    $filter_html .= '<div class="droptickets-bulk-filter">';
+    $filter_html .= '<label class="droptickets-bulk-filter-label">' . check_plain($label_text) . '</label>';
+    $filter_html .= '<div class="droptickets-bulk-filter-controls">';
+    $filter_html .= '<select name="' . check_plain($field_key) . '">';
+    $filter_html .= '<option value="">' . check_plain($empty_label) . '</option>';
+    foreach ($options as $opt_val => $opt_label) {
+      $sel = ((string) $current_value === (string) $opt_val) ? ' selected' : '';
+      $filter_html .= '<option value="' . check_plain($opt_val) . '"' . $sel . '>' . check_plain($opt_label) . '</option>';
+    }
+    $filter_html .= '</select>';
+    $filter_html .= '<label class="droptickets-bulk-not" title="' . t('Invert this filter — match tickets that DO NOT have the selected value.') . '">'
+      . '<input type="checkbox" name="' . check_plain($not_key) . '" value="1"' . ($not_checked ? ' checked' : '') . '> '
+      . t('not') . '</label>';
+    $filter_html .= '</div></div>';
+  };
+
+  $render_filter('pid', t('Project'), $projects, (int) $filters['pid'] ?: '', 'not_pid', $filters['not_pid']);
+
+  $assignee_options = array();
+  foreach ($assignee_accounts as $acc) {
+    $assignee_options[(int) $acc->uid] = $acc->name;
+  }
+  $render_filter('assignee', t('Assignee'), $assignee_options, (int) $filters['assignee'] ?: '', 'not_assignee', $filters['not_assignee']);
+
+  $render_filter('status', t('Status'), $status_options, $filters['status'], 'not_status', $filters['not_status']);
+  $render_filter('type', t('Type'), $type_options, $filters['type'], 'not_type', $filters['not_type']);
+  $render_filter('board', t('Board'), $boards, (int) $filters['board'] ?: '', 'not_board', $filters['not_board']);
+  $render_filter('tag', t('Tag'), $tag_terms, (int) $filters['tag'] ?: '', 'not_tag', $filters['not_tag']);
+
+  $flag_type_options = array();
+  foreach ($flag_types as $ft_tid => $ft) {
+    $flag_type_options[(int) $ft_tid] = $ft->name;
+  }
+  $render_filter('flag', t('Flag type'), $flag_type_options, (int) $filters['flag'] ?: '', 'not_flag', $filters['not_flag']);
+
+  // Changed since has no NOT (it's a date range, already a one-direction comparator).
+  $filter_html .= '<div class="droptickets-bulk-filter">';
+  $filter_html .= '<label class="droptickets-bulk-filter-label">' . t('Changed since') . '</label>';
+  $filter_html .= '<div class="droptickets-bulk-filter-controls">';
+  $filter_html .= '<input type="date" name="changed_since" value="' . check_plain($filters['changed_since']) . '">';
+  $filter_html .= '</div></div>';
+
+  $filter_html .= '<div class="droptickets-bulk-filter droptickets-bulk-filter-actions">';
+  $filter_html .= '<button type="submit" class="button">' . t('Filter') . '</button>';
+  $filter_html .= ' <a class="button button-secondary" href="' . url('drop/tickets/bulk') . '">' . t('Reset') . '</a>';
+  $filter_html .= '</div>';
+  $filter_html .= '</div></form>';
+
+  $output['filters'] = array(
+    '#markup' => $filter_html,
+    '#weight' => -50,
+  );
+
+  // ---- Run the query ----
+  list($tickets, $total_matches) = _droptickets_bulk_query_tickets($filters);
+
+  if ($total_matches === 0) {
+    $output['empty'] = array(
+      '#markup' => '<p class="droptickets-empty">' . t('No tickets match these filters. Widen the filters above to see more.') . '</p>',
+    );
+    return $output;
+  }
+
+  $limit_soft = 500;
+  $limit_hard = 1000;
+  if ($total_matches > $limit_hard) {
+    $output['too_many'] = array(
+      '#markup' => '<div class="messages error">'
+        . t('@count tickets match — too many for a single bulk operation. Tighten your filters to @hard or fewer before proceeding.', array(
+          '@count' => $total_matches,
+          '@hard'  => $limit_hard,
+        ))
+        . '</div>',
+    );
+    return $output;
+  }
+  if ($total_matches > $limit_soft) {
+    $output['warning_many'] = array(
+      '#markup' => '<div class="messages warning">'
+        . t('@count tickets match — this is a large batch. Consider narrowing your filters for faster loads and easier review.', array(
+          '@count' => $total_matches,
+        ))
+        . '</div>',
+    );
+  }
+
+  // ---- Table + action form ----
+  $output['form'] = backdrop_get_form('droptickets_bulk_form', $tickets, $boards, $flag_types, $tag_terms);
+
+  return $output;
+}
+
+/**
+ * Reads the bulk tool filter values from $_GET.
+ *
+ * Each of the equality-style filters (pid, assignee, status, type, board,
+ * tag, flag) has a paired "not_X" boolean that inverts the match. E.g.
+ * board=42 with not_board=1 means "tickets NOT on board 42".
+ */
+function _droptickets_bulk_read_filters() {
+  return array(
+    'pid'           => isset($_GET['pid'])       ? (int) $_GET['pid']       : 0,
+    'not_pid'       => !empty($_GET['not_pid']),
+    'assignee'      => isset($_GET['assignee'])  ? (int) $_GET['assignee']  : 0,
+    'not_assignee'  => !empty($_GET['not_assignee']),
+    'status'        => isset($_GET['status'])    ? (string) $_GET['status'] : '',
+    'not_status'    => !empty($_GET['not_status']),
+    'type'          => isset($_GET['type'])      ? (string) $_GET['type']   : '',
+    'not_type'      => !empty($_GET['not_type']),
+    'board'         => isset($_GET['board'])     ? (int) $_GET['board']     : 0,
+    'not_board'     => !empty($_GET['not_board']),
+    'tag'           => isset($_GET['tag'])       ? (int) $_GET['tag']       : 0,
+    'not_tag'       => !empty($_GET['not_tag']),
+    'flag'          => isset($_GET['flag'])      ? (int) $_GET['flag']      : 0,
+    'not_flag'      => !empty($_GET['not_flag']),
+    'changed_since' => isset($_GET['changed_since']) ? (string) $_GET['changed_since'] : '',
+  );
+}
+
+/**
+ * Runs the filtered ticket query for the bulk tool.
+ *
+ * @return array
+ *   [list of ticket row objects, total match count]
+ */
+function _droptickets_bulk_query_tickets(array $filters) {
+  $q = db_select('drop_ticket', 't')
+    ->fields('t')
+    ->isNull('t.import_id');
+
+  // For each direct-column equality filter, flip = vs <> based on the NOT
+  // toggle. We apply the NOT only when the filter has a real value —
+  // "NOT any" is nonsense and should be ignored.
+  if ($filters['pid']) {
+    $q->condition('t.pid', $filters['pid'], $filters['not_pid'] ? '<>' : '=');
+  }
+  if ($filters['assignee']) {
+    if ($filters['not_assignee']) {
+      // NOT assignee: EITHER a different assignee, OR not user mode at all.
+      $q->condition(
+        db_or()
+          ->condition('t.assignee_uid', $filters['assignee'], '<>')
+          ->condition('t.assignee_mode', 'user', '<>')
+      );
+    }
+    else {
+      $q->condition('t.assignee_uid', $filters['assignee'])
+        ->condition('t.assignee_mode', 'user');
+    }
+  }
+  if ($filters['status'] !== '') {
+    $q->condition('t.status', $filters['status'], $filters['not_status'] ? '<>' : '=');
+  }
+  if ($filters['type'] !== '') {
+    $q->condition('t.type', $filters['type'], $filters['not_type'] ? '<>' : '=');
+  }
+
+  // Board filter: tickets explicitly tagged with the given board term.
+  // NOT variant = tickets NOT tagged with that board (includes untagged).
+  if ($filters['board']) {
+    $board_tids = db_select('field_data_field_drop_board', 'fb')
+      ->fields('fb', array('entity_id'))
+      ->condition('fb.entity_type', 'drop_ticket')
+      ->condition('fb.deleted', 0)
+      ->condition('fb.field_drop_board_tid', $filters['board'])
+      ->execute()->fetchCol();
+    if ($filters['not_board']) {
+      if (!empty($board_tids)) {
+        $q->condition('t.tid', $board_tids, 'NOT IN');
+      }
+      // else: no tickets have this board, NOT matches everything — no-op.
+    }
+    else {
+      if (empty($board_tids)) {
+        return array(array(), 0);
+      }
+      $q->condition('t.tid', $board_tids, 'IN');
+    }
+  }
+
+  // Tag filter (same shape as board).
+  if ($filters['tag']) {
+    $tag_tids = db_select('field_data_field_drop_tags', 'fd')
+      ->fields('fd', array('entity_id'))
+      ->condition('fd.entity_type', 'drop_ticket')
+      ->condition('fd.deleted', 0)
+      ->condition('fd.field_drop_tags_tid', $filters['tag'])
+      ->execute()->fetchCol();
+    if ($filters['not_tag']) {
+      if (!empty($tag_tids)) {
+        $q->condition('t.tid', $tag_tids, 'NOT IN');
+      }
+    }
+    else {
+      if (empty($tag_tids)) {
+        return array(array(), 0);
+      }
+      $q->condition('t.tid', $tag_tids, 'IN');
+    }
+  }
+
+  // Flag type filter (same shape).
+  if ($filters['flag']) {
+    $flag_tids = db_select('drop_ticket_flag', 'f')
+      ->fields('f', array('tid'))
+      ->condition('f.type_tid', $filters['flag'])
+      ->execute()->fetchCol();
+    if ($filters['not_flag']) {
+      if (!empty($flag_tids)) {
+        $q->condition('t.tid', $flag_tids, 'NOT IN');
+      }
+    }
+    else {
+      if (empty($flag_tids)) {
+        return array(array(), 0);
+      }
+      $q->condition('t.tid', $flag_tids, 'IN');
+    }
+  }
+
+  // Changed since (UI passes YYYY-MM-DD).
+  if ($filters['changed_since'] !== '') {
+    $ts = strtotime($filters['changed_since']);
+    if ($ts !== FALSE) {
+      $q->condition('t.changed', $ts, '>=');
+    }
+  }
+
+  $q->orderBy('t.priority', 'DESC')
+    ->orderBy('t.changed', 'DESC')
+    ->range(0, 1000);
+
+  $tickets = $q->execute()->fetchAll();
+
+  // For a real total we'd run a COUNT — but since we cap at 1000 anyway,
+  // the list count doubles as the match count for v1.
+  return array($tickets, count($tickets));
+}
+
+/**
+ * Form builder: bulk checkbox table + action dropdown.
+ *
+ * @param array $form
+ * @param array $form_state
+ * @param array $tickets
+ *   List of drop_ticket row objects.
+ * @param array $boards
+ *   Map of board_tid → name (already filtered to exclude All).
+ * @param array $flag_types
+ *   Map of type_tid → type object from droptickets_flag_types_load().
+ * @param array $tag_terms
+ *   Map of tag_tid → name.
+ */
+function droptickets_bulk_form($form, &$form_state, $tickets, $boards, $flag_types, $tag_terms) {
+  $form['#attached']['css'][] = backdrop_get_path('module', 'droptickets') . '/droptickets.css';
+
+  // Stash the option maps so the submit handler can validate the chosen
+  // target without re-querying.
+  $form_state['bulk_boards']    = $boards;
+  $form_state['bulk_flag_types'] = $flag_types;
+  $form_state['bulk_tag_terms'] = $tag_terms;
+
+  // Bulk-load flag chips + board tags + tags for the "current state" column.
+  $tids = array_column((array) $tickets, 'tid');
+  $flags_map = droptickets_ticket_flags_load_multiple($tids);
+
+  $boards_map = array();
+  $all_board_tid = (int) droptickets_all_board_tid();
+  if (!empty($tids)) {
+    $rows = db_select('field_data_field_drop_board', 'fb')
+      ->fields('fb', array('entity_id', 'field_drop_board_tid'))
+      ->condition('fb.entity_type', 'drop_ticket')
+      ->condition('fb.deleted', 0)
+      ->condition('fb.entity_id', $tids, 'IN')
+      ->execute()->fetchAll();
+    $board_name_lookup = $boards + array($all_board_tid => 'All');
+    foreach ($rows as $br) {
+      if ((int) $br->field_drop_board_tid === $all_board_tid) {
+        continue;
+      }
+      if (isset($board_name_lookup[$br->field_drop_board_tid])) {
+        $boards_map[(int) $br->entity_id][] = $board_name_lookup[$br->field_drop_board_tid];
+      }
+    }
+  }
+
+  $tags_map = array();
+  if (!empty($tids)) {
+    $tag_rows = db_select('field_data_field_drop_tags', 'fd')
+      ->fields('fd', array('entity_id', 'field_drop_tags_tid'))
+      ->condition('fd.entity_type', 'drop_ticket')
+      ->condition('fd.deleted', 0)
+      ->condition('fd.entity_id', $tids, 'IN')
+      ->execute()->fetchAll();
+    foreach ($tag_rows as $tr) {
+      if (isset($tag_terms[$tr->field_drop_tags_tid])) {
+        $tags_map[(int) $tr->entity_id][] = $tag_terms[$tr->field_drop_tags_tid];
+      }
+    }
+  }
+
+  // Build the options list — one checkbox per ticket. We use a tableselect
+  // so we get the "select all visible" master checkbox for free.
+  $options = array();
+  $projects_cache = array();
+  foreach ($tickets as $ticket) {
+    // Resolve project name cheaply (one query per unique project).
+    if (!isset($projects_cache[$ticket->pid])) {
+      $projects_cache[$ticket->pid] = db_query(
+        'SELECT name FROM {drop_project} WHERE pid = :pid',
+        array(':pid' => (int) $ticket->pid)
+      )->fetchField() ?: '—';
+    }
+
+    $flags_cell = isset($flags_map[$ticket->tid])
+      ? droptickets_ticket_flags_render($flags_map[$ticket->tid], 'compact')
+      : '';
+
+    $boards_cell = '';
+    if (!empty($boards_map[$ticket->tid])) {
+      $chips = array();
+      foreach ($boards_map[$ticket->tid] as $name) {
+        $chips[] = '<span class="droptickets-board-tag">' . check_plain($name) . '</span>';
+      }
+      $boards_cell = implode(' ', $chips);
+    }
+
+    $tags_cell = '';
+    if (!empty($tags_map[$ticket->tid])) {
+      $tags_cell = check_plain(implode(', ', $tags_map[$ticket->tid]));
+    }
+
+    $options[(int) $ticket->tid] = array(
+      'id'       => droptickets_ticket_label($ticket, NULL),
+      'project'  => check_plain($projects_cache[$ticket->pid]),
+      'title'    => l($ticket->title, 'drop/tickets/' . $ticket->tid),
+      'status'   => check_plain($ticket->status),
+      'flags'    => $flags_cell,
+      'boards'   => $boards_cell,
+      'tags'     => $tags_cell,
+    );
+  }
+
+  $form['tickets'] = array(
+    '#type'        => 'tableselect',
+    '#header'      => array(
+      'id'       => t('ID'),
+      'project'  => t('Project'),
+      'title'    => t('Title'),
+      'status'   => t('Status'),
+      'flags'    => t('Flags'),
+      'boards'   => t('Boards'),
+      'tags'     => t('Tags'),
+    ),
+    '#options'     => $options,
+    '#empty'       => t('No tickets match.'),
+    '#attributes'  => array('class' => array('droptickets-list', 'droptickets-bulk-table')),
+  );
+
+  // ---- Action dropdown ----
+  // One flat list of every (action, target) pair. Value format:
+  //   "flag_add:{tid}", "flag_remove:{tid}",
+  //   "board_add:{tid}", "board_remove:{tid}",
+  //   "tag_add:{tid}", "tag_remove:{tid}"
+  $action_options = array('' => t('— Choose an action —'));
+
+  if (!empty($flag_types)) {
+    $add_flag = array();
+    $rm_flag  = array();
+    foreach ($flag_types as $tid => $type) {
+      $add_flag['flag_add:' . $tid]    = $type->name;
+      $rm_flag['flag_remove:' . $tid]  = $type->name;
+    }
+    $action_options[(string) t('Add flag')]    = $add_flag;
+    $action_options[(string) t('Remove flag')] = $rm_flag;
+  }
+
+  if (!empty($boards)) {
+    $add_board = array();
+    $rm_board  = array();
+    foreach ($boards as $tid => $name) {
+      $add_board['board_add:' . $tid]   = $name;
+      $rm_board['board_remove:' . $tid] = $name;
+    }
+    $action_options[(string) t('Add to board')]      = $add_board;
+    $action_options[(string) t('Remove from board')] = $rm_board;
+  }
+
+  if (!empty($tag_terms)) {
+    $add_tag = array();
+    $rm_tag  = array();
+    foreach ($tag_terms as $tid => $name) {
+      $add_tag['tag_add:' . $tid]    = $name;
+      $rm_tag['tag_remove:' . $tid]  = $name;
+    }
+    $action_options[(string) t('Add tag')]    = $add_tag;
+    $action_options[(string) t('Remove tag')] = $rm_tag;
+  }
+
+  $form['action_bar'] = array(
+    '#type'   => 'container',
+    '#attributes' => array('class' => array('droptickets-bulk-action-bar')),
+  );
+  $form['action_bar']['action'] = array(
+    '#type'    => 'select',
+    '#title'   => t('Action'),
+    '#options' => $action_options,
+    '#required' => TRUE,
+  );
+  $form['action_bar']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Apply to selected'),
+  );
+
+  return $form;
+}
+
+/**
+ * Validation: require at least one ticket selected and a non-empty action.
+ */
+function droptickets_bulk_form_validate($form, &$form_state) {
+  $selected = array_filter((array) $form_state['values']['tickets']);
+  if (empty($selected)) {
+    form_set_error('tickets', t('Select at least one ticket before applying an action.'));
+  }
+  if (empty($form_state['values']['action'])) {
+    form_set_error('action', t('Pick an action from the dropdown.'));
+  }
+}
+
+/**
+ * Submit handler: apply the chosen action to every selected ticket.
+ */
+function droptickets_bulk_form_submit($form, &$form_state) {
+  $selected_tids = array_map('intval', array_filter((array) $form_state['values']['tickets']));
+  $raw_action = (string) $form_state['values']['action'];
+  list($op, $target_tid) = array_pad(explode(':', $raw_action, 2), 2, '');
+  $target_tid = (int) $target_tid;
+
+  if ($target_tid <= 0 || $op === '') {
+    backdrop_set_message(t('Invalid action.'), 'error');
+    return;
+  }
+
+  $applied = 0;
+  $skipped = 0;
+
+  foreach ($selected_tids as $tid) {
+    $ok = FALSE;
+    switch ($op) {
+      case 'flag_add':
+        if (user_access('flag droptickets') && isset($form_state['bulk_flag_types'][$target_tid])) {
+          droptickets_ticket_flag_set($tid, $target_tid);
+          $ok = TRUE;
+        }
+        break;
+
+      case 'flag_remove':
+        if (user_access('flag droptickets') && isset($form_state['bulk_flag_types'][$target_tid])) {
+          droptickets_ticket_flag_unset($tid, $target_tid);
+          $ok = TRUE;
+        }
+        break;
+
+      case 'board_add':
+        if (isset($form_state['bulk_boards'][$target_tid])) {
+          _droptickets_bulk_field_tag_add($tid, 'field_drop_board', $target_tid);
+          $ok = TRUE;
+        }
+        break;
+
+      case 'board_remove':
+        if (isset($form_state['bulk_boards'][$target_tid])) {
+          _droptickets_bulk_field_tag_remove($tid, 'field_drop_board', $target_tid);
+          $ok = TRUE;
+        }
+        break;
+
+      case 'tag_add':
+        if (isset($form_state['bulk_tag_terms'][$target_tid])) {
+          _droptickets_bulk_field_tag_add($tid, 'field_drop_tags', $target_tid);
+          $ok = TRUE;
+        }
+        break;
+
+      case 'tag_remove':
+        if (isset($form_state['bulk_tag_terms'][$target_tid])) {
+          _droptickets_bulk_field_tag_remove($tid, 'field_drop_tags', $target_tid);
+          $ok = TRUE;
+        }
+        break;
+    }
+    if ($ok) {
+      $applied++;
+    }
+    else {
+      $skipped++;
+    }
+  }
+
+  // Clear the Field API field cache for affected entities so the next page
+  // load sees the new values. The direct DB writes bypass field_attach_update
+  // so the cache_field entries for these tickets are stale.
+  if (function_exists('field_cache_clear')) {
+    field_cache_clear();
+  }
+
+  if ($applied) {
+    backdrop_set_message(format_plural(
+      $applied,
+      '1 ticket updated.',
+      '@count tickets updated.'
+    ));
+  }
+  if ($skipped) {
+    backdrop_set_message(format_plural(
+      $skipped,
+      '1 ticket skipped (permission or invalid target).',
+      '@count tickets skipped (permission or invalid target).'
+    ), 'warning');
+  }
+
+  // Preserve the filter query string so the user lands back on the same
+  // filtered view after applying.
+  $query = array_intersect_key($_GET, array_flip(array(
+    'pid', 'assignee', 'status', 'type', 'board', 'tag', 'flag', 'changed_since',
+  )));
+  $form_state['redirect'] = array('drop/tickets/bulk', array('query' => $query));
+}
+
+/**
+ * Adds a taxonomy term to a ticket's taxonomy_term_reference field without
+ * loading the full entity. No-op if the term is already present.
+ */
+function _droptickets_bulk_field_tag_add($entity_id, $field_name, $term_tid) {
+  $entity_id = (int) $entity_id;
+  $term_tid  = (int) $term_tid;
+  $table = 'field_data_' . $field_name;
+  $col   = $field_name . '_tid';
+
+  $exists = (bool) db_query(
+    "SELECT 1 FROM {{$table}} WHERE entity_type = :et AND entity_id = :eid AND {$col} = :tid AND deleted = 0",
+    array(':et' => 'drop_ticket', ':eid' => $entity_id, ':tid' => $term_tid)
+  )->fetchField();
+  if ($exists) {
+    return;
+  }
+
+  // Find the next delta for this entity.
+  $next_delta = (int) db_query(
+    "SELECT COALESCE(MAX(delta), -1) + 1 FROM {{$table}} WHERE entity_type = :et AND entity_id = :eid AND deleted = 0",
+    array(':et' => 'drop_ticket', ':eid' => $entity_id)
+  )->fetchField();
+
+  db_insert($table)
+    ->fields(array(
+      'entity_type' => 'drop_ticket',
+      'bundle'      => 'drop_ticket',
+      'deleted'     => 0,
+      'entity_id'   => $entity_id,
+      'revision_id' => $entity_id,
+      'language'    => LANGUAGE_NONE,
+      'delta'       => $next_delta,
+      $col          => $term_tid,
+    ))
+    ->execute();
+
+  // Mirror into the revision table so entity_load()/field_attach_load()
+  // sees the new value.
+  $rev_table = 'field_revision_' . $field_name;
+  if (db_table_exists($rev_table)) {
+    db_merge($rev_table)
+      ->key(array(
+        'entity_type' => 'drop_ticket',
+        'entity_id'   => $entity_id,
+        'revision_id' => $entity_id,
+        'language'    => LANGUAGE_NONE,
+        'delta'       => $next_delta,
+        'deleted'     => 0,
+      ))
+      ->insertFields(array(
+        'entity_type' => 'drop_ticket',
+        'bundle'      => 'drop_ticket',
+        'deleted'     => 0,
+        'entity_id'   => $entity_id,
+        'revision_id' => $entity_id,
+        'language'    => LANGUAGE_NONE,
+        'delta'       => $next_delta,
+        $col          => $term_tid,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Removes a taxonomy term from a ticket's taxonomy_term_reference field
+ * without loading the full entity. No-op if not present.
+ */
+function _droptickets_bulk_field_tag_remove($entity_id, $field_name, $term_tid) {
+  $entity_id = (int) $entity_id;
+  $term_tid  = (int) $term_tid;
+  $table = 'field_data_' . $field_name;
+  $col   = $field_name . '_tid';
+  $rev_table = 'field_revision_' . $field_name;
+
+  db_delete($table)
+    ->condition('entity_type', 'drop_ticket')
+    ->condition('entity_id', $entity_id)
+    ->condition($col, $term_tid)
+    ->execute();
+  if (db_table_exists($rev_table)) {
+    db_delete($rev_table)
+      ->condition('entity_type', 'drop_ticket')
+      ->condition('entity_id', $entity_id)
+      ->condition($col, $term_tid)
+      ->execute();
+  }
 }
 
 // ---------------------------------------------------------------------------

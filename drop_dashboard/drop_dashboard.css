@@ -1,6 +1,9 @@
 /**
  * @file
- * DropBridge unified daily list styles.
+ * Drop Dashboard unified daily list styles.
+ *
+ * Class names carried over from dropbridge.css verbatim for phase 1 of the
+ * dashboard refactor — no visual changes.
  */
 
 /* ---------------------------------------------------------------------------
@@ -42,10 +45,9 @@
   border: 1px solid var(--drop-border, #e0e0e0);
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 1rem; /* spacing when stacked at narrow widths */
+  margin-bottom: 1rem;
 }
 
-/* Calendar section is always full-width — sits outside the grid */
 .dropbridge-section--event {
   margin-bottom: 1rem;
 }
@@ -155,7 +157,6 @@
   white-space: nowrap;
 }
 
-/* For calendar events (no view URL), plain text label */
 .dropbridge-section--event .dropbridge-section-item-body {
   flex-direction: row;
   align-items: baseline;
@@ -366,37 +367,4 @@
 
 .dropbridge-quicklink .icon {
   flex-shrink: 0;
-}
-
-/* ---------------------------------------------------------------------------
-   Site announcement banner
-   --------------------------------------------------------------------------- */
-
-.dropbridge-announcement {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #1565c0;
-  color: #fff;
-  padding: 0.65rem 1.25rem;
-  font-size: 0.95em;
-  position: relative;
-}
-
-.dropbridge-announcement-text {
-  flex: 1;
-}
-
-.dropbridge-announcement-dismiss {
-  color: #fff;
-  text-decoration: none;
-  font-size: 1.1em;
-  line-height: 1;
-  opacity: 0.75;
-  flex-shrink: 0;
-}
-
-.dropbridge-announcement-dismiss:hover {
-  opacity: 1;
 }

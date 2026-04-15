@@ -1,7 +1,0 @@
-name = DropTime
-description = Time tracking for the Drop ecosystem. Log daily time entries by project with billable tracking and reports.
-type = module
-backdrop = 1.x
-version = 1.x-1.0-dev
-dependencies[] = drop_base
-package = Drop Suite

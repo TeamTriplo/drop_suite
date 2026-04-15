@@ -3,9 +3,11 @@
  * @file
  * DropDocs — internal team documentation and wiki for the Drop Suite.
  *
- * Provides a 'doc' content type with parent-child hierarchy, tag taxonomy,
- * and a tree-navigation sidebar. Integrates with drop_base for the shared
- * navigation bar and page chrome.
+ * Provides a 'doc' content type that is book-enabled. Navigation, ordering,
+ * and parent/child relationships are handled by the core Book module. Doc
+ * nodes are viewed at Backdrop's canonical node/{nid} path; this module just
+ * provides the drop/docs landing page, the docs layout (with a book
+ * navigation sidebar), and the Drop Suite nav/settings integration.
  */
 
 // ---------------------------------------------------------------------------
@@ -15,12 +17,8 @@
 /**
  * Returns the configured display name for the docs section.
  *
- * Defaults to "Docs". Site architects can change this to "Notes",
- * "Knowledge Base", "Wiki", etc. via the settings form.
- *
  * @param string $variant
- *   Optional variant: 'singular' (e.g. "Doc"), 'plural' (e.g. "Docs"),
- *   'full' (e.g. "Documentation"). Defaults to 'plural'.
+ *   Optional variant: 'singular', 'plural', 'full'. Defaults to 'plural'.
  *
  * @return string
  */
@@ -32,11 +30,9 @@ function dropdocs_display_name($variant = 'plural') {
 
   switch ($variant) {
     case 'singular':
-      // Strip trailing 's' for simple singular form.
       return preg_match('/s$/i', $name) ? rtrim($name, 'sS') : $name;
 
     case 'full':
-      // Longer form for headings like sidebar title.
       $map = array(
         'Docs' => t('Documentation'),
         'Notes' => t('Notebook'),
@@ -61,7 +57,6 @@ function dropdocs_display_name($variant = 'plural') {
 function dropdocs_menu() {
   $items = array();
 
-  // Index listing.
   $items['drop/docs'] = array(
     'title'            => 'Docs',
     'page callback'    => 'dropdocs_index_page',
@@ -70,58 +65,6 @@ function dropdocs_menu() {
     'file'             => 'dropdocs.pages.inc',
   );
 
-  // Default local task on the index so the Reorder tab has a sibling.
-  $items['drop/docs/list'] = array(
-    'title callback'  => 'dropdocs_tab_title',
-    'title arguments' => array('all'),
-    'type'   => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
-  );
-
-  // Reorder local task on the index.
-  $items['drop/docs/reorder'] = array(
-    'title'            => 'Reorder',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('dropdocs_reorder_form'),
-    'access callback'  => 'user_access',
-    'access arguments' => array('administer dropdocs'),
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 10,
-    'file'             => 'dropdocs.pages.inc',
-  );
-
-  // Doc view page.
-  $items['drop/doc/%node'] = array(
-    'title callback'   => 'dropdocs_page_title',
-    'title arguments'  => array(2),
-    'page callback'    => 'dropdocs_doc_view',
-    'page arguments'   => array(2),
-    'access callback'  => 'node_access',
-    'access arguments' => array('view', 2),
-    'file'             => 'dropdocs.pages.inc',
-  );
-
-  // Default local task: View.
-  $items['drop/doc/%node/view'] = array(
-    'title' => 'View',
-    'type'  => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
-  );
-
-  // Edit local task — renders the standard node form at our path.
-  $items['drop/doc/%node/edit'] = array(
-    'title'            => 'Edit',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('doc_node_form', 2),
-    'access callback'  => 'node_access',
-    'access arguments' => array('update', 2),
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 5,
-    'file path'        => backdrop_get_path('module', 'node'),
-    'file'             => 'node.pages.inc',
-  );
-
-  // Settings.
   $items['drop/docs/settings'] = array(
     'title'            => 'Settings',
     'page callback'    => 'backdrop_get_form',
@@ -133,49 +76,7 @@ function dropdocs_menu() {
     'file'             => 'dropdocs.pages.inc',
   );
 
-  // Add child local task.
-  $items['drop/doc/%node/add-child'] = array(
-    'title'            => 'Add child page',
-    'page callback'    => 'dropdocs_add_child_redirect',
-    'page arguments'   => array(2),
-    'access callback'  => 'node_access',
-    'access arguments' => array('create', 'doc'),
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 10,
-    'file'             => 'dropdocs.pages.inc',
-  );
-
   return $items;
-}
-
-/**
- * Title callback for the doc view page.
- *
- * @param object $node
- *   The loaded doc node.
- *
- * @return string
- */
-function dropdocs_page_title($node) {
-  return $node->title;
-}
-
-/**
- * Title callback for local task tabs.
- *
- * @param string $variant
- *   'all' for the listing tab.
- *
- * @return string
- */
-function dropdocs_tab_title($variant = 'all') {
-  switch ($variant) {
-    case 'all':
-      return t('All @name', array('@name' => strtolower(dropdocs_display_name())));
-
-    default:
-      return dropdocs_display_name();
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -195,23 +96,49 @@ function dropdocs_permission() {
       'title'       => t('Administer Drop Docs'),
       'description' => t('Manage documentation settings and structure.'),
     ),
+    'view drop docs book content' => array(
+      'title'       => t('View Drop Docs book content'),
+      'description' => t('View any node that is a member of a book outline. Without this permission, anonymous (and other) users cannot view individual doc pages. The permission covers any content type used as a book page, not just Doc nodes.'),
+    ),
   );
 }
 
 // ---------------------------------------------------------------------------
-// Theme
+// Node access — gate book-member pages behind a permission
 // ---------------------------------------------------------------------------
 
 /**
- * Implements hook_theme().
+ * Implements hook_node_access().
+ *
+ * Denies 'view' access to any node that is part of a book outline unless the
+ * user has the 'view drop docs book content' permission. Book membership is
+ * the test on purpose: "doc" isn't a dedicated content type in Backdrop's
+ * book module — any content type configured as a book-child type becomes a
+ * book page when it's placed in a book outline. Protecting by book
+ * membership picks those up regardless of type, and leaves standalone doc
+ * nodes (nodes not in any book) untouched.
+ *
+ * Admins with 'administer nodes' or 'bypass node access' are not affected,
+ * because this hook only runs for the 'view' op and core handles those
+ * bypass permissions elsewhere for non-view ops.
  */
-function dropdocs_theme() {
-  return array(
-    'dropdocs_reorder_form' => array(
-      'render element' => 'form',
-      'file'           => 'dropdocs.pages.inc',
-    ),
-  );
+function dropdocs_node_access($node, $op, $account) {
+  if ($op !== 'view') {
+    return NODE_ACCESS_IGNORE;
+  }
+  if (!is_object($node) || empty($node->book)) {
+    return NODE_ACCESS_IGNORE;
+  }
+  // Admins short-circuit. 'bypass node access' and 'administer nodes' are the
+  // Backdrop-standard escape hatches; we honour them so this can't lock a
+  // site architect out of their own docs.
+  if (user_access('bypass node access', $account) || user_access('administer nodes', $account)) {
+    return NODE_ACCESS_IGNORE;
+  }
+  if (user_access('view drop docs book content', $account)) {
+    return NODE_ACCESS_IGNORE;
+  }
+  return NODE_ACCESS_DENY;
 }
 
 // ---------------------------------------------------------------------------
@@ -221,8 +148,7 @@ function dropdocs_theme() {
 /**
  * Implements hook_menu_local_tasks_alter().
  *
- * Strip all local tasks on the Docs landing page. Admin links (Reorder,
- * Settings) are accessible via the settings dashboard (drop/settings).
+ * Strip all local tasks on the Docs landing page.
  */
 function dropdocs_menu_local_tasks_alter(&$data, $router_item, $root_path) {
   if ($root_path !== 'drop/docs') {
@@ -257,14 +183,11 @@ function dropdocs_drop_section_links($section) {
   }
 
   $links = array();
-
   $links['all'] = array(
-    'title'        => t('All @name', array('@name' => dropdocs_display_name())),
-    'href'         => 'drop/docs',
-    'weight'       => -10,
-    'active_paths' => array('drop/docs', 'drop/docs/list', 'drop/doc'),
+    'title'  => t('All @name', array('@name' => dropdocs_display_name())),
+    'href'   => 'drop/docs',
+    'weight' => -10,
   );
-
   return $links;
 }
 
@@ -294,205 +217,68 @@ function dropdocs_drop_settings_info() {
 /**
  * Implements hook_form_BASE_FORM_ID_alter() for doc_node_form.
  *
- * Sets correct Drop Suite breadcrumbs on the add/edit form and redirects
- * back to our admin path after save.
+ * Sets Drop Suite breadcrumbs on the add/edit form.
  */
 function dropdocs_form_doc_node_form_alter(&$form, &$form_state, $form_id) {
   $node    = $form['#node'];
   $is_edit = !empty($node->nid);
 
-  // Breadcrumb.
-  if ($is_edit) {
-    $crumb = array(
-      l(t('Home'), '<front>'),
-      l(t('Drop Suite'), 'drop'),
-      l(dropdocs_display_name(), 'drop/docs'),
-    );
-    $parents = dropdocs_get_ancestors($node->nid);
-    foreach ($parents as $ancestor) {
-      $crumb[] = l($ancestor->title, 'drop/doc/' . $ancestor->nid);
-    }
-    $crumb[] = l($node->title, 'drop/doc/' . $node->nid);
-    backdrop_set_breadcrumb($crumb);
-  }
-  else {
-    $crumb = array(
-      l(t('Home'), '<front>'),
-      l(t('Drop Suite'), 'drop'),
-      l(dropdocs_display_name(), 'drop/docs'),
-    );
-    // Pre-fill parent field when arriving from "Add child page" tab.
-    if (isset($_GET['parent'])) {
-      $parent_nid = (int) $_GET['parent'];
-      if ($parent_nid) {
-        $parent = node_load($parent_nid);
-        if ($parent && $parent->type === 'doc') {
-          $lang = LANGUAGE_NONE;
-          // entityreference_autocomplete expects "Title (nid)" format.
-          $form['field_doc_parent'][$lang][0]['target_id']['#default_value'] =
-            $parent->title . ' (' . $parent_nid . ')';
-          $crumb[] = l($parent->title, 'drop/doc/' . $parent_nid);
-        }
-      }
-    }
-    backdrop_set_breadcrumb($crumb);
-  }
-
-  // After save, redirect to our admin path instead of node/{nid}.
-  $form['actions']['submit']['#submit'][] = 'dropdocs_node_form_redirect';
-}
-
-/**
- * Submit handler: redirect to the Drop Docs view path after saving a doc.
- */
-function dropdocs_node_form_redirect($form, &$form_state) {
-  if (!empty($form_state['nid'])) {
-    $form_state['redirect'] = 'drop/doc/' . $form_state['nid'];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Tree helpers (used by pages.inc)
-// ---------------------------------------------------------------------------
-
-/**
- * Loads all published doc nodes and their parent relationships in one query.
- *
- * @return array
- *   Keyed by nid; each row has nid, title, parent_nid.
- */
-function dropdocs_load_all() {
-  $query = db_select('node', 'n')
-    ->fields('n', array('nid', 'title'))
-    ->condition('n.type', 'doc')
-    ->condition('n.status', 1)
-    ->orderBy('n.title', 'ASC');
-  $query->leftJoin(
-    'field_data_field_doc_parent', 'p',
-    'p.entity_id = n.nid AND p.entity_type = :et',
-    array(':et' => 'node')
+  $crumb = array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(dropdocs_display_name(), 'drop/docs'),
   );
-  $query->addField('p', 'field_doc_parent_target_id', 'parent_nid');
-  $query->leftJoin('dropdocs_weight', 'w', 'w.nid = n.nid');
-  $query->addField('w', 'weight', 'weight');
-  return $query->execute()->fetchAllAssoc('nid');
+  if ($is_edit) {
+    $crumb[] = l($node->title, 'node/' . $node->nid);
+  }
+  backdrop_set_breadcrumb($crumb);
 }
 
-/**
- * Builds a nested tree array from a flat list of doc rows.
- *
- * @param array  $docs       Flat list keyed by nid (from dropdocs_load_all()).
- * @param int    $parent_nid Parent nid to build children for (NULL = root).
- *
- * @return array
- *   Nested array of doc objects, each with a 'children' property.
- */
-function dropdocs_build_tree(array $docs, $parent_nid = NULL) {
-  $tree = array();
-  foreach ($docs as $nid => $doc) {
-    $doc_parent = $doc->parent_nid ? (int) $doc->parent_nid : NULL;
-    if ($doc_parent === $parent_nid) {
-      $doc->children = dropdocs_build_tree($docs, (int) $nid);
-      $tree[]        = $doc;
-    }
-  }
-  // Sort siblings by weight (NULL treated as 0), then title.
-  usort($tree, function($a, $b) {
-    $wa = ($a->weight !== NULL) ? (int) $a->weight : 0;
-    $wb = ($b->weight !== NULL) ? (int) $b->weight : 0;
-    return ($wa !== $wb) ? ($wa - $wb) : strcmp($a->title, $b->title);
-  });
-  return $tree;
-}
-
-/**
- * Returns ancestor doc nodes from root down to (but not including) $nid.
- *
- * @param int $nid  The starting doc nid.
- *
- * @return array  Ordered array of node objects, root first.
- */
-function dropdocs_get_ancestors($nid) {
-  $ancestors   = array();
-  $current_nid = (int) $nid;
-  // Walk up; cap at 10 levels to guard against corrupt data.
-  for ($i = 0; $i < 10; $i++) {
-    $parent_nid = db_query(
-      'SELECT field_doc_parent_target_id
-       FROM {field_data_field_doc_parent}
-       WHERE entity_id = :nid AND entity_type = :et',
-      array(':nid' => $current_nid, ':et' => 'node')
-    )->fetchField();
-    if (!$parent_nid) {
-      break;
-    }
-    $parent = node_load((int) $parent_nid);
-    if (!$parent || $parent->type !== 'doc') {
-      break;
-    }
-    array_unshift($ancestors, $parent);
-    $current_nid = (int) $parent_nid;
-  }
-  return $ancestors;
-}
+// ---------------------------------------------------------------------------
+// Node view tweaks
+// ---------------------------------------------------------------------------
 
 /**
  * Implements hook_preprocess_node() for doc nodes.
  *
- * Suppresses the submitted-by metadata on doc nodes when viewed via our
- * custom admin path, since that information isn't relevant in a wiki context.
+ * Suppresses submitted-by metadata on doc views.
  */
 function dropdocs_preprocess_node(&$variables) {
   if ($variables['node']->type !== 'doc') {
     return;
   }
   $variables['display_submitted'] = FALSE;
-  // Our custom path drop/doc/{nid} is not the canonical node URL, so
-  // node_is_page() returns FALSE and the template renders a duplicate title.
-  // Set $page = TRUE to suppress it; backdrop_set_title() handles the H1.
-  $path = current_path();
-  if (strpos($path, 'drop/doc/') === 0) {
-    $variables['page'] = TRUE;
-  }
 }
 
 /**
- * Renders a nested doc tree as an HTML <ul> list.
+ * Implements hook_preprocess_layout().
  *
- * @param array $tree        Nested tree from dropdocs_build_tree().
- * @param int   $active_nid  Currently viewed nid (highlighted in the tree).
- *
- * @return string  HTML markup.
+ * Sets a Drop Suite breadcrumb on doc node view pages that includes a link
+ * to the book root. Runs before blocks render so the breadcrumbs block picks
+ * it up. Book module itself does not set breadcrumbs on node view.
  */
-function dropdocs_render_tree(array $tree, $active_nid = NULL) {
-  if (empty($tree)) {
-    return '';
+function dropdocs_preprocess_layout(&$variables) {
+  $node = menu_get_object();
+  if (empty($node) || empty($node->type) || $node->type !== 'doc') {
+    return;
   }
-  $output = '<ul class="dropdocs-tree">';
-  foreach ($tree as $doc) {
-    $is_active    = ($active_nid && (int) $doc->nid === (int) $active_nid);
-    $has_children = !empty($doc->children);
-    $classes      = array();
-    if ($is_active) {
-      $classes[] = 'dropdocs-tree-active';
-    }
-    if ($has_children) {
-      $classes[] = 'dropdocs-has-children';
-    }
-    $class_attr = $classes ? ' class="' . implode(' ', $classes) . '"' : '';
-    $output .= '<li' . $class_attr . ' data-nid="' . (int) $doc->nid . '">';
-    if ($has_children) {
-      $output .= '<span class="dropdocs-tree-item">'
-        . '<button class="dropdocs-toggle" aria-expanded="true" aria-label="' . t('Toggle') . '"></button>'
-        . l($doc->title, 'drop/doc/' . $doc->nid)
-        . '</span>';
-      $output .= dropdocs_render_tree($doc->children, $active_nid);
-    }
-    else {
-      $output .= l($doc->title, 'drop/doc/' . $doc->nid);
-    }
-    $output .= '</li>';
+  if (empty($node->book['bid'])) {
+    return;
   }
-  $output .= '</ul>';
-  return $output;
+
+  $crumb = array(
+    l(t('Home'), '<front>'),
+    l(t('Drop Suite'), 'drop'),
+    l(dropdocs_display_name(), 'drop/docs'),
+  );
+
+  // If this node is not itself the book root, link to the root ancestor.
+  if ($node->book['bid'] != $node->nid) {
+    $root = node_load($node->book['bid']);
+    if ($root) {
+      $crumb[] = l($root->title, 'node/' . $root->nid);
+    }
+  }
+
+  backdrop_set_breadcrumb($crumb);
 }

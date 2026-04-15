@@ -2156,3 +2156,301 @@ tr.droptickets-review-row--done .droptickets-review-btn {
   transition: transform 0.15s ease;
   cursor: default;
 }
+
+/* ============================================================ */
+/* BULK TICKETS TOOL                                            */
+/* Filter bar and action area for /drop/tickets/bulk.           */
+/* ============================================================ */
+
+.droptickets-bulk-filters {
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem 0;
+}
+
+.droptickets-bulk-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+}
+
+.droptickets-bulk-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.droptickets-bulk-filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.droptickets-bulk-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.droptickets-bulk-filter-row select,
+.droptickets-bulk-filter-row input[type="date"] {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.droptickets-bulk-not {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #777;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.droptickets-bulk-not input[type="checkbox"] {
+  margin: 0;
+  transform: scale(0.9);
+}
+
+.droptickets-bulk-filter-actions {
+  justify-content: flex-end;
+}
+
+.droptickets-bulk-table .droptickets-flag-chips,
+.droptickets-bulk-table .droptickets-board-tag {
+  vertical-align: middle;
+}
+
+.droptickets-bulk-action-bar {
+  margin: 1rem 0 0 0;
+  padding: 0.75rem 1rem;
+  background: #eef4fb;
+  border: 1px solid #b8d4ef;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.droptickets-bulk-action-bar .form-item {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 18rem;
+}
+
+.droptickets-bulk-action-bar .form-submit {
+  margin: 0;
+}
+
+/* ============================================================ */
+/* BOARD TAGS                                                   */
+/* Small neutral pills in the ticket list Boards column.        */
+/* ============================================================ */
+
+.droptickets-col-boards {
+  white-space: normal;
+}
+
+.droptickets-board-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  margin: 0.05rem 0.1rem 0.05rem 0;
+  border-radius: 999px;
+  background: #eef1f4;
+  color: #555;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* ============================================================ */
+/* FLAG CHIPS                                                   */
+/* Term-driven colored chips for the typed flag system.         */
+/* ============================================================ */
+
+.droptickets-flag-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.droptickets-flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.droptickets-flag-chip__icon {
+  flex-shrink: 0;
+}
+
+.droptickets-flag-chip__name {
+  letter-spacing: 0.01em;
+}
+
+/* Compact size — used on kanban cards and dense ticket listings.
+ * Hides the chip name and shrinks padding so the chip is just the icon
+ * (or a colored dot if no icon is set). */
+.droptickets-flag-chips--compact .droptickets-flag-chip {
+  padding: 0.1rem 0.3rem;
+  min-width: 0.85rem;
+  min-height: 0.85rem;
+  font-size: 0.65rem;
+}
+
+.droptickets-flag-chips--compact .droptickets-flag-chip__name {
+  display: none;
+}
+
+/* ============================================================ */
+/* TICKET DETAIL SIDEBAR — flag picker                          */
+/* ============================================================ */
+
+.droptickets-sidebar-flags {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.droptickets-sidebar-flags-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.droptickets-sidebar-flags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.droptickets-sidebar-flags-empty {
+  font-size: 0.85rem;
+  color: #888;
+  font-style: italic;
+}
+
+/* Each flag in the picker is a clickable chip wrapper. The chip itself
+ * already carries its color. Off-state chips are dimmed via opacity so
+ * "set vs unset" reads at a glance without changing the chip color. */
+.droptickets-flag-toggle {
+  display: inline-block;
+  text-decoration: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.droptickets-flag-toggle--off {
+  opacity: 0.35;
+  filter: saturate(0.5);
+}
+
+.droptickets-flag-toggle--off:hover,
+.droptickets-flag-toggle--off:focus {
+  opacity: 0.7;
+  filter: saturate(0.8);
+}
+
+.droptickets-flag-toggle--on {
+  transform: scale(1.0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+.droptickets-flag-toggle--on:hover,
+.droptickets-flag-toggle--on:focus {
+  transform: scale(1.02);
+}
+
+/* ============================================================ */
+/* FLAGGED PAGE — filter pills                                  */
+/* ============================================================ */
+
+.droptickets-flag-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem 0;
+}
+
+/* Pills are <a> tags rendered by l(). The theme typically defines
+ * a:link / a:visited at higher specificity than a single class, so we have
+ * to repeat the link state pseudo-classes to keep our colors winning. */
+.droptickets-flag-pill,
+a.droptickets-flag-pill,
+a.droptickets-flag-pill:link,
+a.droptickets-flag-pill:visited {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #333;
+  text-decoration: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+a.droptickets-flag-pill:hover,
+a.droptickets-flag-pill:focus {
+  background: #f5f5f5;
+  border-color: #aaa;
+  color: #333;
+  text-decoration: none;
+}
+
+a.droptickets-flag-pill.droptickets-flag-pill--active,
+a.droptickets-flag-pill.droptickets-flag-pill--active:link,
+a.droptickets-flag-pill.droptickets-flag-pill--active:visited {
+  background: #333;
+  color: #fff;
+  border-color: #333;
+}
+
+a.droptickets-flag-pill.droptickets-flag-pill--active:hover,
+a.droptickets-flag-pill.droptickets-flag-pill--active:focus {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.droptickets-flag-pill-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.droptickets-flag-pill-count {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-left: 0.15rem;
+}
+
+.droptickets-flag-pill--active .droptickets-flag-pill-count {
+  opacity: 0.85;
+}
