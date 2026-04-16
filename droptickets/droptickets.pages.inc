@@ -1174,10 +1174,10 @@ function droptickets_inline_set_status(DropTicket $ticket) {
     exit();
   }
 
-  $valid_statuses = array_merge(
-    array_keys(droptickets_status_options()),
-    array_keys(droptickets_discussion_status_options())
-  );
+  $is_discussion = ($ticket->type === 'discussion');
+  $valid_statuses = $is_discussion
+    ? array_keys(droptickets_discussion_status_options())
+    : array_keys(droptickets_status_options());
   if (!in_array($status, $valid_statuses)) {
     print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid status.'));
     exit();
@@ -1301,6 +1301,12 @@ function droptickets_kanban_set_status(DropTicket $ticket) {
 
   if (!backdrop_valid_token($token, 'droptickets_kanban')) {
     print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Invalid token.'));
+    exit();
+  }
+
+  // Discussions are not shown on the kanban board.
+  if ($ticket->type === 'discussion') {
+    print backdrop_json_encode(array('ok' => FALSE, 'message' => 'Discussions cannot be moved on the kanban board.'));
     exit();
   }
 
@@ -2472,7 +2478,7 @@ function droptickets_react_ajax($entity_type, $entity_id) {
  * Page callback: mark a ticket as done (for DropBridge).
  */
 function droptickets_ticket_mark_done(DropTicket $ticket) {
-  $ticket->status = 'done';
+  $ticket->status = ($ticket->type === 'discussion') ? 'disc_concluded' : 'done';
   $ticket->save();
   backdrop_set_message(t('Ticket %label marked as done.', array('%label' => droptickets_ticket_label($ticket))));
   backdrop_goto('drop');
@@ -2482,7 +2488,7 @@ function droptickets_ticket_mark_done(DropTicket $ticket) {
  * Page callback: manually close a ticket.
  */
 function droptickets_ticket_close(DropTicket $ticket) {
-  $ticket->status = 'closed';
+  $ticket->status = ($ticket->type === 'discussion') ? 'disc_concluded' : 'closed';
   $ticket->save();
   backdrop_set_message(t('Ticket %label has been closed.', array('%label' => droptickets_ticket_label($ticket))));
   backdrop_goto('drop/tickets/' . $ticket->tid);

@@ -1721,6 +1721,78 @@ class DropTicketsDiscussionTest extends DropTicketsTestBase {
   }
 
   /**
+   * Helper: raw POST to an AJAX endpoint via curlExec.
+   */
+  protected function rawPost($path, array $post_data = array()) {
+    $url = url($path, array('absolute' => TRUE));
+    $post = http_build_query($post_data);
+    $out = $this->curlExec(array(
+      CURLOPT_URL        => $url,
+      CURLOPT_POST       => TRUE,
+      CURLOPT_POSTFIELDS => $post,
+    ));
+    return $out;
+  }
+
+  /**
+   * Inline status endpoint rejects regular statuses on a discussion ticket.
+   */
+  public function testInlineStatusRejectsRegularStatusOnDiscussion() {
+    $this->backdropLogin($this->adminUser);
+
+    $project = $this->createTestProject();
+    $ticket = $this->createTestTicket($project, array(
+      'type'   => 'discussion',
+      'status' => 'disc_open',
+    ));
+
+    // Grab a valid CSRF token by visiting any page first.
+    $this->backdropGet('drop/tickets/' . $ticket->tid);
+    $token = backdrop_get_token('droptickets_inline_status');
+
+    $response = $this->rawPost('drop/tickets/' . $ticket->tid . '/inline-status', array(
+      'status' => 'icebox',
+      'token'  => $token,
+    ));
+
+    $data = backdrop_json_decode($response);
+    $this->assertFalse($data['ok'], 'Setting regular status on a discussion is rejected.');
+
+    // Verify the status was not changed.
+    $loaded = entity_load('drop_ticket', array($ticket->tid), array(), TRUE);
+    $loaded_ticket = reset($loaded);
+    $this->assertEqual('disc_open', $loaded_ticket->status, 'Discussion status unchanged after rejected inline update.');
+  }
+
+  /**
+   * Inline status endpoint rejects discussion statuses on a regular ticket.
+   */
+  public function testInlineStatusRejectsDiscussionStatusOnRegularTicket() {
+    $this->backdropLogin($this->adminUser);
+
+    $project = $this->createTestProject();
+    $ticket = $this->createTestTicket($project, array(
+      'type'   => 'task',
+      'status' => 'open',
+    ));
+
+    $this->backdropGet('drop/tickets/' . $ticket->tid);
+    $token = backdrop_get_token('droptickets_inline_status');
+
+    $response = $this->rawPost('drop/tickets/' . $ticket->tid . '/inline-status', array(
+      'status' => 'disc_active',
+      'token'  => $token,
+    ));
+
+    $data = backdrop_json_decode($response);
+    $this->assertFalse($data['ok'], 'Setting discussion status on a regular ticket is rejected.');
+
+    $loaded = entity_load('drop_ticket', array($ticket->tid), array(), TRUE);
+    $loaded_ticket = reset($loaded);
+    $this->assertEqual('open', $loaded_ticket->status, 'Regular ticket status unchanged after rejected inline update.');
+  }
+
+  /**
    * A ticket can be saved without a project.
    */
   public function testTicketCanBeSavedWithoutProject() {
