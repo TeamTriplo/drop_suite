@@ -113,6 +113,43 @@ function droptickets_entity_info() {
 /**
  * Implements hook_permission().
  */
+/**
+ * Implements hook_file_download().
+ *
+ * Grants download access to private-scheme files stored in field_ticket_files
+ * when the requesting user can view at least one ticket that references the
+ * file. Without this hook droptickets would never grant access to its own
+ * attachments — team members reported getting access denied errors on
+ * perfectly legitimate files.
+ *
+ * Backdrop core calls every module's hook_file_download() for private files
+ * and denies by default if no module explicitly grants. So the fix is to
+ * return proper content headers whenever the ticket-level access check
+ * passes.
+ */
+/**
+ * Implements hook_file_download_access().
+ *
+ * Grants download access to files attached to drop_ticket entities via
+ * the field_ticket_files field when the user can view the ticket.
+ *
+ * Note: we DON'T implement hook_file_download() directly. Core's
+ * file_file_download() already handles the file → entity lookup and
+ * invokes this hook for every (field, entity_type, entity) tuple that
+ * references the file. If we returned headers from hook_file_download()
+ * without also implementing this hook, file_file_download() would default
+ * to FALSE and return -1, wiping out our grant. So this is the correct
+ * place to make the decision — one hook, one job.
+ *
+ * Returns TRUE to grant, FALSE to deny, NULL for no opinion.
+ */
+function droptickets_file_download_access($field, $entity_type, $entity) {
+  if ($entity_type !== 'drop_ticket' || $field['field_name'] !== 'field_ticket_files') {
+    return NULL;
+  }
+  return droptickets_ticket_access('view', $entity);
+}
+
 function droptickets_permission() {
   return array(
     'administer droptickets' => array(

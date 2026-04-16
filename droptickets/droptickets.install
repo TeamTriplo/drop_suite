@@ -767,6 +767,10 @@ function droptickets_install() {
   // and seed a Priority term.
   _droptickets_ensure_flag_types_vocabulary();
 
+  // Create the private attachments field on drop_ticket so fresh installs
+  // have it without waiting for update 1008.
+  _droptickets_ensure_ticket_files_field();
+
   // Create the Team Member role if it doesn't already exist.
   $role = user_role_load_by_name('team_member');
   if (!$role) {
@@ -972,10 +976,10 @@ function droptickets_update_1005() {
 }
 
 /**
- * Add field_ticket_files managed-file field to drop_ticket entities.
+ * Creates the field_ticket_files managed-file field and instance on
+ * drop_ticket. Idempotent — safe to call from update hooks and hook_install.
  */
-function droptickets_update_1008() {
-  // Create the field if it doesn't exist.
+function _droptickets_ensure_ticket_files_field() {
   if (!field_info_field('field_ticket_files')) {
     $field = array(
       'field_name'  => 'field_ticket_files',
@@ -990,7 +994,6 @@ function droptickets_update_1008() {
     field_create_field($field);
   }
 
-  // Create the instance on drop_ticket if it doesn't exist.
   if (!field_info_instance('drop_ticket', 'field_ticket_files', 'drop_ticket')) {
     $instance = array(
       'field_name'  => 'field_ticket_files',
@@ -999,7 +1002,7 @@ function droptickets_update_1008() {
       'label'       => t('Attachments'),
       'required'    => FALSE,
       'settings'    => array(
-        'file_extensions'  => 'pdf doc docx xls xlsx csv txt png jpg jpeg gif zip',
+        'file_extensions'  => 'pdf doc docx xls xlsx csv txt png jpg jpeg gif zip md',
         'file_directory'   => 'tickets',
         'max_filesize'     => '10 MB',
         'description_field' => TRUE,
@@ -1021,6 +1024,13 @@ function droptickets_update_1008() {
     );
     field_create_instance($instance);
   }
+}
+
+/**
+ * Add field_ticket_files managed-file field to drop_ticket entities.
+ */
+function droptickets_update_1008() {
+  _droptickets_ensure_ticket_files_field();
 }
 
 /**

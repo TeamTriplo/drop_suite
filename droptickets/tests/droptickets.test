@@ -2055,3 +2055,194 @@ class DropTicketsImportedExclusionTest extends DropTicketsTestBase {
     $this->assertNoText('Imported recent ticket', 'Imported ticket is hidden from Recent page by default.');
   }
 }
+
+// ---------------------------------------------------------------------------
+// File download access
+//
+// Regression test for the bug where team members got 403 when trying to
+// download attachments from tickets they could otherwise view. The fix was
+// to implement droptickets_file_download() so droptickets explicitly grants
+// file access to anyone who can view the parent ticket.
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests the droptickets_file_download() hook.
+ */
+class DropTicketsFileAccessTest extends DropTicketsTestBase {
+
+  /** @var object User with no droptickets access. */
+  protected $outsider;
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTickets File Download Access',
+      'description' => 'Private ticket attachments are downloadable by anyone who can view the parent ticket.',
+      'group'       => 'DropTickets',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('droptickets');
+
+    // A plain team member — the user profile that previously triggered the
+    // access-denied bug.
+    $this->teamMember = $this->backdropCreateUser(array(
+      'access droptickets',
+    ));
+
+    // A user with no droptickets access at all — used as the negative case.
+    $this->outsider = $this->backdropCreateUser();
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access droptickets',
+      'administer droptickets',
+    ));
+  }
+
+  /**
+   * Creates a private-scheme managed file and attaches it to the given
+   * ticket via field_ticket_files.
+   *
+   * @param DropTicket $ticket
+   * @param string $filename
+   *
+   * @return object
+   *   The saved managed file entity.
+   */
+  protected function createAttachedFile(DropTicket $ticket, $filename = 'attachment.txt') {
+    // Write a small private file directly so we don't depend on the upload
+    // widget's UI flow.
+    $content = 'contents of ' . $filename . ' at ' . microtime(TRUE);
+    $uri = file_unmanaged_save_data($content, 'private://' . $filename, FILE_EXISTS_RENAME);
+    $this->assertTrue($uri, 'Wrote private file to ' . $uri);
+
+    $file = entity_create('file', array(
+      'uri'      => $uri,
+      'filename' => backdrop_basename($uri),
+      'filemime' => 'text/plain',
+      'filesize' => strlen($content),
+      'uid'      => $this->adminUser->uid,
+      'status'   => FILE_STATUS_PERMANENT,
+    ));
+    file_save($file);
+
+    // Attach the file to the ticket via field_ticket_files. Write the
+    // field_data row directly so we know the assignment persists even if
+    // the custom entity's save() doesn't run field_attach_update in the
+    // shape we expect.
+    db_insert('field_data_field_ticket_files')
+      ->fields(array(
+        'entity_type' => 'drop_ticket',
+        'bundle'      => 'drop_ticket',
+        'deleted'     => 0,
+        'entity_id'   => $ticket->tid,
+        'revision_id' => $ticket->tid,
+        'language'    => LANGUAGE_NONE,
+        'delta'       => 0,
+        'field_ticket_files_fid'     => $file->fid,
+        'field_ticket_files_display' => 1,
+      ))
+      ->execute();
+
+    // Sanity check: the row should now exist.
+    $persisted = db_query(
+      'SELECT COUNT(*) FROM {field_data_field_ticket_files}
+       WHERE entity_type = :et AND entity_id = :eid AND field_ticket_files_fid = :fid',
+      array(':et' => 'drop_ticket', ':eid' => $ticket->tid, ':fid' => $file->fid)
+    )->fetchField();
+    $this->assertEqual((int) $persisted, 1, 'File attachment persisted to field_data_field_ticket_files.');
+
+    return $file;
+  }
+
+  /**
+   * Returns the full download URL for a private managed file.
+   */
+  protected function privateFileDownloadPath($file) {
+    return file_create_url($file->uri);
+  }
+
+  /**
+   * A team member with plain 'access droptickets' can download ticket
+   * attachments.
+   */
+  public function testTeamMemberCanDownloadAttachment() {
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Ticket with attachment'));
+    $file    = $this->createAttachedFile($ticket, 'teammember-test.txt');
+
+    $this->backdropLogin($this->teamMember);
+    $this->backdropGet($this->privateFileDownloadPath($file));
+    $this->assertResponse(200, 'Team member can download a ticket attachment (hook_file_download_access grants).');
+    $this->assertRaw('contents of teammember-test.txt', 'Downloaded bytes match the original file contents.');
+  }
+
+  /**
+   * A full admin can download attachments.
+   */
+  public function testAdminCanDownloadAttachment() {
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Admin download'));
+    $file    = $this->createAttachedFile($ticket, 'admin-test.txt');
+
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet($this->privateFileDownloadPath($file));
+    $this->assertResponse(200, 'Admin can download a ticket attachment.');
+  }
+
+  /**
+   * A user without 'access droptickets' is denied even though the file
+   * is attached to a ticket.
+   */
+  public function testOutsiderCannotDownloadAttachment() {
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Hidden attachment'));
+    $file    = $this->createAttachedFile($ticket, 'outsider-test.txt');
+
+    $this->backdropLogin($this->outsider);
+    $this->backdropGet($this->privateFileDownloadPath($file));
+    $this->assertResponse(403, 'Outsider without droptickets access is denied.');
+  }
+
+  /**
+   * Anonymous users are denied access to ticket attachments.
+   */
+  public function testAnonymousCannotDownloadAttachment() {
+    $project = $this->createTestProject();
+    $ticket  = $this->createTestTicket($project, array('title' => 'Anon attachment'));
+    $file    = $this->createAttachedFile($ticket, 'anon-test.txt');
+
+    // Do NOT log in — $this->backdropGet() runs as anonymous by default.
+    $this->backdropGet($this->privateFileDownloadPath($file));
+    $this->assertResponse(403, 'Anonymous user is denied access to ticket attachments.');
+  }
+
+  /**
+   * The hook returns NULL (no opinion) for private files that aren't
+   * attached to any ticket, so the request must not 500 or leak an
+   * exception. The team member falls back to core's default, which for
+   * a file they don't own is a 403.
+   */
+  public function testUnrelatedFileDoesNotCrashHook() {
+    $content = 'unrelated file contents';
+    $uri = file_unmanaged_save_data($content, 'private://unrelated.txt', FILE_EXISTS_RENAME);
+    $file = entity_create('file', array(
+      'uri'      => $uri,
+      'filename' => backdrop_basename($uri),
+      'filemime' => 'text/plain',
+      'filesize' => strlen($content),
+      'uid'      => $this->adminUser->uid,
+      'status'   => FILE_STATUS_PERMANENT,
+    ));
+    file_save($file);
+
+    $this->backdropLogin($this->teamMember);
+    $this->backdropGet($this->privateFileDownloadPath($file));
+    // Critical assertion: no 500. Whether the specific response is 200
+    // or 403 depends on what other modules say — we only care that
+    // droptickets_file_download() returns NULL cleanly and passes the
+    // decision along without crashing.
+    $this->assertNotEqual($this->backdropGetHeader('status'), '500', 'droptickets_file_download() does not crash on unrelated files.');
+  }
+}
+

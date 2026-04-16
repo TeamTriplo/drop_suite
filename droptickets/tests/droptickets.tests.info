@@ -69,3 +69,9 @@ name = DropTickets Read/Unread Comments
 description = Verifies that comments posted after a user's last visit are marked as unread.
 group = DropTickets
 file = droptickets.test
+
+[DropTicketsFileAccessTest]
+name = DropTickets File Download Access
+description = Private ticket attachments are downloadable by anyone who can view the parent ticket.
+group = DropTickets
+file = droptickets.test
