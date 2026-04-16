@@ -703,7 +703,28 @@ function _droptickets_ensure_flag_types_vocabulary() {
     ));
   }
 
-  // 4. Seed a default Priority term so existing flag rows have something to
+  // 4. Soft-limit field on terms (integer, optional).
+  if (!field_info_field('field_flag_limit')) {
+    field_create_field(array(
+      'field_name'  => 'field_flag_limit',
+      'type'        => 'number_integer',
+      'cardinality' => 1,
+    ));
+  }
+  if (!field_info_instance('taxonomy_term', 'field_flag_limit', 'ticket_flag_types')) {
+    field_create_instance(array(
+      'field_name'  => 'field_flag_limit',
+      'entity_type' => 'taxonomy_term',
+      'bundle'      => 'ticket_flag_types',
+      'label'       => 'Soft limit',
+      'required'    => FALSE,
+      'description' => 'Warn when flagged tickets of this type exceed this number. Leave blank or 0 for no limit.',
+      'widget'      => array('type' => 'number', 'weight' => 7),
+      'display'     => array('default' => array('type' => 'hidden')),
+    ));
+  }
+
+  // 5. Seed a default Priority term so existing flag rows have something to
   // migrate to. Site Architects can rename or delete it later.
   $existing = taxonomy_term_load_multiple(array(), array(
     'name'       => 'Priority',
@@ -1581,4 +1602,30 @@ function droptickets_uninstall() {
   if (db_table_exists('drop_ticket_flag')) {
     db_drop_table('drop_ticket_flag');
   }
+}
+
+/**
+ * Add per-type soft limit field to ticket_flag_types vocabulary and remove
+ * the global flag_soft_limit config setting.
+ */
+function droptickets_update_1030() {
+  // Re-run the vocab helper which now includes the field_flag_limit field.
+  _droptickets_ensure_flag_types_vocabulary();
+
+  // Migrate the old global limit as the default for existing flag types.
+  $old_limit = (int) config_get('droptickets.settings', 'flag_soft_limit');
+  if ($old_limit > 0) {
+    $terms = entity_load('taxonomy_term', FALSE, array('vocabulary' => 'ticket_flag_types'));
+    foreach ($terms as $term) {
+      if (empty($term->field_flag_limit[LANGUAGE_NONE][0]['value'])) {
+        $term->field_flag_limit[LANGUAGE_NONE][0]['value'] = $old_limit;
+        taxonomy_term_save($term);
+      }
+    }
+  }
+
+  // Remove the now-unused global setting.
+  $config = config('droptickets.settings');
+  $config->clear('flag_soft_limit');
+  $config->save();
 }

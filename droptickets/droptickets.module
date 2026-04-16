@@ -502,17 +502,6 @@ function droptickets_menu() {
     'type'             => MENU_CALLBACK,
   );
 
-  // Bulk tickets tool — filter, select, and apply a single action (add or
-  // remove a flag / board / tag) to many tickets at once. Intentionally
-  // gated by the admin permission; individual actions check finer perms.
-  $items['drop/tickets/bulk'] = array(
-    'title'            => 'Bulk tickets tool',
-    'description'      => 'Apply a flag, board, or tag to many tickets at once.',
-    'page callback'    => 'droptickets_bulk_page',
-    'access arguments' => array('administer droptickets'),
-    'file'             => 'droptickets.pages.inc',
-    'type'             => MENU_CALLBACK,
-  );
 
   // Activate an imported ticket (clears import_id).
   $items['drop/tickets/%drop_ticket/activate'] = array(
@@ -951,11 +940,16 @@ function droptickets_flag_types_load() {
     if (!empty($term->field_flag_icon[LANGUAGE_NONE][0]['value'])) {
       $icon = $term->field_flag_icon[LANGUAGE_NONE][0]['value'];
     }
+    $limit = 0;
+    if (!empty($term->field_flag_limit[LANGUAGE_NONE][0]['value'])) {
+      $limit = (int) $term->field_flag_limit[LANGUAGE_NONE][0]['value'];
+    }
     $cached[(int) $term->tid] = (object) array(
       'tid'    => (int) $term->tid,
       'name'   => $term->name,
       'color'  => $color,
       'icon'   => $icon,
+      'limit'  => $limit,
       'weight' => (int) $term->weight,
     );
   }
