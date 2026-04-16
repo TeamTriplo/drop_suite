@@ -819,6 +819,22 @@ function drop_base_priority_class($priority) {
 }
 
 /**
+ * Sets the page title with a "Lab" badge appended.
+ *
+ * Modules in Drop Suites Lab can call this instead of backdrop_set_title()
+ * to visually flag their pages as experimental.
+ *
+ * @param string $title
+ *   The page title (plain text — will be escaped).
+ */
+function drop_base_lab_title($title) {
+  backdrop_set_title(
+    check_plain($title) . ' <span class="drop-lab-badge">' . t('Lab') . '</span>',
+    PASS_THROUGH
+  );
+}
+
+/**
  * Returns a section header markup string for use in render arrays.
  *
  * Renders a flex row with the section title on the left and an optional

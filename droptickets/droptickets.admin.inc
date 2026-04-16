@@ -889,10 +889,6 @@ function droptickets_settings_form($form, &$form_state) {
     '#markup' => '<p>' . l(t('Manage statuses and Kanban lanes'), 'drop/tickets/settings/statuses') . '</p>',
     '#weight' => -100,
   );
-  $form['bulk_link'] = array(
-    '#markup' => '<p>' . l(t('Bulk tickets tool — apply flags, boards, or tags to many tickets at once'), 'drop/tickets/bulk') . '</p>',
-    '#weight' => -99,
-  );
 
   // --- Notifications ---
   $form['notifications'] = array(

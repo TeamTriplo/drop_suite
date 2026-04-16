@@ -798,3 +798,20 @@ span.drop-pin-link.drop-pin-disabled {
 .drop-announcement-dismiss:hover {
   opacity: 1;
 }
+
+/* Lab badge — appended to page titles by drop_base_lab_title(). */
+.drop-lab-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.5rem;
+  border-radius: 3px;
+  background: #e8e0f0;
+  color: #6b4c9a;
+  font-size: 0.55em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  position: relative;
+  top: -0.1em;
+}
