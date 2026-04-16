@@ -2753,12 +2753,20 @@ function droptickets_ticket_flag_toggle(DropTicket $ticket, $type_tid = NULL) {
 
   // Soft-limit warning fires only when adding a flag (not when removing).
   if ($now_set) {
-    $count = db_select('drop_ticket_flag', 'f')->countQuery()->execute()->fetchField();
-    $soft_limit = (int) config_get('droptickets.settings', 'flag_soft_limit');
-    if ($soft_limit > 0 && $count >= $soft_limit) {
-      backdrop_set_message(t('You now have more than @limit flagged tickets. Consider clearing some to keep the list focused.', array(
-        '@limit' => $soft_limit,
-      )), 'warning');
+    $types = droptickets_flag_types_load();
+    if (isset($types[$type_tid]) && $types[$type_tid]->limit > 0) {
+      $count = db_select('drop_ticket_flag', 'f')
+        ->condition('type_tid', $type_tid)
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+      if ($count >= $types[$type_tid]->limit) {
+        backdrop_set_message(t('You now have @count "@type" flags. The soft limit is @limit.', array(
+          '@count' => $count,
+          '@type'  => $types[$type_tid]->name,
+          '@limit' => $types[$type_tid]->limit,
+        )), 'warning');
+      }
     }
   }
 
@@ -3086,14 +3094,23 @@ function droptickets_flagged_page() {
     '#weight' => -10,
   );
 
-  // ---- Soft-limit warning (totals across all types) ----
-  $soft_limit = (int) config_get('droptickets.settings', 'flag_soft_limit');
-  if ($soft_limit > 0 && $total_count > $soft_limit) {
+  // ---- Per-type soft-limit warnings ----
+  $warnings = array();
+  foreach ($flag_types as $type) {
+    if ($type->limit > 0) {
+      $type_count = isset($counts_by_type[$type->tid]) ? $counts_by_type[$type->tid] : 0;
+      if ($type_count > $type->limit) {
+        $warnings[] = t('You have @count "@type" flags (soft limit: @limit).', array(
+          '@count' => $type_count,
+          '@type'  => $type->name,
+          '@limit' => $type->limit,
+        ));
+      }
+    }
+  }
+  if (!empty($warnings)) {
     $output['warning'] = array(
-      '#markup' => '<p class="messages warning">' . t('You have @count flagged tickets across all types. Try to keep it to @limit or fewer.', array(
-        '@count' => $total_count,
-        '@limit' => $soft_limit,
-      )) . '</p>',
+      '#markup' => '<p class="messages warning">' . implode('<br>', $warnings) . '</p>',
     );
   }
 

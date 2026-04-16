@@ -1028,17 +1028,6 @@ function droptickets_settings_form($form, &$form_state) {
     '#default_value' => (int) ($config->get('default_board_tid') ?: droptickets_all_board_tid()),
     '#empty_option'  => t('— None —'),
   );
-  $form['display']['flag_soft_limit'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Flagged tickets soft limit'),
-    '#description'   => t('Warn when flagged tickets exceed this count.'),
-    '#options'       => array(
-      2  => '2', 4 => '4', 6 => '6', 8 => '8',
-      10 => '10', 12 => '12', 15 => '15',
-    ),
-    '#default_value' => $config->get('flag_soft_limit'),
-  );
-
   // --- Team ---
   $form['team'] = array(
     '#type' => 'fieldset',
