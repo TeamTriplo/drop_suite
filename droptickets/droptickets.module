@@ -2625,8 +2625,9 @@ function droptickets_drop_section_links($section) {
     );
   }
 
+  // Count discussions still needing attention (anything not concluded).
   $disc_count = db_query(
-    "SELECT COUNT(*) FROM {drop_ticket} WHERE type = 'discussion' AND status = 'disc_active'"
+    "SELECT COUNT(*) FROM {drop_ticket} WHERE type = 'discussion' AND status <> 'disc_concluded'"
   )->fetchField();
   $links['discussions'] = array(
     'title'   => t('Discussions'),
