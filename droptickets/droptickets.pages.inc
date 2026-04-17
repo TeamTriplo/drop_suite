@@ -345,7 +345,30 @@ function droptickets_list_page() {
     $show_proj_select = TRUE;
   }
 
-  // Active tag badge — shown inline when a tag filter is in use.
+  // Tag select — lists every term in the drop_tags vocabulary so you can
+  // filter on any tag (module label, cross-cutting theme, etc.).
+  $tag_opts_html = '<option value="0"' . (!$tag_filter ? ' selected' : '') . '>' . t('— All tags —') . '</option>';
+  $tags_vocab = taxonomy_vocabulary_load('drop_tags');
+  $show_tag_select = FALSE;
+  if ($tags_vocab) {
+    $all_tag_terms = db_select('taxonomy_term_data', 'd')
+      ->fields('d', array('tid', 'name'))
+      ->condition('d.vocabulary', 'drop_tags')
+      ->orderBy('d.name')
+      ->execute()
+      ->fetchAllKeyed();
+    if (!empty($all_tag_terms)) {
+      foreach ($all_tag_terms as $term_tid => $term_name) {
+        $tag_opts_html .= '<option value="' . (int) $term_tid . '"'
+          . ($tag_filter === (int) $term_tid ? ' selected' : '') . '>'
+          . check_plain($term_name) . '</option>';
+      }
+      $show_tag_select = TRUE;
+    }
+  }
+
+  // Active tag badge — shown inline when a tag filter is in use. Kept even
+  // with the tag select above so there is an obvious one-click clear.
   $tag_badge = '';
   if ($tag_filter) {
     $term_load = entity_load('taxonomy_term', array($tag_filter));
@@ -362,11 +385,14 @@ function droptickets_list_page() {
 
   // Assemble the single combined form.
   $filter_form = '<form method="get" action="' . url('drop/tickets') . '" class="droptickets-filter-form">'
-    . ($tag_filter ? '<input type="hidden" name="tag" value="' . (int) $tag_filter . '">' : '')
     . '<select name="status" class="droptickets-filter-select" onchange="this.form.submit()">' . $status_opts_html . '</select>';
 
   if ($show_proj_select) {
     $filter_form .= '<select name="pid" class="droptickets-filter-select" onchange="this.form.submit()">' . $proj_opts_html . '</select>';
+  }
+
+  if ($show_tag_select) {
+    $filter_form .= '<select name="tag" class="droptickets-filter-select" onchange="this.form.submit()">' . $tag_opts_html . '</select>';
   }
 
   $filter_form .= '<input type="search" name="search" value="' . check_plain($search) . '" placeholder="' . t('Search tickets…') . '" class="droptickets-search-input">'
