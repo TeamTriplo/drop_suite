@@ -1721,6 +1721,26 @@ class DropTicketsDiscussionTest extends DropTicketsTestBase {
   }
 
   /**
+   * Discussions section-nav badge counts disc_open + disc_active, not disc_concluded.
+   */
+  public function testDiscussionsSectionLinkBadge() {
+    foreach (array('disc_open', 'disc_active', 'disc_concluded') as $status) {
+      $ticket = entity_create('drop_ticket', array(
+        'pid'    => 0,
+        'title'  => 'Discussion ' . $status,
+        'type'   => 'discussion',
+        'status' => $status,
+      ));
+      $ticket->save();
+    }
+
+    $this->backdropLogin($this->adminUser);
+    $links = droptickets_drop_section_links('tickets');
+    $this->assertTrue(isset($links['discussions']), 'Discussions section link is present.');
+    $this->assertEqual(2, $links['discussions']['badge'], 'Badge counts disc_open + disc_active but excludes disc_concluded.');
+  }
+
+  /**
    * Helper: raw POST to an AJAX endpoint via curlExec.
    */
   protected function rawPost($path, array $post_data = array()) {
