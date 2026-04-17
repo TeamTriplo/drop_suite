@@ -148,6 +148,13 @@ function droptickets_schema() {
         'default'     => 1,
         'description' => '1 = normal/verified ticket, 0 = created from unknown sender.',
       ),
+      'active_since' => array(
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => FALSE,
+        'default'     => NULL,
+        'description' => 'Unix timestamp when the ticket entered a counting status (see age badge config). NULL if not currently counted.',
+      ),
     ),
     'primary key' => array('tid'),
     'unique keys' => array(
@@ -815,6 +822,20 @@ function droptickets_install() {
   }
 
   drop_base_grant_admin_permissions('droptickets');
+
+  // Seed age-badge defaults so fresh installs match what update 1031 does.
+  $config = config('droptickets.statuses');
+  if ($config->get('age_badge_threshold_days') === NULL) {
+    $config->set('age_badge_threshold_days', 3);
+  }
+  $statuses = $config->get('statuses');
+  if ($config->get('age_badge_active_start') === NULL && isset($statuses['todo'])) {
+    $config->set('age_badge_active_start', 'todo');
+  }
+  if ($config->get('age_badge_done_cutoff') === NULL && isset($statuses['done'])) {
+    $config->set('age_badge_done_cutoff', 'done');
+  }
+  $config->save();
 }
 
 /**
@@ -1628,4 +1649,56 @@ function droptickets_update_1030() {
   $config = config('droptickets.settings');
   $config->clear('flag_soft_limit');
   $config->save();
+}
+
+/**
+ * Add active_since column and age-badge config defaults (tid 550).
+ *
+ * Back-fills active_since = changed for tickets currently in a counting status
+ * so the badge has something reasonable to show on existing data.
+ */
+function droptickets_update_1031() {
+  if (!db_field_exists('drop_ticket', 'active_since')) {
+    db_add_field('drop_ticket', 'active_since', array(
+      'type'     => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'default'  => NULL,
+      'description' => 'Unix timestamp when the ticket entered a counting status.',
+    ));
+  }
+
+  $config = config('droptickets.statuses');
+  if ($config->get('age_badge_threshold_days') === NULL) {
+    $config->set('age_badge_threshold_days', 3);
+  }
+  // Default: first non-inactive status after backlog (todo in the shipped set).
+  $statuses = $config->get('statuses');
+  if ($config->get('age_badge_active_start') === NULL && isset($statuses['todo'])) {
+    $config->set('age_badge_active_start', 'todo');
+  }
+  if ($config->get('age_badge_done_cutoff') === NULL && isset($statuses['done'])) {
+    $config->set('age_badge_done_cutoff', 'done');
+  }
+  $config->save();
+
+  // Back-fill active_since = changed for tickets currently in counting range.
+  $start = $config->get('age_badge_active_start');
+  $cutoff = $config->get('age_badge_done_cutoff');
+  if ($start && $cutoff && !empty($statuses[$start]['weight']) !== NULL && !empty($statuses[$cutoff]['weight']) !== NULL) {
+    $start_w = isset($statuses[$start]['weight']) ? (int) $statuses[$start]['weight'] : 0;
+    $cutoff_w = isset($statuses[$cutoff]['weight']) ? (int) $statuses[$cutoff]['weight'] : 999;
+    $counting = array();
+    foreach ($statuses as $key => $info) {
+      $w = isset($info['weight']) ? (int) $info['weight'] : 0;
+      if ($w >= $start_w && $w < $cutoff_w) { $counting[] = $key; }
+    }
+    if ($counting) {
+      db_update('drop_ticket')
+        ->expression('active_since', 'changed')
+        ->condition('status', $counting, 'IN')
+        ->isNull('active_since')
+        ->execute();
+    }
+  }
 }
