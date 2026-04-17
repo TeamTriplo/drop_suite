@@ -1908,6 +1908,11 @@ function droptickets_entity_update($entity, $type) {
   droptickets_untrack_inline_images($entity->tid);
   droptickets_track_inline_images($entity);
   $original = isset($entity->original) ? $entity->original : NULL;
+  // Programmatic callers (API, bulk scripts) can set
+  // $entity->suppress_notifications = TRUE to skip team-visible notifications
+  // (Slack, in-app bell). Audit events (event log, watcher subscriptions)
+  // still fire — they're internal state, not noise.
+  $suppress = !empty($entity->suppress_notifications);
 
   // Assignee changed — auto-watch new assignee and notify them.
   $assignee_changed = $original && (
@@ -1917,17 +1922,19 @@ function droptickets_entity_update($entity, $type) {
   if ($assignee_changed) {
     if (!empty($entity->assignee_uid)) {
       droptickets_watcher_add($entity->tid, $entity->assignee_uid);
-      if ($entity->assignee_uid != $user->uid) {
+      if (!$suppress && $entity->assignee_uid != $user->uid) {
         droptickets_notify_create($entity->assignee_uid, $entity->tid, NULL, 'assigned', $user->uid);
       }
     }
-    droptickets_slack_notify_assignment($entity, $original);
+    if (!$suppress) {
+      droptickets_slack_notify_assignment($entity, $original);
+    }
   }
 
   // Status or priority changed — notify all watchers.
   $status_changed   = $original && $entity->status !== $original->status;
   $priority_changed = $original && $entity->priority != $original->priority;
-  if ($status_changed || $priority_changed) {
+  if (($status_changed || $priority_changed) && !$suppress) {
     droptickets_notify_watchers($entity->tid, 'updated', $user->uid);
   }
 
