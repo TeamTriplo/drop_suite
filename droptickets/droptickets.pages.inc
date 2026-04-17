@@ -1146,7 +1146,24 @@ function droptickets_kanban_page() {
         }
 
         $board .= '<div class="droptickets-kanban-card ' . $priority_class . '" draggable="true" data-tid="' . (int) $ticket->tid . '">';
-        $board .= '<div class="droptickets-kanban-card-id"><span class="droptickets-ticket-id">' . check_plain($label) . '</span>' . $flag_html . '</div>';
+        $age_badge_html = '';
+        $days_active = droptickets_ticket_active_days($ticket);
+        if ($days_active !== NULL) {
+          $threshold = (int) config_get('droptickets.statuses', 'age_badge_threshold_days') ?: 3;
+          $severity = 'normal';
+          if ($days_active >= $threshold * 4) {
+            $severity = 'high';
+          }
+          elseif ($days_active >= $threshold * 2) {
+            $severity = 'med';
+          }
+          $age_badge_html = ' <span class="droptickets-age-badge droptickets-age-badge--kanban droptickets-age-badge--' . $severity . '"'
+            . ' title="' . check_plain(format_plural($days_active, '1 day active', '@count days active')) . '">'
+            . icon('clock', array('attributes' => array('width' => 10, 'height' => 10)))
+            . ' ' . (int) $days_active . 'd'
+            . '</span>';
+        }
+        $board .= '<div class="droptickets-kanban-card-id"><span class="droptickets-ticket-id">' . check_plain($label) . '</span>' . $flag_html . $age_badge_html . '</div>';
         if ($kanban_modals) {
           $board .= '<div class="droptickets-kanban-card-title"><a href="' . url('drop/tickets/' . $ticket->tid) . '" class="droptickets-modal-open" data-tid="' . (int) $ticket->tid . '">' . check_plain($ticket->title) . '</a></div>';
         }

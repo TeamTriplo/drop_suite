@@ -269,6 +269,14 @@
 .droptickets-age-badge--high   { background: #ffebee; color: #b71c1c; }
 .droptickets-age-badge svg     { flex: 0 0 auto; }
 
+/* Compact kanban variant: just "3d" with clock icon, pushed to card-id row's right edge. */
+.droptickets-age-badge--kanban {
+  margin-left: auto;
+  padding: 0 5px;
+  font-size: 0.68rem;
+  gap: 2px;
+}
+
 /* Inline status select — shares badge color classes, styled to look interactive */
 .droptickets-status-select {
   appearance: auto;
