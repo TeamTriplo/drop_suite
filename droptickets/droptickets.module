@@ -1545,6 +1545,124 @@ function droptickets_mark_read_for_ticket($tid, $uid) {
 }
 
 /**
+ * Implements hook_entity_presave().
+ *
+ * Maintains $ticket->active_since: the timestamp when the ticket most recently
+ * entered a "counting" status (as configured on the statuses admin page).
+ * See tid 550 on support for the design discussion.
+ */
+function droptickets_entity_presave($entity, $type) {
+  if ($type !== 'drop_ticket') {
+    return;
+  }
+  $range_info = _droptickets_age_range_info();
+  if (!$range_info) {
+    return;
+  }
+  $new_range = _droptickets_range_for_status($entity->status, $range_info);
+  $original = isset($entity->original) ? $entity->original : NULL;
+  $old_range = $original ? _droptickets_range_for_status($original->status, $range_info) : NULL;
+
+  // On insert: if created directly in a counting status, start the clock.
+  if (!$original) {
+    if ($new_range === 'counting' && empty($entity->active_since)) {
+      $entity->active_since = REQUEST_TIME;
+    }
+    return;
+  }
+
+  // Unknown status on either side → no opinion; leave active_since alone.
+  if ($new_range === NULL || $old_range === NULL) {
+    return;
+  }
+  if ($new_range === $old_range) {
+    return;
+  }
+  if ($new_range === 'counting') {
+    $entity->active_since = REQUEST_TIME;
+  }
+  elseif ($new_range === 'backlog') {
+    $entity->active_since = NULL;
+  }
+  // counting → done: preserve value (badge hidden; if bounced back to counting
+  // later, that transition resets active_since).
+}
+
+/**
+ * Returns age-badge range metadata from droptickets.statuses config.
+ *
+ * @return array|null
+ *   array('statuses' => [key => info], 'start_weight' => int, 'cutoff_weight' => int)
+ *   or NULL if the feature is not configured.
+ */
+function _droptickets_age_range_info() {
+  $config = config('droptickets.statuses');
+  $start = $config->get('age_badge_active_start');
+  $cutoff = $config->get('age_badge_done_cutoff');
+  if (!$start || !$cutoff) {
+    return NULL;
+  }
+  $statuses = _droptickets_load_statuses();
+  if (!isset($statuses[$start]) || !isset($statuses[$cutoff])) {
+    return NULL;
+  }
+  return array(
+    'statuses'      => $statuses,
+    'start_weight'  => (int) (isset($statuses[$start]['weight']) ? $statuses[$start]['weight'] : 0),
+    'cutoff_weight' => (int) (isset($statuses[$cutoff]['weight']) ? $statuses[$cutoff]['weight'] : 999),
+  );
+}
+
+/**
+ * Classifies a status as 'backlog', 'counting', 'done', or NULL for unknown.
+ *
+ * Returns NULL when the status isn't in the configured status set. The caller
+ * should treat unknown statuses as "no opinion" and leave active_since alone
+ * rather than destructively clearing it.
+ */
+function _droptickets_range_for_status($status_key, $range_info) {
+  if (!isset($range_info['statuses'][$status_key])) {
+    return NULL;
+  }
+  $w = (int) (isset($range_info['statuses'][$status_key]['weight']) ? $range_info['statuses'][$status_key]['weight'] : 0);
+  if ($w < $range_info['start_weight']) {
+    return 'backlog';
+  }
+  if ($w >= $range_info['cutoff_weight']) {
+    return 'done';
+  }
+  return 'counting';
+}
+
+/**
+ * Returns the ticket's "days active" count or NULL if no badge should show.
+ *
+ * Used by the ticket view page. NULL means: not in a counting status, or
+ * active_since is unset, or age is below the configured threshold.
+ */
+function droptickets_ticket_active_days($ticket) {
+  if (empty($ticket->active_since)) {
+    return NULL;
+  }
+  $range_info = _droptickets_age_range_info();
+  if (!$range_info) {
+    return NULL;
+  }
+  if (_droptickets_range_for_status($ticket->status, $range_info) !== 'counting') {
+    return NULL;
+  }
+  $threshold = (int) config_get('droptickets.statuses', 'age_badge_threshold_days');
+  if ($threshold < 1) {
+    $threshold = 3;
+  }
+  $days = (int) floor((REQUEST_TIME - (int) $ticket->active_since) / 86400);
+  if ($days < $threshold) {
+    return NULL;
+  }
+  return $days;
+}
+
+/**
  * Implements hook_entity_insert().
  *
  * Auto-adds the assignee as a watcher on ticket creation.

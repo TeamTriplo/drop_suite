@@ -1389,6 +1389,7 @@ function droptickets_import_delete_form_submit($form, &$form_state) {
 function droptickets_statuses_form($form, &$form_state) {
   $form['#theme'] = 'droptickets_statuses_form';
 
+  $config = config('droptickets.statuses');
   $statuses = _droptickets_load_statuses();
 
   // Sort by weight for display.
@@ -1405,6 +1406,43 @@ function droptickets_statuses_form($form, &$form_state) {
   $group_options = array(
     'active' => t('Active'),
     'inactive' => t('Inactive'),
+  );
+
+  // Age-badge settings (tid 550). Lives alongside statuses since the fields
+  // reference specific status machine names.
+  $status_options_for_badge = array();
+  foreach ($statuses as $key => $info) {
+    $status_options_for_badge[$key] = (isset($info['label']) ? $info['label'] : $key) . ' (' . $key . ')';
+  }
+  $form['age_badge'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Age badge'),
+    '#description' => t('Show a "days active" badge on the ticket page once a ticket has been in an active status longer than the threshold.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $form['age_badge']['age_badge_active_start'] = array(
+    '#type' => 'select',
+    '#title' => t('Start counting at status'),
+    '#description' => t('The clock starts when a ticket enters this status (or any status weighted after it). Typically the first status after the backlog — e.g. "To Do".'),
+    '#options' => array('' => t('- Feature disabled -')) + $status_options_for_badge,
+    '#default_value' => $config->get('age_badge_active_start'),
+  );
+  $form['age_badge']['age_badge_done_cutoff'] = array(
+    '#type' => 'select',
+    '#title' => t('Hide badge starting at status'),
+    '#description' => t('Tickets in this status (or any status weighted after it) never show the badge. Typically "Done".'),
+    '#options' => array('' => t('- Feature disabled -')) + $status_options_for_badge,
+    '#default_value' => $config->get('age_badge_done_cutoff'),
+  );
+  $form['age_badge']['age_badge_threshold_days'] = array(
+    '#type' => 'number',
+    '#title' => t('Threshold (days)'),
+    '#description' => t('Badge stays hidden until the ticket has been active for at least this many days.'),
+    '#default_value' => $config->get('age_badge_threshold_days') ?: 3,
+    '#min' => 1,
+    '#max' => 365,
+    '#size' => 5,
   );
 
   $form['statuses'] = array(
@@ -1579,6 +1617,19 @@ function droptickets_statuses_form_submit($form, &$form_state) {
   }
 
   $config->set('statuses', $statuses);
+
+  // Age-badge settings (tid 550). Form has #tree = TRUE so fieldset nests.
+  $ab = isset($values['age_badge']) ? $values['age_badge'] : array();
+  if (isset($ab['age_badge_active_start'])) {
+    $config->set('age_badge_active_start', $ab['age_badge_active_start'] ?: NULL);
+  }
+  if (isset($ab['age_badge_done_cutoff'])) {
+    $config->set('age_badge_done_cutoff', $ab['age_badge_done_cutoff'] ?: NULL);
+  }
+  if (isset($ab['age_badge_threshold_days'])) {
+    $config->set('age_badge_threshold_days', (int) $ab['age_badge_threshold_days']);
+  }
+
   $config->save();
 
   // Clear the static cache.
@@ -1766,7 +1817,13 @@ function theme_droptickets_statuses_form($variables) {
     }
   }
 
-  $output = theme('table', array(
+  // Render the age-badge fieldset above the statuses table.
+  $output = '';
+  if (isset($form['age_badge'])) {
+    $output .= backdrop_render($form['age_badge']);
+  }
+
+  $output .= theme('table', array(
     'header' => $header,
     'rows' => $rows,
     'empty' => t('No statuses configured.'),
@@ -1775,7 +1832,7 @@ function theme_droptickets_statuses_form($variables) {
 
   backdrop_add_tabledrag('droptickets-statuses-table', 'order', 'sibling', 'status-weight');
 
-  // Render remaining form elements (new status fieldset, submit button).
+  // Render remaining form elements (description, new status fieldset, submit button).
   $output .= backdrop_render_children($form);
 
   return $output;

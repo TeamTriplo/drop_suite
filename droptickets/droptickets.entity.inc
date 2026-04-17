@@ -32,6 +32,7 @@ class DropTicket extends Entity {
   public $external_link = NULL;
   public $inbound_email = NULL;
   public $is_verified   = 1;
+  public $active_since  = NULL;
 
   /** {@inheritdoc} */
   public function id() {

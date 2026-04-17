@@ -1826,6 +1826,24 @@ function droptickets_ticket_view(DropTicket $ticket) {
     $status_field = '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>';
   }
 
+  // Age badge (tid 550): days active since last transition into a counting status.
+  $days_active = droptickets_ticket_active_days($ticket);
+  if ($days_active !== NULL) {
+    $threshold = (int) config_get('droptickets.statuses', 'age_badge_threshold_days') ?: 3;
+    $severity = 'normal';
+    if ($days_active >= $threshold * 4) {
+      $severity = 'high';
+    }
+    elseif ($days_active >= $threshold * 2) {
+      $severity = 'med';
+    }
+    $status_field .= ' <span class="droptickets-age-badge droptickets-age-badge--' . $severity . '"'
+      . ' title="' . check_plain(t('Days since this ticket entered an active status')) . '">'
+      . icon('clock', array('attributes' => array('width' => 12, 'height' => 12)))
+      . ' ' . format_plural($days_active, '1 day active', '@count days active')
+      . '</span>';
+  }
+
   // Parent ticket link.
   $parent_item = '';
   if (!empty($ticket->parent_tid)) {
