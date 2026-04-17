@@ -1562,7 +1562,13 @@ function droptickets_entity_insert($entity, $type) {
     droptickets_watcher_add($entity->tid, $entity->assignee_uid);
   }
   droptickets_track_inline_images($entity);
-  droptickets_slack_notify_new_ticket($entity);
+  // Programmatic callers (API, imports, scripted fill) can set
+  // $entity->suppress_notifications = TRUE before save to keep the Slack
+  // channel quiet when bulk-creating tickets that are not actionable by
+  // the team.
+  if (empty($entity->suppress_notifications)) {
+    droptickets_slack_notify_new_ticket($entity);
+  }
   if (!empty($entity->inbound_email)) {
     $sender = check_plain($entity->inbound_email);
     droptickets_event_write($entity->tid, 0, t('@sender submitted this ticket by email', array('@sender' => $sender)));
