@@ -1851,7 +1851,15 @@ function droptickets_ticket_view(DropTicket $ticket) {
     $meta_items[t('Tags')] = $tag_html;
   }
   if (!empty($ticket->external_link)) {
-    $meta_items[t('External link')] = l(t('View in JIRA'), $ticket->external_link, array(
+    $host = parse_url($ticket->external_link, PHP_URL_HOST);
+    if ($host) {
+      $host = preg_replace('/^www\./', '', $host);
+      $link_text = t('View on @host', array('@host' => $host));
+    }
+    else {
+      $link_text = t('View link');
+    }
+    $meta_items[t('External link')] = l($link_text, $ticket->external_link, array(
       'attributes' => array('target' => '_blank', 'rel' => 'noopener'),
     ));
   }
