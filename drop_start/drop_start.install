@@ -1,0 +1,63 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for Drop Start.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_start_install() {
+  drop_base_grant_admin_permissions('drop_start');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function drop_start_schema() {
+  $schema['drop_start_content'] = array(
+    'description' => 'Tracks sample content created by Drop Start for safe deletion.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'The entity type (e.g. drop_ticket, crm_contact, node).',
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'entity_id' => array(
+        'description' => 'The entity ID.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the sample content was created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'entity' => array('entity_type', 'entity_id'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function drop_start_uninstall() {
+  // Remove the tracking table — but do NOT delete the sample content itself.
+  // If users want to clean up content they should use the UI before uninstalling.
+}
