@@ -85,13 +85,24 @@ function drop_base_navigation_form($form, &$form_state) {
 
   $form['intro'] = array(
     '#markup' =>
-      '<p>' . t('Reorder by dragging. Rename, hide, or add a Phosphor icon to any item. Module-supplied items cannot be deleted — untick them if you want them hidden. Use the shortcuts section below to add custom links to any path (e.g. <code>drop/tickets/kanban</code> labelled "Boards").') . '</p>' .
+      '<ul>' .
+        '<li>' . t('Reorder by dragging.') . '</li>' .
+        '<li>' . t('Rename, hide, or add a Phosphor icon to any item.') . '</li>' .
+        '<li>' . t('Module-supplied items cannot be deleted — untick them if you want them hidden.') . '</li>' .
+        '<li>' . t('Use the shortcuts section below to add custom links to any path (e.g. <code>drop/tickets/kanban</code> labelled "Boards").') . '</li>' .
+      '</ul>' .
       '<p>' . t('Icon names are the lowercase <a href="@url">Phosphor</a> name, for example <code>kanban</code>, <code>house</code>, <code>ticket</code>. Clear the field to fall back to the module default.', array(
         '@url' => 'https://phosphoricons.com/',
       )) . '</p>',
   );
 
-  $form['show_icons'] = array(
+  $form['display_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display options'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['display_options']['show_icons'] = array(
     '#type' => 'checkbox',
     '#title' => t('Show icons in the primary navigation'),
     '#description' => t('Turn off to hide all icons site-wide without clearing the per-item icon names.'),
@@ -261,8 +272,8 @@ function theme_drop_base_navigation_form($variables) {
   if (isset($form['intro'])) {
     $output .= backdrop_render($form['intro']);
   }
-  if (isset($form['show_icons'])) {
-    $output .= backdrop_render($form['show_icons']);
+  if (isset($form['display_options'])) {
+    $output .= backdrop_render($form['display_options']);
   }
 
   $output .= theme('table', array(
@@ -289,7 +300,7 @@ function drop_base_navigation_form_submit($form, &$form_state) {
   $values = $form_state['values'];
   $config = config('drop_base.navigation');
 
-  $config->set('show_icons', !empty($values['show_icons']));
+  $config->set('show_icons', !empty($values['display_options']['show_icons']));
 
   $hook_items = _drop_base_hook_nav_items();
   $new_overrides = array();

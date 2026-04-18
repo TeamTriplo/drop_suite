@@ -1417,7 +1417,7 @@ function droptickets_statuses_form($form, &$form_state) {
     '#description' => t('Show a "days active" badge on the ticket page once a ticket has been in an active status longer than the threshold.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-    '#weight' => 10,
+    '#weight' => 30,
   );
   $form['age_badge']['age_badge_active_start'] = array(
     '#type' => 'select',
