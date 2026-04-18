@@ -1,0 +1,712 @@
+<?php
+/**
+ * @file
+ * DropCRM Membership — membership management for DropCRM.
+ *
+ * Provides three entity types linked to crm_contact:
+ *  - crm_membership: the member relationship (one row per member)
+ *  - crm_membership_term: one row per term (initial join + each renewal)
+ *  - crm_membership_payment: manual log of dues payments
+ */
+
+// Status code constants mirror the ones in dropcrm_membership.install so they
+// are loaded at runtime without needing the install file.
+if (!defined('DROPCRM_MEMBERSHIP_STATUS_LAPSED')) {
+  define('DROPCRM_MEMBERSHIP_STATUS_LAPSED',    0);
+  define('DROPCRM_MEMBERSHIP_STATUS_ACTIVE',    1);
+  define('DROPCRM_MEMBERSHIP_STATUS_CANCELLED', 2);
+  define('DROPCRM_MEMBERSHIP_STATUS_PENDING',   3);
+  define('DROPCRM_MEMBERSHIP_STATUS_GRACE',     4);
+}
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function dropcrm_membership_autoload_info() {
+  return array(
+    'CrmMembership'                    => 'dropcrm_membership.entity.inc',
+    'CrmMembershipController'          => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTerm'                => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTermController'      => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPayment'             => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPaymentController'   => 'dropcrm_membership.entity.inc',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entity info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_info().
+ */
+function dropcrm_membership_entity_info() {
+  $info = array();
+
+  $info['crm_membership'] = array(
+    'label'              => t('CRM Membership'),
+    'plural label'       => t('CRM Memberships'),
+    'description'        => t('A membership relationship between the organization and a CRM contact.'),
+    'entity class'       => 'CrmMembership',
+    'controller class'   => 'CrmMembershipController',
+    'views controller class' => 'EntityPlusDefaultViewsController',
+    'base table'         => 'crm_membership',
+    'fieldable'          => TRUE,
+    'entity keys'        => array(
+      'id'    => 'mid',
+      'label' => 'member_id',
+    ),
+    'view modes'         => array(
+      'full' => array('label' => t('Full'), 'custom settings' => FALSE),
+    ),
+    'uri callback'       => 'entity_class_uri',
+    'access callback'    => 'dropcrm_membership_access',
+    'module'             => 'dropcrm_membership',
+  );
+
+  $info['crm_membership_term'] = array(
+    'label'              => t('Membership Term'),
+    'plural label'       => t('Membership Terms'),
+    'description'        => t('A single term within a membership: initial join or a renewal.'),
+    'entity class'       => 'CrmMembershipTerm',
+    'controller class'   => 'CrmMembershipTermController',
+    'views controller class' => 'EntityPlusDefaultViewsController',
+    'base table'         => 'crm_membership_term',
+    'fieldable'          => FALSE,
+    'entity keys'        => array(
+      'id' => 'tid',
+    ),
+    'uri callback'       => 'entity_class_uri',
+    'access callback'    => 'dropcrm_membership_term_access',
+    'module'             => 'dropcrm_membership',
+  );
+
+  $info['crm_membership_payment'] = array(
+    'label'              => t('Membership Payment'),
+    'plural label'       => t('Membership Payments'),
+    'description'        => t('A manually-recorded dues payment against a membership.'),
+    'entity class'       => 'CrmMembershipPayment',
+    'controller class'   => 'CrmMembershipPaymentController',
+    'views controller class' => 'EntityPlusDefaultViewsController',
+    'base table'         => 'crm_membership_payment',
+    'fieldable'          => FALSE,
+    'entity keys'        => array(
+      'id' => 'pid',
+    ),
+    'uri callback'       => 'entity_class_uri',
+    'access callback'    => 'dropcrm_membership_payment_access',
+    'module'             => 'dropcrm_membership',
+  );
+
+  return $info;
+}
+
+// ---------------------------------------------------------------------------
+// Entity property info (drives Views integration)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_entity_property_info().
+ *
+ * Every schema column is declared so EntityPlusDefaultViewsController exposes
+ * it automatically. Foreign keys are typed as their target entity so Views
+ * relationships are generated for free.
+ */
+function dropcrm_membership_entity_property_info() {
+  $info = array();
+
+  // --- crm_membership properties ---
+  $m = &$info['crm_membership']['properties'];
+  $m['mid'] = array(
+    'label'          => t('Membership ID'),
+    'type'           => 'integer',
+    'schema field'   => 'mid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $m['cid'] = array(
+    'label'          => t('Contact'),
+    'type'           => 'crm_contact',
+    'description'    => t('The CRM contact who is the member.'),
+    'schema field'   => 'cid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $m['member_id'] = array(
+    'label'          => t('Member ID'),
+    'type'           => 'text',
+    'description'    => t('Optional human-friendly identifier (e.g. M-0042).'),
+    'schema field'   => 'member_id',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $m['type'] = array(
+    'label'          => t('Membership Type'),
+    'type'           => 'token',
+    'description'    => t('Membership type key.'),
+    'schema field'   => 'type',
+    'options list'   => '_dropcrm_membership_type_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $m['status'] = array(
+    'label'          => t('Status'),
+    'type'           => 'integer',
+    'description'    => t('Membership status (active, grace, lapsed, pending, cancelled).'),
+    'schema field'   => 'status',
+    'options list'   => '_dropcrm_membership_status_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $m['created'] = array(
+    'label'          => t('Date Created'),
+    'type'           => 'date',
+    'schema field'   => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $m['changed'] = array(
+    'label'          => t('Date Modified'),
+    'type'           => 'date',
+    'schema field'   => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $m['uid'] = array(
+    'label'          => t('Created by'),
+    'type'           => 'user',
+    'schema field'   => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  // Computed property: earliest term start_date = effective joined date.
+  $m['joined_date'] = array(
+    'label'           => t('Joined Date'),
+    'type'            => 'date',
+    'description'     => t('Earliest term start date for this membership.'),
+    'getter callback' => '_dropcrm_membership_joined_date_get',
+    'computed'        => TRUE,
+  );
+
+  // --- crm_membership_term properties ---
+  $t = &$info['crm_membership_term']['properties'];
+  $t['tid'] = array(
+    'label'          => t('Term ID'),
+    'type'           => 'integer',
+    'schema field'   => 'tid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $t['mid'] = array(
+    'label'          => t('Membership'),
+    'type'           => 'crm_membership',
+    'description'    => t('The membership this term belongs to.'),
+    'schema field'   => 'mid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $t['start_date'] = array(
+    'label'          => t('Term Start'),
+    'type'           => 'date',
+    'schema field'   => 'start_date',
+    'getter callback' => '_dropcrm_membership_date_get',
+    'setter callback' => '_dropcrm_membership_date_set',
+  );
+  $t['end_date'] = array(
+    'label'          => t('Term End'),
+    'type'           => 'date',
+    'description'    => t('NULL means lifetime term.'),
+    'schema field'   => 'end_date',
+    'getter callback' => '_dropcrm_membership_date_get',
+    'setter callback' => '_dropcrm_membership_date_set',
+  );
+  $t['status'] = array(
+    'label'          => t('Term Status'),
+    'type'           => 'integer',
+    'schema field'   => 'status',
+    'options list'   => '_dropcrm_membership_status_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $t['notes'] = array(
+    'label'          => t('Notes'),
+    'type'           => 'text',
+    'schema field'   => 'notes',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $t['created'] = array(
+    'label'          => t('Recorded'),
+    'type'           => 'date',
+    'schema field'   => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $t['uid'] = array(
+    'label'          => t('Recorded by'),
+    'type'           => 'user',
+    'schema field'   => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+
+  // --- crm_membership_payment properties ---
+  $p = &$info['crm_membership_payment']['properties'];
+  $p['pid'] = array(
+    'label'          => t('Payment ID'),
+    'type'           => 'integer',
+    'schema field'   => 'pid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $p['mid'] = array(
+    'label'          => t('Membership'),
+    'type'           => 'crm_membership',
+    'schema field'   => 'mid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['tid'] = array(
+    'label'          => t('Term'),
+    'type'           => 'crm_membership_term',
+    'description'    => t('Term this payment funded (optional).'),
+    'schema field'   => 'tid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['amount'] = array(
+    'label'          => t('Amount'),
+    'type'           => 'decimal',
+    'schema field'   => 'amount',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['paid_date'] = array(
+    'label'          => t('Paid Date'),
+    'type'           => 'date',
+    'schema field'   => 'paid_date',
+    'getter callback' => '_dropcrm_membership_date_get',
+    'setter callback' => '_dropcrm_membership_date_set',
+  );
+  $p['method'] = array(
+    'label'          => t('Method'),
+    'type'           => 'text',
+    'schema field'   => 'method',
+    'options list'   => '_dropcrm_membership_payment_method_options',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['reference'] = array(
+    'label'          => t('Reference'),
+    'type'           => 'text',
+    'schema field'   => 'reference',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['notes'] = array(
+    'label'          => t('Notes'),
+    'type'           => 'text',
+    'schema field'   => 'notes',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $p['created'] = array(
+    'label'          => t('Recorded'),
+    'type'           => 'date',
+    'schema field'   => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $p['uid'] = array(
+    'label'          => t('Recorded by'),
+    'type'           => 'user',
+    'schema field'   => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+
+  return $info;
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function dropcrm_membership_permission() {
+  return array(
+    'administer dropcrm_membership' => array(
+      'title'           => t('Administer DropCRM Membership'),
+      'description'     => t('Manage settings, types, and payment methods. Implies all other membership permissions.'),
+      'restrict access' => TRUE,
+    ),
+    'access dropcrm_membership' => array(
+      'title'       => t('View memberships and payments'),
+      'description' => t('View membership records and payment history.'),
+    ),
+    'manage dropcrm_membership' => array(
+      'title'       => t('Manage memberships'),
+      'description' => t('Create memberships, record renewals, and log payments.'),
+    ),
+    'cancel dropcrm_membership' => array(
+      'title'       => t('Cancel memberships'),
+      'description' => t('Mark memberships as cancelled. Separate from manage because it is a terminal action.'),
+    ),
+  );
+}
+
+/**
+ * Access callback for crm_membership.
+ */
+function dropcrm_membership_access($op, $entity = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+  if (user_access('administer dropcrm_membership', $account)) {
+    return TRUE;
+  }
+  switch ($op) {
+    case 'view':
+      return user_access('access dropcrm_membership', $account);
+    case 'create':
+    case 'update':
+      return user_access('manage dropcrm_membership', $account);
+    case 'delete':
+      return user_access('administer dropcrm_membership', $account);
+  }
+  return FALSE;
+}
+
+/**
+ * Access callback for crm_membership_term.
+ */
+function dropcrm_membership_term_access($op, $entity = NULL, $account = NULL) {
+  return dropcrm_membership_access($op, $entity, $account);
+}
+
+/**
+ * Access callback for crm_membership_payment.
+ */
+function dropcrm_membership_payment_access($op, $entity = NULL, $account = NULL) {
+  return dropcrm_membership_access($op, $entity, $account);
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function dropcrm_membership_menu() {
+  $items = array();
+
+  $items['drop/crm/memberships'] = array(
+    'title'            => 'Memberships',
+    'page callback'    => 'dropcrm_membership_list_page',
+    'access arguments' => array('access dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  $items['drop/crm/memberships/list'] = array(
+    'title'  => 'List',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  $items['drop/crm/memberships/add'] = array(
+    'title'            => 'Add membership',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_form'),
+    'access arguments' => array('manage dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+
+  $items['drop/crm/memberships/%crm_membership'] = array(
+    'title callback'   => 'dropcrm_membership_page_title',
+    'title arguments'  => array(3),
+    'page callback'    => 'dropcrm_membership_view_page',
+    'page arguments'   => array(3),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('view', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
+  $items['drop/crm/memberships/%crm_membership/view'] = array(
+    'title'  => 'View',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  $items['drop/crm/memberships/%crm_membership/edit'] = array(
+    'title'            => 'Edit',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_form', 3),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 0,
+  );
+
+  $items['drop/crm/memberships/%crm_membership/renew'] = array(
+    'title'            => 'Renew',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_renew_form', 3),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 5,
+  );
+
+  $items['drop/crm/memberships/%crm_membership/payment/add'] = array(
+    'title'            => 'Record payment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_payment_form', 3),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 10,
+  );
+
+  $items['drop/crm/memberships/%crm_membership/payment/%crm_membership_payment/edit'] = array(
+    'title'            => 'Edit payment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_payment_form', 3, 5),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
+  $items['drop/crm/memberships/%crm_membership/payment/%crm_membership_payment/delete'] = array(
+    'title'            => 'Delete payment',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_payment_delete_form', 3, 5),
+    'access arguments' => array('administer dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
+  $items['drop/crm/memberships/%crm_membership/cancel'] = array(
+    'title'            => 'Cancel',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_cancel_form', 3),
+    'access arguments' => array('cancel dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 20,
+  );
+
+  return $items;
+}
+
+/**
+ * Title callback for the membership view page.
+ */
+function dropcrm_membership_page_title($membership) {
+  $contact = entity_load('crm_contact', $membership->cid);
+  $name = $contact ? $contact->label() : t('(unknown contact)');
+  $types = _dropcrm_membership_types();
+  $type_label = isset($types[$membership->type]['label']) ? $types[$membership->type]['label'] : $membership->type;
+  return t('@type membership — @name', array('@type' => $type_label, '@name' => $name));
+}
+
+/**
+ * Menu loader for %crm_membership.
+ */
+function crm_membership_load($mid) {
+  $entities = entity_load('crm_membership', array($mid));
+  return $entities ? reset($entities) : FALSE;
+}
+
+/**
+ * Menu loader for %crm_membership_payment.
+ */
+function crm_membership_payment_load($pid) {
+  $entities = entity_load('crm_membership_payment', array($pid));
+  return $entities ? reset($entities) : FALSE;
+}
+
+// ---------------------------------------------------------------------------
+// Presave hooks (timestamps + uid)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_crm_membership_presave().
+ */
+function dropcrm_membership_crm_membership_presave($membership) {
+  global $user;
+  $now = REQUEST_TIME;
+  if (empty($membership->created)) {
+    $membership->created = $now;
+  }
+  $membership->changed = $now;
+  if (empty($membership->uid)) {
+    $membership->uid = $user->uid;
+  }
+}
+
+/**
+ * Implements hook_crm_membership_term_presave().
+ */
+function dropcrm_membership_crm_membership_term_presave($term) {
+  global $user;
+  if (empty($term->created)) {
+    $term->created = REQUEST_TIME;
+  }
+  if (empty($term->uid)) {
+    $term->uid = $user->uid;
+  }
+}
+
+/**
+ * Implements hook_crm_membership_payment_presave().
+ */
+function dropcrm_membership_crm_membership_payment_presave($payment) {
+  global $user;
+  if (empty($payment->created)) {
+    $payment->created = REQUEST_TIME;
+  }
+  if (empty($payment->uid)) {
+    $payment->uid = $user->uid;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns status codes keyed to human labels.
+ */
+function _dropcrm_membership_status_options() {
+  return array(
+    DROPCRM_MEMBERSHIP_STATUS_ACTIVE    => t('Active'),
+    DROPCRM_MEMBERSHIP_STATUS_GRACE     => t('Grace'),
+    DROPCRM_MEMBERSHIP_STATUS_LAPSED    => t('Lapsed'),
+    DROPCRM_MEMBERSHIP_STATUS_PENDING   => t('Pending'),
+    DROPCRM_MEMBERSHIP_STATUS_CANCELLED => t('Cancelled'),
+  );
+}
+
+/**
+ * Returns a rendered themed status badge.
+ */
+function _dropcrm_membership_status_badge($status) {
+  $labels = _dropcrm_membership_status_options();
+  $classes = array(
+    DROPCRM_MEMBERSHIP_STATUS_ACTIVE    => 'active',
+    DROPCRM_MEMBERSHIP_STATUS_GRACE     => 'grace',
+    DROPCRM_MEMBERSHIP_STATUS_LAPSED    => 'lapsed',
+    DROPCRM_MEMBERSHIP_STATUS_PENDING   => 'pending',
+    DROPCRM_MEMBERSHIP_STATUS_CANCELLED => 'cancelled',
+  );
+  $label = isset($labels[$status]) ? $labels[$status] : t('Unknown');
+  $class = isset($classes[$status]) ? $classes[$status] : 'unknown';
+  return '<span class="crm-membership-status crm-membership-status-' . $class . '">' . check_plain($label) . '</span>';
+}
+
+/**
+ * Returns the membership types config, keyed by type machine name.
+ */
+function _dropcrm_membership_types() {
+  $types = config_get('dropcrm_membership.settings', 'types');
+  return is_array($types) ? $types : array();
+}
+
+/**
+ * Options list callback: type key => label.
+ */
+function _dropcrm_membership_type_options() {
+  $out = array();
+  foreach (_dropcrm_membership_types() as $key => $type) {
+    $out[$key] = isset($type['label']) ? $type['label'] : $key;
+  }
+  return $out;
+}
+
+/**
+ * Options list callback: payment method labels (keyed by label itself).
+ */
+function _dropcrm_membership_payment_method_options() {
+  $methods = config_get('dropcrm_membership.settings', 'payment_methods');
+  if (!is_array($methods)) {
+    $methods = array('Check', 'Cash', 'Credit Card', 'Other');
+  }
+  return array_combine($methods, $methods);
+}
+
+/**
+ * Getter: computed joined_date property on crm_membership (earliest term's
+ * start_date). Returns a Unix timestamp for Views date handler compatibility.
+ */
+function _dropcrm_membership_joined_date_get($membership, array $options, $name, $type, $info) {
+  $earliest = db_query('SELECT MIN(start_date) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $membership->mid))->fetchField();
+  if (empty($earliest) || $earliest === '0000-00-00') {
+    return NULL;
+  }
+  return strtotime($earliest);
+}
+
+/**
+ * Getter for schema date columns (stored as YYYY-MM-DD strings, exposed to
+ * Views as Unix timestamps).
+ */
+function _dropcrm_membership_date_get($entity, array $options, $name, $type, $info) {
+  if (empty($entity->{$name}) || $entity->{$name} === '0000-00-00') {
+    return NULL;
+  }
+  return strtotime($entity->{$name});
+}
+
+/**
+ * Setter that accepts either Unix timestamp or YYYY-MM-DD string.
+ */
+function _dropcrm_membership_date_set($entity, $name, $value) {
+  if (empty($value)) {
+    $entity->{$name} = NULL;
+    return;
+  }
+  if (is_numeric($value)) {
+    $entity->{$name} = format_date($value, 'custom', 'Y-m-d');
+  }
+  else {
+    $entity->{$name} = $value;
+  }
+}
+
+/**
+ * Returns the latest term row for a membership, or NULL.
+ */
+function _dropcrm_membership_latest_term($mid) {
+  $tid = db_query('SELECT tid FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
+  if (!$tid) {
+    return NULL;
+  }
+  $terms = entity_load('crm_membership_term', array($tid));
+  return $terms ? reset($terms) : NULL;
+}
+
+/**
+ * Adds a term_length string (strtotime-compatible) to a YYYY-MM-DD date.
+ */
+function _dropcrm_membership_add_term_length($start_date, $term_length) {
+  if (empty($term_length)) {
+    return NULL;
+  }
+  $ts = strtotime('+' . $term_length, strtotime($start_date));
+  if (!$ts) {
+    return NULL;
+  }
+  return format_date($ts, 'custom', 'Y-m-d');
+}
+
+/**
+ * Sums payments for a membership.
+ */
+function _dropcrm_membership_total_paid($mid) {
+  return (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
+}
