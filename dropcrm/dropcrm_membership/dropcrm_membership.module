@@ -712,6 +712,291 @@ function _dropcrm_membership_total_paid($mid) {
 }
 
 // ---------------------------------------------------------------------------
+// Settings form (extends /admin/crm/settings)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_FORM_ID_alter() for dropcrm_settings_form.
+ *
+ * Appends a "Memberships" fieldset: types table, payment methods, expiring
+ * widget window, and auto-lapse toggle.
+ */
+function dropcrm_membership_form_dropcrm_settings_form_alter(&$form, &$form_state) {
+  $config = config('dropcrm_membership.settings');
+  $types = $config->get('types');
+  $types = is_array($types) ? $types : array();
+
+  $form['memberships'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Memberships'),
+    '#description' => t('Manage membership types, dues, payment methods, and renewal lifecycle.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => 35,
+  );
+
+  // --- Types table ---
+  $form['memberships']['types_header'] = array(
+    '#markup' => '<h4>' . t('Membership types') . '</h4>'
+      . '<p class="description">' . t('The machine key cannot be changed after saving. Term length is any <code>strtotime</code>-compatible phrase (e.g. <code>1 year</code>, <code>6 months</code>).') . '</p>'
+      . '<table class="dropcrm-settings-table">'
+      . '<thead><tr>'
+      . '<th>' . t('Key') . '</th>'
+      . '<th>' . t('Label') . '</th>'
+      . '<th>' . t('Term length') . '</th>'
+      . '<th>' . t('Grace days') . '</th>'
+      . '<th>' . t('Default dues') . '</th>'
+      . '<th>' . t('Delete') . '</th>'
+      . '</tr></thead><tbody>',
+  );
+
+  $w = 1;
+  foreach ($types as $key => $info) {
+    $in_use = (bool) db_query('SELECT COUNT(*) FROM {crm_membership} WHERE type = :t', array(':t' => $key))->fetchField();
+
+    $form['memberships']['mt_key_' . $key] = array(
+      '#markup' => '<td><code>' . check_plain($key) . '</code></td>',
+      '#prefix' => '<tr>',
+      '#weight' => $w,
+    );
+    $form['memberships']['mt_label_' . $key] = array(
+      '#type'          => 'textfield',
+      '#title'         => t('Label'),
+      '#title_display' => 'invisible',
+      '#default_value' => isset($info['label']) ? $info['label'] : '',
+      '#size'          => 18,
+      '#maxlength'     => 64,
+      '#prefix'        => '<td>',
+      '#suffix'        => '</td>',
+      '#weight'        => $w + 0.1,
+    );
+    $form['memberships']['mt_term_' . $key] = array(
+      '#type'          => 'textfield',
+      '#title'         => t('Term length'),
+      '#title_display' => 'invisible',
+      '#default_value' => isset($info['term_length']) ? $info['term_length'] : '1 year',
+      '#size'          => 12,
+      '#maxlength'     => 32,
+      '#prefix'        => '<td>',
+      '#suffix'        => '</td>',
+      '#weight'        => $w + 0.2,
+    );
+    $form['memberships']['mt_grace_' . $key] = array(
+      '#type'          => 'textfield',
+      '#title'         => t('Grace days'),
+      '#title_display' => 'invisible',
+      '#default_value' => isset($info['grace_days']) ? $info['grace_days'] : 30,
+      '#size'          => 5,
+      '#maxlength'     => 4,
+      '#element_validate' => array('element_validate_integer'),
+      '#prefix'        => '<td>',
+      '#suffix'        => '</td>',
+      '#weight'        => $w + 0.3,
+    );
+    $form['memberships']['mt_dues_' . $key] = array(
+      '#type'          => 'textfield',
+      '#title'         => t('Default dues'),
+      '#title_display' => 'invisible',
+      '#default_value' => isset($info['default_dues']) ? $info['default_dues'] : '',
+      '#size'          => 10,
+      '#maxlength'     => 20,
+      '#field_prefix'  => '$',
+      '#prefix'        => '<td>',
+      '#suffix'        => '</td>',
+      '#weight'        => $w + 0.4,
+    );
+
+    if ($in_use) {
+      $form['memberships']['mt_del_' . $key] = array(
+        '#markup' => '<td class="dropcrm-cell-inuse"><span class="dropcrm-inuse">' . t('In use') . '</span></td></tr>',
+        '#weight' => $w + 0.5,
+      );
+    }
+    else {
+      $form['memberships']['mt_del_' . $key] = array(
+        '#type'          => 'checkbox',
+        '#title'         => t('Delete'),
+        '#title_display' => 'invisible',
+        '#default_value' => 0,
+        '#prefix'        => '<td class="checkbox-cell">',
+        '#suffix'        => '</td></tr>',
+        '#weight'        => $w + 0.5,
+      );
+    }
+    $w++;
+  }
+
+  $form['memberships']['types_close'] = array(
+    '#markup' => '</tbody></table>',
+    '#weight' => $w,
+  );
+
+  // --- Add new type ---
+  $form['memberships']['new_type'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Add a new membership type'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => $w + 1,
+  );
+  $form['memberships']['new_type']['mt_new_key'] = array(
+    '#type'        => 'textfield',
+    '#title'       => t('Machine key'),
+    '#description' => t('Lowercase letters, numbers, and underscores only.'),
+    '#size'        => 24,
+    '#maxlength'   => 32,
+  );
+  $form['memberships']['new_type']['mt_new_label'] = array(
+    '#type'     => 'textfield',
+    '#title'    => t('Label'),
+    '#size'     => 24,
+    '#maxlength' => 64,
+  );
+  $form['memberships']['new_type']['mt_new_term'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Term length'),
+    '#size'          => 16,
+    '#default_value' => '1 year',
+    '#description'   => t('e.g. "1 year", "6 months", "90 days".'),
+  );
+  $form['memberships']['new_type']['mt_new_grace'] = array(
+    '#type'             => 'textfield',
+    '#title'            => t('Grace days'),
+    '#size'             => 5,
+    '#default_value'    => 30,
+    '#element_validate' => array('element_validate_integer'),
+  );
+  $form['memberships']['new_type']['mt_new_dues'] = array(
+    '#type'         => 'textfield',
+    '#title'        => t('Default dues'),
+    '#size'         => 10,
+    '#field_prefix' => '$',
+  );
+
+  // --- Payment methods ---
+  $methods = $config->get('payment_methods');
+  $form['memberships']['payment_methods'] = array(
+    '#type'          => 'textarea',
+    '#title'         => t('Payment methods'),
+    '#description'   => t('One payment method label per line.'),
+    '#default_value' => is_array($methods) ? implode("\n", $methods) : '',
+    '#rows'          => 5,
+    '#weight'        => $w + 5,
+  );
+
+  // --- Simple numeric and boolean settings ---
+  $form['memberships']['expiring_widget_window'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Expiring widget window (days)'),
+    '#description'   => t('How far ahead the dashboard widget looks for expiring memberships.'),
+    '#default_value' => (int) $config->get('expiring_widget_window'),
+    '#size'          => 5,
+    '#element_validate' => array('element_validate_integer_positive'),
+    '#weight'        => $w + 6,
+  );
+  $form['memberships']['auto_lapse_after_grace'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Automatically lapse memberships after the grace period'),
+    '#description'   => t('When off, memberships in grace status stay there until manually lapsed.'),
+    '#default_value' => (bool) $config->get('auto_lapse_after_grace'),
+    '#weight'        => $w + 7,
+  );
+
+  $form['#validate'][] = 'dropcrm_membership_settings_validate';
+  $form['#submit'][] = 'dropcrm_membership_settings_submit';
+}
+
+/**
+ * Validate handler for the Memberships fieldset on the CRM settings form.
+ */
+function dropcrm_membership_settings_validate($form, &$form_state) {
+  $v = &$form_state['values'];
+
+  // New type — only validate if key or label was filled in.
+  $new_key = isset($v['mt_new_key']) ? trim($v['mt_new_key']) : '';
+  $new_label = isset($v['mt_new_label']) ? trim($v['mt_new_label']) : '';
+  if ($new_key !== '' || $new_label !== '') {
+    if ($new_key === '') {
+      form_set_error('mt_new_key', t('Machine key is required for a new membership type.'));
+    }
+    elseif (!preg_match('/^[a-z0-9_]+$/', $new_key)) {
+      form_set_error('mt_new_key', t('Machine key must contain only lowercase letters, numbers, and underscores.'));
+    }
+    else {
+      $types = config_get('dropcrm_membership.settings', 'types');
+      if (is_array($types) && isset($types[$new_key])) {
+        form_set_error('mt_new_key', t('That key is already in use.'));
+      }
+    }
+    if ($new_label === '') {
+      form_set_error('mt_new_label', t('Label is required for a new membership type.'));
+    }
+    if (!empty($v['mt_new_term']) && strtotime('+' . $v['mt_new_term']) === FALSE) {
+      form_set_error('mt_new_term', t('Term length must be a recognizable duration (e.g. "1 year").'));
+    }
+  }
+
+  // Existing types: validate term_length parseability where given.
+  $types = config_get('dropcrm_membership.settings', 'types');
+  if (is_array($types)) {
+    foreach ($types as $key => $info) {
+      $field = 'mt_term_' . $key;
+      if (!empty($v[$field]) && strtotime('+' . $v[$field]) === FALSE) {
+        form_set_error($field, t('Term length for %key must be a recognizable duration.', array('%key' => $key)));
+      }
+    }
+  }
+}
+
+/**
+ * Submit handler for the Memberships fieldset on the CRM settings form.
+ */
+function dropcrm_membership_settings_submit($form, &$form_state) {
+  $v = $form_state['values'];
+  $config = config('dropcrm_membership.settings');
+
+  // Rebuild types from form values.
+  $existing_types = $config->get('types');
+  $existing_types = is_array($existing_types) ? $existing_types : array();
+  $new_types = array();
+  foreach ($existing_types as $key => $info) {
+    // Skip if delete checkbox is ticked and type is not in use.
+    if (!empty($v['mt_del_' . $key])) {
+      continue;
+    }
+    $new_types[$key] = array(
+      'label'        => trim($v['mt_label_' . $key]),
+      'term_length'  => trim($v['mt_term_' . $key]),
+      'grace_days'   => (int) $v['mt_grace_' . $key],
+      'default_dues' => trim($v['mt_dues_' . $key]),
+    );
+  }
+
+  // New type.
+  $new_key = isset($v['mt_new_key']) ? trim($v['mt_new_key']) : '';
+  if ($new_key !== '') {
+    $new_types[$new_key] = array(
+      'label'        => trim($v['mt_new_label']),
+      'term_length'  => trim($v['mt_new_term']) ?: '1 year',
+      'grace_days'   => (int) $v['mt_new_grace'],
+      'default_dues' => trim($v['mt_new_dues']),
+    );
+  }
+
+  $config->set('types', $new_types);
+
+  // Payment methods.
+  if (isset($v['payment_methods'])) {
+    $methods = array_filter(array_map('trim', explode("\n", $v['payment_methods'])));
+    $config->set('payment_methods', array_values($methods));
+  }
+
+  $config->set('expiring_widget_window', (int) $v['expiring_widget_window']);
+  $config->set('auto_lapse_after_grace', (bool) $v['auto_lapse_after_grace']);
+  $config->save();
+}
+
+// ---------------------------------------------------------------------------
 // Cron + state machine
 // ---------------------------------------------------------------------------
 
