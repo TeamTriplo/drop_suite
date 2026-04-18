@@ -1,0 +1,148 @@
+<?php
+/**
+ * @file
+ * Drop Start: sample content generation and onboarding for Drop Suite.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function drop_start_menu() {
+  $items = array();
+
+  $items['drop/start'] = array(
+    'title'            => 'Drop Start',
+    'page callback'    => 'drop_start_overview_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/start/generate'] = array(
+    'title'            => 'Generate sample content',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_start_generate_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['drop/start/delete'] = array(
+    'title'            => 'Delete sample content',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_start_delete_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function drop_start_permission() {
+  return array(
+    'administer drop_start' => array(
+      'title' => t('Administer Drop Start'),
+      'description' => t('Generate and delete sample content.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function drop_start_drop_settings_info() {
+  return array(
+    'drop_start' => array(
+      'title' => t('Drop Start'),
+      'description' => t('Generate or remove sample content for demos and onboarding.'),
+      'path' => 'drop/start',
+      'permission' => 'administer drop_start',
+      'weight' => 50,
+    ),
+  );
+}
+
+/**
+ * Track a piece of sample content for later deletion.
+ *
+ * @param string $entity_type
+ *   The entity type (e.g. 'drop_ticket', 'crm_contact', 'node').
+ * @param int $entity_id
+ *   The entity's primary key.
+ */
+function drop_start_track($entity_type, $entity_id) {
+  db_merge('drop_start_content')
+    ->key(array(
+      'entity_type' => $entity_type,
+      'entity_id'   => (int) $entity_id,
+    ))
+    ->fields(array(
+      'created' => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Returns a count of tracked sample content, grouped by entity type.
+ *
+ * @return array
+ *   Associative array of entity_type => count.
+ */
+function drop_start_content_counts() {
+  $query = db_select('drop_start_content', 'c')
+    ->fields('c', array('entity_type'));
+  $query->addExpression('COUNT(*)', 'cnt');
+  $query->groupBy('c.entity_type');
+  return $query->execute()->fetchAllKeyed();
+}
+
+/**
+ * Returns the total count of tracked sample content.
+ *
+ * @return int
+ */
+function drop_start_content_total() {
+  return (int) db_select('drop_start_content', 'c')
+    ->countQuery()
+    ->execute()
+    ->fetchField();
+}
+
+/**
+ * Returns which Drop Suite modules are available for content generation.
+ *
+ * @return array
+ *   Keyed by module name, value is the human-readable label.
+ */
+function drop_start_available_modules() {
+  $modules = array();
+  if (module_exists('drop_base')) {
+    $modules['drop_base'] = t('Projects');
+  }
+  if (module_exists('droptickets')) {
+    $modules['droptickets'] = t('Tickets');
+  }
+  if (module_exists('dropcrm')) {
+    $modules['dropcrm'] = t('Contacts');
+  }
+  if (module_exists('droptasks')) {
+    $modules['droptasks'] = t('Tasks');
+  }
+  if (module_exists('dropgoals')) {
+    $modules['dropgoals'] = t('Goals');
+  }
+  if (module_exists('droptime')) {
+    $modules['droptime'] = t('Time entries');
+  }
+  if (module_exists('dropdocs')) {
+    $modules['dropdocs'] = t('Docs');
+  }
+  return $modules;
+}
