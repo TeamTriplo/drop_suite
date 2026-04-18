@@ -256,6 +256,37 @@ function dropdocs_update_1004() {
 }
 
 /**
+ * Promote orphan doc nodes to their own books so they appear on /drop/docs.
+ *
+ * Before the auto-book presave hook was added, docs created without explicitly
+ * placing them in a book (drop_start sample content, docs added via the UI
+ * without selecting "Create a new book", etc.) were invisible on the docs
+ * index page. This retroactively promotes each orphan to its own book root.
+ */
+function dropdocs_update_1005() {
+  $orphans = db_query("
+    SELECT n.nid
+    FROM {node} n
+    LEFT JOIN {book} b ON n.nid = b.nid
+    WHERE n.type = :t AND b.nid IS NULL
+    ORDER BY n.nid
+  ", array(':t' => 'doc'))->fetchCol();
+
+  $count = 0;
+  foreach ($orphans as $nid) {
+    $node = node_load($nid);
+    if (!$node) {
+      continue;
+    }
+    $node->book = array('bid' => 'new');
+    node_save($node);
+    $count++;
+  }
+
+  return t('DropDocs: promoted @n orphan doc(s) to their own books.', array('@n' => $count));
+}
+
+/**
  * Implements hook_uninstall().
  */
 function dropdocs_uninstall() {
