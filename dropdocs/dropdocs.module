@@ -122,6 +122,40 @@ function dropdocs_permission() {
  * because this hook only runs for the 'view' op and core handles those
  * bypass permissions elsewhere for non-view ops.
  */
+/**
+ * Implements hook_node_presave().
+ *
+ * Auto-assigns doc nodes to a new book outline if the caller didn't place them
+ * in one. Orphan docs don't show on /drop/docs because the index only lists
+ * book-rooted docs. Runs before book_node_insert/book_node_update, which pick
+ * up the bid and create the menu link.
+ */
+function dropdocs_node_presave($node) {
+  if (!isset($node->type) || $node->type !== 'doc') {
+    return;
+  }
+  // Caller explicitly placed this node in a book (or ticked "Create a new
+  // book" on the form). Leave it alone.
+  if (!empty($node->book['bid']) && $node->book['bid'] !== 0 && $node->book['bid'] !== '0') {
+    return;
+  }
+  // Existing node that's already in the book outline — don't re-root it.
+  if (!empty($node->nid)) {
+    $existing_bid = db_query(
+      "SELECT bid FROM {book} WHERE nid = :nid",
+      array(':nid' => $node->nid)
+    )->fetchField();
+    if ($existing_bid) {
+      return;
+    }
+  }
+  // Orphan doc — make it its own new book so it appears on /drop/docs.
+  if (!isset($node->book) || !is_array($node->book)) {
+    $node->book = array();
+  }
+  $node->book['bid'] = 'new';
+}
+
 function dropdocs_node_access($node, $op, $account) {
   if ($op !== 'view') {
     return NODE_ACCESS_IGNORE;

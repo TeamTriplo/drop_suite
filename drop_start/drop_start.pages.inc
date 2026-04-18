@@ -685,8 +685,16 @@ function _drop_start_create_doc($title, $body, $uid, $parent_nid = NULL) {
     'value'  => $body,
     'format' => 'filtered_html',
   );
+  // Attach children to the parent's book outline. Top-level docs (no parent)
+  // fall through to dropdocs_node_presave, which auto-roots them as new books.
   if ($parent_nid) {
-    $node->field_doc_parent[LANGUAGE_NONE][0]['target_id'] = (int) $parent_nid;
+    $parent = node_load($parent_nid);
+    if ($parent && !empty($parent->book['bid']) && !empty($parent->book['mlid'])) {
+      $node->book = array(
+        'bid'  => $parent->book['bid'],
+        'plid' => $parent->book['mlid'],
+      );
+    }
   }
   node_save($node);
   drop_start_track('node', $node->nid);

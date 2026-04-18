@@ -929,8 +929,8 @@ function drop_base_settings_form($form, &$form_state) {
   );
   $form['features']['meeting_enabled'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Enable meeting agenda'),
-    '#description' => t('Show the Meeting page in the navigation bar.'),
+    '#title' => t('Enable Meeting Agenda'),
+    '#description' => t('Adds a <em>Meeting</em> page to the Drop Suite nav that aggregates every task and ticket tagged <code>Meeting</code> into a single pre-meeting prep list. During a meeting, remove the tag as each item is addressed, or postpone an item to keep it off the agenda until your next meeting. Useful for teams that run a recurring standup or review and want one screen to walk through.'),
     '#default_value' => $config->get('meeting_enabled') !== FALSE ? $config->get('meeting_enabled') : TRUE,
   );
 

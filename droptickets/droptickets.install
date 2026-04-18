@@ -811,14 +811,24 @@ function droptickets_install() {
   }
 
   // Grant permissions to the Team Member role.
+  // Two gotchas:
+  //  1. user_role_grant_permissions() takes a role machine name, not a rid —
+  //     Backdrop 1.x roles are identified by name. Passing rid silently no-ops.
+  //  2. If ANY permission in the list is undefined (i.e. the providing module
+  //     isn't enabled), the entire grant silently drops — including the valid
+  //     ones. Filter to defined permissions before calling.
   if ($role) {
-    $permissions = array(
+    $wanted = array(
       'access droptickets',
       'access droptasks',
       'access droptime',
       'access dropbridge',
     );
-    user_role_grant_permissions($role->rid, $permissions);
+    $defined = array_keys(user_permission_get_modules());
+    $permissions = array_values(array_intersect($wanted, $defined));
+    if ($permissions) {
+      user_role_grant_permissions($role->name, $permissions);
+    }
   }
 
   drop_base_grant_admin_permissions('droptickets');
@@ -1700,5 +1710,57 @@ function droptickets_update_1031() {
         ->isNull('active_since')
         ->execute();
     }
+  }
+}
+
+/**
+ * Re-grant team_member permissions that silently failed on fresh installs (tid 564).
+ *
+ * droptickets_install() passed $role->rid to user_role_grant_permissions(),
+ * which takes a role machine name — the grant no-op'd without error. Result:
+ * team_member role existed but had no permissions, so assignee/watcher
+ * dropdowns only showed admin. Idempotent.
+ *
+ * NOTE: This first version had a second bug — if any permission in the list
+ * was undefined (module not enabled), Backdrop silently drops the whole list,
+ * including the valid ones. Superseded by droptickets_update_1033 which
+ * filters to defined permissions before granting. This hook is left in place
+ * so schema bookkeeping stays monotonic on sites that already ran it.
+ */
+function droptickets_update_1032() {
+  if (!user_role_load_by_name('team_member')) {
+    return;
+  }
+  user_role_grant_permissions('team_member', array(
+    'access droptickets',
+    'access droptasks',
+    'access droptime',
+    'access dropbridge',
+  ));
+}
+
+/**
+ * Re-grant team_member permissions with defined-permission filter (tid 564).
+ *
+ * Supersedes update 1032. `user_role_grant_permissions()` silently drops the
+ * entire list if any permission in it is undefined by an enabled module, so
+ * on a site with only droptickets enabled (not droptasks/droptime/dropbridge)
+ * the 1032 grant produced zero permissions. Filter to currently-defined
+ * permissions and grant only those.
+ */
+function droptickets_update_1033() {
+  if (!user_role_load_by_name('team_member')) {
+    return;
+  }
+  $wanted = array(
+    'access droptickets',
+    'access droptasks',
+    'access droptime',
+    'access dropbridge',
+  );
+  $defined = array_keys(user_permission_get_modules());
+  $permissions = array_values(array_intersect($wanted, $defined));
+  if ($permissions) {
+    user_role_grant_permissions('team_member', $permissions);
   }
 }
