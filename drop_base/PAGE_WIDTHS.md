@@ -6,9 +6,10 @@ against intended behavior.
 
 ## How widths are controlled
 
-- **Narrow pages** get the body class `drop-narrow-page` and CSS
-  `max-width: 900px` on `.l-wrapper`. The list is driven by the regex patterns
-  in `_drop_base_is_narrow_page()` in `drop_base.module`.
+- **Narrow pages** get the body class `drop-narrow-page` and a configurable
+  `max-width` on `.l-wrapper` (default 1000px, set at `drop/settings/base`).
+  The list of narrow paths is driven by the regex patterns in
+  `_drop_base_is_narrow_page()` in `drop_base.module`.
 - **Wide pages** use `.l-wrapper-inner { max-width: var(--drop-page-width, 1600px) }`,
   which reads from a per-user body class:
   - `drop-page-width-narrow` — 1200px
@@ -20,7 +21,7 @@ against intended behavior.
   with the inner `.drop-nav` capped at 1920px, so the nav width stays
   constant regardless of the viewer's page-width preference.
 
-## Narrow pages (900px fixed wrapper)
+## Narrow pages (1000px default, configurable)
 
 | Area | Paths |
 |---|---|

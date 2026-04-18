@@ -23,7 +23,7 @@
 
   <?php if ($content['header']): ?>
     <header class="l-header" role="banner" aria-label="<?php print t('Site header'); ?>">
-      <div class="l-header-inner">
+      <div class="l-header-inner container container-fluid">
         <?php print $content['header']; ?>
       </div>
     </header>
