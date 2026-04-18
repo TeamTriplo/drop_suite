@@ -131,7 +131,13 @@ function dropdocs_settings_form($form, &$form_state) {
 
   $config = config('dropdocs.settings');
 
-  $form['display_name'] = array(
+  $form['display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['display']['display_name'] = array(
     '#type' => 'select',
     '#title' => t('Display name'),
     '#description' => t('Choose what this section is called in navigation, breadcrumbs, and page titles. The internal module name and URLs are unchanged.'),
