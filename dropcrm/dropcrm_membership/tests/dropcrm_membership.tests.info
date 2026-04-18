@@ -1,0 +1,29 @@
+[DropCRMMembershipStateMachineTest]
+name = DropCRM Membership State Machine
+description = Verifies ACTIVE → GRACE → LAPSED cron transitions and date-boundary correctness.
+group = DropCRM Membership
+file = dropcrm_membership.test
+
+[DropCRMMembershipRenewalTest]
+name = DropCRM Membership Renewal
+description = Renewing a membership creates a new term, flips status to active, and preserves prior terms.
+group = DropCRM Membership
+file = dropcrm_membership.test
+
+[DropCRMMembershipPaymentTest]
+name = DropCRM Membership Payment
+description = Payments record correctly, total_paid sum aggregates, and payments can be linked to terms.
+group = DropCRM Membership
+file = dropcrm_membership.test
+
+[DropCRMMembershipAccessTest]
+name = DropCRM Membership Access
+description = Permission gates block unauthorized users from managing memberships and canceling.
+group = DropCRM Membership
+file = dropcrm_membership.test
+
+[DropCRMMembershipActivityIntegrationTest]
+name = DropCRM Membership Activity Integration
+description = Renewal and cancellation each create a corresponding crm_activity on the contact timeline.
+group = DropCRM Membership
+file = dropcrm_membership.test

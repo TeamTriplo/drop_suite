@@ -491,9 +491,9 @@ function dropcrm_membership_renew_form_submit($form, &$form_state) {
   ));
   $term->save();
 
-  // Flip membership to active.
-  $membership->status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
-  $membership->save();
+  // Recompute status from the new latest term. Normally flips to ACTIVE, but
+  // correctly handles backdated end dates.
+  _dropcrm_membership_recompute_status($membership->mid);
 
   // Optional payment.
   if (trim((string) $v['pay_amount']) !== '') {

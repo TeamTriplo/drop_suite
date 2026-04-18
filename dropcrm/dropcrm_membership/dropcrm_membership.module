@@ -710,3 +710,144 @@ function _dropcrm_membership_add_term_length($start_date, $term_length) {
 function _dropcrm_membership_total_paid($mid) {
   return (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
 }
+
+// ---------------------------------------------------------------------------
+// Cron + state machine
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_cron().
+ *
+ * State transitions:
+ *   ACTIVE → GRACE   when latest term end_date is before today
+ *   GRACE  → LAPSED  when latest term end_date + grace_days is before today
+ *                    (only if auto_lapse_after_grace is enabled)
+ *
+ * CANCELLED memberships are never touched automatically. Lifetime terms
+ * (end_date IS NULL) stay ACTIVE indefinitely.
+ */
+function dropcrm_membership_cron() {
+  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+  $types = _dropcrm_membership_types();
+  $auto_lapse = (bool) config_get('dropcrm_membership.settings', 'auto_lapse_after_grace');
+
+  // Active → Grace. Examine the latest term per membership.
+  $to_grace = db_query("
+    SELECT m.mid
+    FROM {crm_membership} m
+    INNER JOIN (
+      SELECT mid, MAX(tid) AS tid
+      FROM (
+        SELECT mid, tid,
+               ROW_NUMBER() OVER (PARTITION BY mid ORDER BY start_date DESC, tid DESC) AS rn
+        FROM {crm_membership_term}
+      ) ranked
+      WHERE rn = 1
+      GROUP BY mid
+    ) latest ON latest.mid = m.mid
+    INNER JOIN {crm_membership_term} t ON t.tid = latest.tid
+    WHERE m.status = :active
+      AND t.end_date IS NOT NULL
+      AND t.end_date < :today
+  ", array(
+    ':active' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+    ':today'  => $today,
+  ))->fetchCol();
+
+  foreach ($to_grace as $mid) {
+    _dropcrm_membership_set_status($mid, DROPCRM_MEMBERSHIP_STATUS_GRACE);
+  }
+  if (!empty($to_grace)) {
+    watchdog('dropcrm_membership', 'Moved @n memberships to grace status.', array('@n' => count($to_grace)));
+  }
+
+  // Grace → Lapsed (respects per-type grace_days).
+  if ($auto_lapse) {
+    $grace_memberships = db_query("
+      SELECT m.mid, m.type, t.end_date
+      FROM {crm_membership} m
+      INNER JOIN (
+        SELECT mid, MAX(tid) AS tid
+        FROM (
+          SELECT mid, tid,
+                 ROW_NUMBER() OVER (PARTITION BY mid ORDER BY start_date DESC, tid DESC) AS rn
+          FROM {crm_membership_term}
+        ) ranked
+        WHERE rn = 1
+        GROUP BY mid
+      ) latest ON latest.mid = m.mid
+      INNER JOIN {crm_membership_term} t ON t.tid = latest.tid
+      WHERE m.status = :grace
+        AND t.end_date IS NOT NULL
+    ", array(':grace' => DROPCRM_MEMBERSHIP_STATUS_GRACE))->fetchAll();
+
+    $lapsed_count = 0;
+    foreach ($grace_memberships as $row) {
+      $grace_days = isset($types[$row->type]['grace_days']) ? (int) $types[$row->type]['grace_days'] : 30;
+      $deadline = format_date(strtotime($row->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
+      if ($deadline < $today) {
+        _dropcrm_membership_set_status($row->mid, DROPCRM_MEMBERSHIP_STATUS_LAPSED);
+        $lapsed_count++;
+      }
+    }
+    if ($lapsed_count > 0) {
+      watchdog('dropcrm_membership', 'Lapsed @n memberships past grace period.', array('@n' => $lapsed_count));
+    }
+  }
+}
+
+/**
+ * Updates the status column on a membership without triggering a full
+ * entity_save (no need to touch changed timestamp / run presave hooks on a
+ * machine-driven transition).
+ */
+function _dropcrm_membership_set_status($mid, $status) {
+  db_update('crm_membership')
+    ->fields(array(
+      'status'  => $status,
+      'changed' => REQUEST_TIME,
+    ))
+    ->condition('mid', $mid)
+    ->execute();
+  entity_get_controller('crm_membership')->resetCache(array($mid));
+}
+
+/**
+ * Recomputes the membership status from scratch based on its latest term.
+ * Useful after renewals or manual edits.
+ */
+function _dropcrm_membership_recompute_status($mid) {
+  $membership = entity_load('crm_membership', array($mid));
+  $membership = reset($membership);
+  if (!$membership || $membership->status == DROPCRM_MEMBERSHIP_STATUS_CANCELLED) {
+    return;
+  }
+  $term = _dropcrm_membership_latest_term($mid);
+  if (!$term) {
+    return;
+  }
+  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+
+  // Lifetime term → always active.
+  if (empty($term->end_date)) {
+    $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
+  }
+  elseif ($term->end_date >= $today) {
+    $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
+  }
+  else {
+    $types = _dropcrm_membership_types();
+    $grace_days = isset($types[$membership->type]['grace_days']) ? (int) $types[$membership->type]['grace_days'] : 30;
+    $deadline = format_date(strtotime($term->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
+    if ($deadline >= $today) {
+      $new_status = DROPCRM_MEMBERSHIP_STATUS_GRACE;
+    }
+    else {
+      $new_status = DROPCRM_MEMBERSHIP_STATUS_LAPSED;
+    }
+  }
+
+  if ($new_status != $membership->status) {
+    _dropcrm_membership_set_status($mid, $new_status);
+  }
+}
