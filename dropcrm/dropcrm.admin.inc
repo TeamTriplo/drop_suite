@@ -1575,14 +1575,14 @@ function dropcrm_settings_form($form, &$form_state) {
 
   $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
 
-  $form['features'] = array(
+  $form['households'] = array(
     '#type'        => 'fieldset',
-    '#title'       => t('Features'),
+    '#title'       => t('Households'),
     '#collapsible' => TRUE,
     '#collapsed'   => TRUE,
     '#weight'      => -10,
   );
-  $form['features']['enable_households'] = array(
+  $form['households']['enable_households'] = array(
     '#type'          => 'checkbox',
     '#title'         => t('Enable Households'),
     '#description'   => t('Show the Households tab in the CRM. Disable to hide it without removing the feature from the module.'),
@@ -1687,17 +1687,23 @@ function dropcrm_settings_form($form, &$form_state) {
       '#weight'        => $w + 0.2,
     );
 
-    $form['activity_types']['at_del_' . $key] = array(
-      '#type'          => 'checkbox',
-      '#title'         => t('Delete'),
-      '#title_display' => 'invisible',
-      '#default_value' => 0,
-      '#disabled'      => $in_use,
-      '#description'   => $in_use ? t('In use') : '',
-      '#prefix'        => '<td class="checkbox-cell">',
-      '#suffix'        => '</td></tr>',
-      '#weight'        => $w + 0.3,
-    );
+    if ($in_use) {
+      $form['activity_types']['at_del_' . $key] = array(
+        '#markup' => '<td class="dropcrm-cell-inuse"><span class="dropcrm-inuse">' . t('In use') . '</span></td></tr>',
+        '#weight' => $w + 0.3,
+      );
+    }
+    else {
+      $form['activity_types']['at_del_' . $key] = array(
+        '#type'          => 'checkbox',
+        '#title'         => t('Delete'),
+        '#title_display' => 'invisible',
+        '#default_value' => 0,
+        '#prefix'        => '<td class="checkbox-cell">',
+        '#suffix'        => '</td></tr>',
+        '#weight'        => $w + 0.3,
+      );
+    }
 
     $w += 1;
   }
@@ -1711,7 +1717,8 @@ function dropcrm_settings_form($form, &$form_state) {
   $form['activity_types']['new_type'] = array(
     '#type'        => 'fieldset',
     '#title'       => t('Add a new activity type'),
-    '#collapsible' => FALSE,
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
     '#weight'      => $w + 1,
   );
 

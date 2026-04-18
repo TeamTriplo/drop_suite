@@ -905,7 +905,13 @@ function drop_base_project_delete_form_submit($form, &$form_state) {
 function drop_base_settings_form($form, &$form_state) {
   $config = config('drop_base.settings');
 
-  $form['narrow_page_width'] = array(
+  $form['page_layout'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Page layout'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['page_layout']['narrow_page_width'] = array(
     '#type'          => 'number',
     '#title'         => t('Narrow page width'),
     '#description'   => t('Maximum width in pixels for pages that work better at a narrower width (e.g. Meeting, Settings). Set to 0 for no limit.'),
@@ -919,6 +925,7 @@ function drop_base_settings_form($form, &$form_state) {
     '#type' => 'fieldset',
     '#title' => t('Features'),
     '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
   $form['features']['meeting_enabled'] = array(
     '#type' => 'checkbox',
