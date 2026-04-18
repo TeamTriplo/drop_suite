@@ -337,3 +337,16 @@ function drop_base_update_1202() {
   }
 }
 
+/**
+ * Bump default narrow_page_width from 900 to 1000 (fits 3 settings cards across).
+ *
+ * Only migrates sites still holding the old default; leaves custom values alone.
+ */
+function drop_base_update_1203() {
+  $config = config('drop_base.settings');
+  if ((int) $config->get('narrow_page_width') === 900) {
+    $config->set('narrow_page_width', 1000);
+    $config->save();
+  }
+}
+

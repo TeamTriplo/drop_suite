@@ -1399,10 +1399,6 @@ function droptickets_statuses_form($form, &$form_state) {
 
   $form['#tree'] = TRUE;
 
-  $form['description'] = array(
-    '#markup' => '<p>' . t('Configure ticket statuses and which ones appear as Kanban board lanes. Statuses with the "Active" group appear in the default ticket list. "Inactive" statuses (Icebox, Closed) are hidden from default views.') . '</p>',
-  );
-
   $group_options = array(
     'active' => t('Active'),
     'inactive' => t('Inactive'),
@@ -1419,7 +1415,8 @@ function droptickets_statuses_form($form, &$form_state) {
     '#title' => t('Age badge'),
     '#description' => t('Show a "days active" badge on the ticket page once a ticket has been in an active status longer than the threshold.'),
     '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
+    '#collapsed' => TRUE,
+    '#weight' => 10,
   );
   $form['age_badge']['age_badge_active_start'] = array(
     '#type' => 'select',
@@ -1446,7 +1443,12 @@ function droptickets_statuses_form($form, &$form_state) {
   );
 
   $form['statuses'] = array(
-    '#type' => 'container',
+    '#type' => 'fieldset',
+    '#title' => t('Statuses'),
+    '#description' => t('Configure ticket statuses and which ones appear as Kanban board lanes. Statuses with the "Active" group appear in the default ticket list. "Inactive" statuses (Icebox, Closed) are hidden from default views.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => -10,
   );
 
   // Count tickets per status for delete warnings.
@@ -1513,6 +1515,7 @@ function droptickets_statuses_form($form, &$form_state) {
     '#title' => t('Add new status'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
+    '#weight' => 20,
     '#attributes' => array('class' => array('droptickets-new-status')),
   );
   $form['new_status']['key'] = array(
@@ -1555,7 +1558,7 @@ function droptickets_statuses_form($form, &$form_state) {
     '#size' => 3,
   );
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array('#type' => 'actions', '#weight' => 99);
   $form['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save statuses'),
@@ -1797,11 +1800,7 @@ function theme_droptickets_statuses_form($variables) {
   $rows = array();
   if (isset($form['statuses'])) {
     foreach (element_children($form['statuses']) as $key) {
-      // Add tabledrag class to the weight field.
       $form['statuses'][$key]['weight']['#attributes']['class'][] = 'status-weight';
-
-      // Render key markup but don't show it as a column — hide it.
-      backdrop_render($form['statuses'][$key]['key']);
 
       $rows[] = array(
         'data' => array(
@@ -1814,16 +1813,14 @@ function theme_droptickets_statuses_form($variables) {
         ),
         'class' => array('draggable'),
       );
+
+      // Remove the row's children so they don't double-render inside the
+      // fieldset. Their output is already captured in $rows above.
+      unset($form['statuses'][$key]);
     }
   }
 
-  // Render the age-badge fieldset above the statuses table.
-  $output = '';
-  if (isset($form['age_badge'])) {
-    $output .= backdrop_render($form['age_badge']);
-  }
-
-  $output .= theme('table', array(
+  $table_html = theme('table', array(
     'header' => $header,
     'rows' => $rows,
     'empty' => t('No statuses configured.'),
@@ -1832,9 +1829,10 @@ function theme_droptickets_statuses_form($variables) {
 
   backdrop_add_tabledrag('droptickets-statuses-table', 'order', 'sibling', 'status-weight');
 
-  // Render remaining form elements (description, new status fieldset, submit button).
-  $output .= backdrop_render_children($form);
+  // Inject the rendered table as the fieldset's body. #children is what
+  // theme_fieldset() wraps inside the fieldset markup.
+  $form['statuses']['#children'] = $table_html;
 
-  return $output;
+  return backdrop_render_children($form);
 }
 

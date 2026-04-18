@@ -167,7 +167,7 @@ function dropcrm_user_form_dropcrm_settings_form_alter(&$form, &$form_state) {
     '#type'        => 'fieldset',
     '#title'       => t('User Accounts'),
     '#collapsible' => TRUE,
-    '#collapsed'   => FALSE,
+    '#collapsed'   => TRUE,
     '#weight'      => 50,
   );
 
