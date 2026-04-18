@@ -1028,21 +1028,22 @@ function droptickets_settings_form($form, &$form_state) {
     '#default_value' => (int) ($config->get('default_board_tid') ?: droptickets_all_board_tid()),
     '#empty_option'  => t('— None —'),
   );
-  // --- Team ---
-  $form['team'] = array(
+  // --- Default watchers ---
+  $form['default_watchers_fieldset'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Team'),
+    '#title' => t('Default watchers'),
+    '#description' => t('These people are pre-selected as watchers when anyone creates a new ticket.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
   $team = droptickets_assignee_options();
   $saved_defaults = $config->get('default_watchers');
   $default_watcher_uids = ($saved_defaults !== NULL) ? $saved_defaults : array_keys($team);
-  $form['team']['default_watchers'] = array(
-    '#type'        => 'checkboxes',
-    '#title'       => t('Default watchers on new tickets'),
-    '#description' => t('Pre-selected as watchers when creating a new ticket.'),
-    '#options'     => $team,
+  $form['default_watchers_fieldset']['default_watchers'] = array(
+    '#type'          => 'checkboxes',
+    '#title'         => t('Default watchers'),
+    '#title_display' => 'invisible',
+    '#options'       => $team,
     '#default_value' => $default_watcher_uids,
   );
 
