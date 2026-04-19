@@ -201,6 +201,7 @@ a.drop-section-add {
 
 .drop-page-actions a {
   display: inline-block;
+  margin-right: 0.4em;
   padding: 0.2em 0.75em;
   border: 1px solid #aaa;
   border-radius: 2em;
@@ -209,6 +210,10 @@ a.drop-section-add {
   color: #333;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.drop-page-actions a:last-child {
+  margin-right: 0;
 }
 
 .drop-page-actions a:hover {
