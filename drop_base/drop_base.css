@@ -321,6 +321,14 @@ a.drop-section-add {
   padding-bottom: 0.25rem;
 }
 
+.layout--drop-suite .l-header .block-content {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
 /* ---------------------------------------------------------------------------
    Top region
    Contains: page title, local task tabs, local actions, system messages.

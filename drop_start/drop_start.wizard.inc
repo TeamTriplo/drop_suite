@@ -572,6 +572,40 @@ function drop_start_step_modules($form, &$form_state) {
     );
   }
 
+  // Drop Suite modules that are on this site but not yet enabled.
+  // drop_base and drop_start are always filtered out since they're the
+  // required substrate — admin can't do without them mid-wizard.
+  $drop_survey = _drop_start_step_modules_drop_survey();
+  if (!empty($drop_survey['disabled'])) {
+    $header = array(
+      'name'        => t('Module'),
+      'description' => t('Description'),
+    );
+    $rows = array();
+    foreach ($drop_survey['disabled'] as $machine => $info) {
+      $rows[$machine] = array(
+        'name' => array(
+          'data' => '<strong>' . check_plain($info['name']) . '</strong>'
+            . '<br /><code class="drop-start-module-machine">' . check_plain($machine) . '</code>',
+        ),
+        'description' => array(
+          'data' => check_plain($info['description']),
+        ),
+      );
+    }
+    $subform['drop_on_disk'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Drop Suite modules available to enable'),
+      '#description' => t('These Drop Suite modules are already on this site but not yet turned on. Check the ones you want, then click Continue.'),
+    );
+    $subform['drop_on_disk']['enable_drop_modules'] = array(
+      '#type'    => 'tableselect',
+      '#header'  => $header,
+      '#options' => $rows,
+      '#empty'   => t('None available.'),
+    );
+  }
+
   // Survey contrib dependencies of Drop Suite modules and narrate the
   // state so the admin understands what Color Field / Book / Entity Plus
   // / Entity Reference are, why they're listed, and whether they even
@@ -654,25 +688,44 @@ function drop_start_step_modules($form, &$form_state) {
 }
 
 /**
- * Custom submit: enable any contrib deps the admin checked, and stay on
- * this step so the re-rendered page reflects the new state (the contrib
- * deps are gone from the "available" list, and the main modules link now
- * unblocks the Drop modules that needed them).
+ * Custom submit: enable any contrib deps or Drop Suite modules the admin
+ * checked, and stay on this step so the re-rendered page reflects the new
+ * state.
+ *
+ * Both sets are fed to a single module_enable() call — Backdrop's enable
+ * flow resolves the dependency graph, so a Drop module whose contrib dep
+ * was checked in the same submit will pick up that dep correctly.
  */
 function drop_start_step_modules_submit($form, &$form_state) {
-  if (empty($form_state['values']['enable_deps'])) {
+  $deps = !empty($form_state['values']['enable_deps'])
+    ? array_values(array_filter($form_state['values']['enable_deps']))
+    : array();
+  $drop = !empty($form_state['values']['enable_drop_modules'])
+    ? array_values(array_filter($form_state['values']['enable_drop_modules']))
+    : array();
+
+  if (empty($deps) && empty($drop)) {
     return;
   }
-  $to_enable = array_values(array_filter($form_state['values']['enable_deps']));
-  if (empty($to_enable)) {
-    return;
-  }
+
+  $to_enable = array_values(array_unique(array_merge($deps, $drop)));
   if (module_enable($to_enable)) {
-    backdrop_set_message(format_plural(count($to_enable),
-      'Enabled 1 contrib dependency: @list.',
-      'Enabled @count contrib dependencies: @list.',
-      array('@list' => implode(', ', $to_enable))
-    ));
+    $messages = array();
+    if (!empty($deps)) {
+      $messages[] = format_plural(count($deps),
+        'Enabled 1 contrib dependency: @list.',
+        'Enabled @count contrib dependencies: @list.',
+        array('@list' => implode(', ', $deps))
+      );
+    }
+    if (!empty($drop)) {
+      $messages[] = format_plural(count($drop),
+        'Enabled 1 Drop Suite module: @list.',
+        'Enabled @count Drop Suite modules: @list.',
+        array('@list' => implode(', ', $drop))
+      );
+    }
+    backdrop_set_message(implode(' ', $messages));
   }
   // Stay on this step so the admin sees the updated state.
   $form_state['drop_start_no_advance'] = TRUE;
@@ -695,6 +748,40 @@ function _drop_start_step_modules_enabled() {
   }
   ksort($enabled);
   return $enabled;
+}
+
+/**
+ * Surveys Drop Suite modules and buckets them by state.
+ *
+ * @return array
+ *   Three buckets: 'enabled', 'disabled' (on disk, not enabled), and
+ *   'missing' (not on disk). Each bucket is keyed by machine name with
+ *   {name, description} metadata. drop_base and drop_start are always
+ *   filtered out — they're the required substrate.
+ */
+function _drop_start_step_modules_drop_survey() {
+  $drop_modules = drop_base_get_drop_module_names();
+  $all = system_rebuild_module_data();
+  $skip = array('drop_base' => TRUE, 'drop_start' => TRUE);
+  $buckets = array('enabled' => array(), 'disabled' => array(), 'missing' => array());
+
+  foreach (array_keys($drop_modules) as $machine) {
+    if (isset($skip[$machine])) {
+      continue;
+    }
+    if (empty($all[$machine])) {
+      $buckets['missing'][$machine] = array('name' => $machine, 'description' => '');
+      continue;
+    }
+    $name = !empty($all[$machine]->info['name']) ? $all[$machine]->info['name'] : $machine;
+    $desc = !empty($all[$machine]->info['description']) ? $all[$machine]->info['description'] : '';
+    $bucket = !empty($all[$machine]->status) ? 'enabled' : 'disabled';
+    $buckets[$bucket][$machine] = array('name' => $name, 'description' => $desc);
+  }
+  foreach ($buckets as $key => $_) {
+    ksort($buckets[$key]);
+  }
+  return $buckets;
 }
 
 /**
@@ -751,17 +838,19 @@ function _drop_start_step_modules_contrib_dep_survey() {
 }
 
 // ---------------------------------------------------------------------------
-// Step: Home page navigation
+// Step: Home page
 // ---------------------------------------------------------------------------
 //
 // Moved from drop_base in phase 5 of the wizard build (tid 566). The old
-// /drop/settings/home-nav route now 301-redirects to this step.
+// /drop/settings/home-nav route 301-redirects here. Handles three home-
+// layout toggles: add Drop Suite nav, remove the stock Hero block, remove
+// the stock Promoted cards block.
 
 /**
  * The Drop Suite navigation blocks that can be added to the home layout.
  * Keyed by plugin name (module:delta).
  */
-function _drop_start_home_nav_blocks() {
+function _drop_start_home_page_nav_blocks() {
   return array(
     'drop_base:drop_nav'         => t('Drop Navigation'),
     'drop_base:drop_section_nav' => t('Drop Section Navigation'),
@@ -769,34 +858,59 @@ function _drop_start_home_nav_blocks() {
 }
 
 /**
- * Inspects the home layout and returns which Drop nav blocks are present.
+ * Stock Backdrop blocks this step can offer to remove from the home layout.
+ * Keyed by plugin name.
+ */
+function _drop_start_home_page_removable_blocks() {
+  return array(
+    'layout:hero'                 => t('Hero block'),
+    'views:promoted_cards-block'  => t('Promoted cards'),
+  );
+}
+
+/**
+ * Inspects the home layout and returns a combined state for the step.
  *
  * @return array
- *   - layout: Loaded home Layout object (or FALSE if missing).
- *   - present: plugin => uuid for blocks already in the layout.
- *   - missing: plugin => label for blocks not yet in the layout.
+ *   - layout:   Loaded Layout object or FALSE.
+ *   - nav_present: plugin => uuid for Drop nav blocks currently present.
+ *   - nav_missing: plugin => label for Drop nav blocks not yet present.
+ *   - removable_present: plugin => ['uuid' => uuid, 'label' => label] for
+ *     stock blocks currently present (and thus eligible to remove).
  */
-function _drop_start_home_nav_state() {
-  $state = array('layout' => FALSE, 'present' => array(), 'missing' => array());
+function _drop_start_home_page_state() {
+  $state = array('layout' => FALSE, 'nav_present' => array(), 'nav_missing' => array(), 'removable_present' => array());
   $layout = layout_load('home');
   if (!$layout) {
     return $state;
   }
   $state['layout'] = $layout;
-  $wanted = _drop_start_home_nav_blocks();
+
+  $nav_wanted   = _drop_start_home_page_nav_blocks();
+  $removables   = _drop_start_home_page_removable_blocks();
+
   foreach ($layout->content as $uuid => $block) {
-    if (isset($block->plugin) && isset($wanted[$block->plugin])) {
-      $state['present'][$block->plugin] = $uuid;
+    if (empty($block->plugin)) {
+      continue;
+    }
+    if (isset($nav_wanted[$block->plugin])) {
+      $state['nav_present'][$block->plugin] = $uuid;
+    }
+    if (isset($removables[$block->plugin])) {
+      $state['removable_present'][$block->plugin] = array(
+        'uuid'  => $uuid,
+        'label' => $removables[$block->plugin],
+      );
     }
   }
-  $state['missing'] = array_diff_key($wanted, $state['present']);
+  $state['nav_missing'] = array_diff_key($nav_wanted, $state['nav_present']);
   return $state;
 }
 
 /**
  * Picks the best region on the home layout to place Drop Suite nav blocks.
  */
-function _drop_start_home_nav_target_region($layout) {
+function _drop_start_home_page_target_region($layout) {
   foreach (array('navigation', 'top', 'header') as $preferred) {
     if (isset($layout->positions[$preferred])) {
       return $preferred;
@@ -807,15 +921,15 @@ function _drop_start_home_nav_target_region($layout) {
 }
 
 /**
- * Wizard step: Home page navigation.
+ * Wizard step: Home page.
  */
-function drop_start_step_home_nav($form, &$form_state) {
+function drop_start_step_home_page($form, &$form_state) {
   $subform = array();
-  $state = _drop_start_home_nav_state();
+  $state = _drop_start_home_page_state();
 
   $subform['intro'] = array(
-    '#markup' => '<h2>' . t('Home page navigation') . '</h2>'
-      . '<p>' . t('The Backdrop home page uses its own layout, so the Drop Suite primary navigation that appears on the rest of your site is not shown there by default. This step can add the Drop Suite nav blocks to the top of your home layout so people arriving at the home page can jump straight into tickets, tasks, and other Drop modules.') . '</p>'
+    '#markup' => '<h2>' . t('Set up your home page') . '</h2>'
+      . '<p>' . t('Backdrop\'s home page has its own layout separate from the rest of the site. This step offers three quick adjustments: add the Drop Suite navigation, remove the stock Hero block, and remove the stock Promoted cards block.') . '</p>'
       . '<p>' . t('You can always fine-tune placement later at <em>Structure → Layouts → Home page</em>.') . '</p>',
   );
 
@@ -826,38 +940,75 @@ function drop_start_step_home_nav($form, &$form_state) {
     return $subform;
   }
 
-  $wanted = _drop_start_home_nav_blocks();
+  // Status table: one row per toggle showing current state.
   $rows = array();
-  foreach ($wanted as $plugin => $label) {
+  // Drop Suite navigation row.
+  $rows[] = array(
+    t('Drop Suite navigation'),
+    empty($state['nav_missing']) ? t('Present') : '<em>' . t('Not added') . '</em>',
+  );
+  $removables = _drop_start_home_page_removable_blocks();
+  foreach ($removables as $plugin => $label) {
     $rows[] = array(
-      check_plain($label),
-      isset($state['present'][$plugin]) ? t('Present') : '<em>' . t('Not added') . '</em>',
+      $label,
+      isset($state['removable_present'][$plugin]) ? t('Present') : '<em>' . t('Not on the home layout') . '</em>',
     );
   }
   $subform['status'] = array(
     '#markup' => theme('table', array(
-      'header' => array(t('Navigation block'), t('Status on home layout')),
+      'header' => array(t('Block'), t('Status on home layout')),
       'rows'   => $rows,
     )),
   );
 
-  if (empty($state['missing'])) {
-    $subform['already'] = array(
-      '#markup' => '<p><strong>' . t('✓ All Drop Suite navigation blocks are already on the home layout.') . '</strong></p>',
-    );
-    $subform['remove'] = array(
-      '#type'        => 'checkbox',
-      '#title'       => t('Remove Drop Suite navigation from home page'),
-      '#default_value' => FALSE,
-      '#description' => t('Check to revert. Leave unchecked and click Continue to keep the current layout.'),
-    );
-  }
-  else {
-    $subform['add'] = array(
+  // Toggles — each default-checked in the "probably what admin wants" state.
+  $subform['actions'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('What to change'),
+  );
+
+  // Add / remove Drop Suite nav.
+  if (!empty($state['nav_missing'])) {
+    $subform['actions']['add_nav'] = array(
       '#type'          => 'checkbox',
       '#title'         => t('Add Drop Suite navigation to home page'),
       '#default_value' => TRUE,
-      '#description'   => t('Uncheck to skip. You can always return to this step later.'),
+      '#description'   => t('Drop Navigation and Drop Section Navigation will appear at the top of the home layout.'),
+    );
+  }
+  else {
+    $subform['actions']['remove_nav'] = array(
+      '#type'          => 'checkbox',
+      '#title'         => t('Remove Drop Suite navigation from home page'),
+      '#default_value' => FALSE,
+      '#description'   => t('Undoes the previous "add" action.'),
+    );
+  }
+
+  // Remove Hero block (only when present).
+  if (isset($state['removable_present']['layout:hero'])) {
+    $subform['actions']['remove_hero'] = array(
+      '#type'          => 'checkbox',
+      '#title'         => t('Remove the Hero block'),
+      '#default_value' => TRUE,
+      '#description'   => t('The stock Backdrop Hero block at the top of the home page.'),
+    );
+  }
+
+  // Remove Promoted cards block (only when present).
+  if (isset($state['removable_present']['views:promoted_cards-block'])) {
+    $subform['actions']['remove_promoted'] = array(
+      '#type'          => 'checkbox',
+      '#title'         => t('Remove the Promoted cards block'),
+      '#default_value' => TRUE,
+      '#description'   => t('The stock Backdrop block with three promoted content cards.'),
+    );
+  }
+
+  // If nothing to do, say so.
+  if (empty($state['nav_missing']) && empty($state['removable_present'])) {
+    $subform['nothing'] = array(
+      '#markup' => '<p><strong>' . t('✓ Your home page is already configured for Drop Suite.') . '</strong> ' . t('Nothing else to do here.') . '</p>',
     );
   }
 
@@ -865,64 +1016,108 @@ function drop_start_step_home_nav($form, &$form_state) {
 }
 
 /**
- * Status: 'configured' if all blocks present, 'not_started' otherwise.
+ * Status: 'configured' if Drop nav is present AND no stock removables remain;
+ * 'not_started' otherwise.
  */
-function drop_start_step_home_nav_status() {
-  $state = _drop_start_home_nav_state();
+function drop_start_step_home_page_status() {
+  $state = _drop_start_home_page_state();
   if (!$state['layout']) {
-    // No home layout to configure — count as configured.
     return 'configured';
   }
-  return empty($state['missing']) ? 'configured' : 'not_started';
+  $nav_ok       = empty($state['nav_missing']);
+  $removable_ok = empty($state['removable_present']);
+  return ($nav_ok && $removable_ok) ? 'configured' : 'not_started';
 }
 
 /**
- * Custom submit: apply the add/remove choice, if any.
+ * Custom submit: apply each checked action.
  */
-function drop_start_step_home_nav_submit($form, &$form_state) {
-  if (!empty($form_state['values']['add'])) {
-    _drop_start_home_nav_apply('add');
+function drop_start_step_home_page_submit($form, &$form_state) {
+  $values = isset($form_state['values']) ? $form_state['values'] : array();
+  $done = array();
+
+  if (!empty($values['add_nav'])) {
+    $count = _drop_start_home_page_apply_nav('add');
+    if ($count) {
+      $done[] = format_plural($count, 'Added 1 Drop Suite nav block', 'Added @count Drop Suite nav blocks');
+    }
   }
-  elseif (!empty($form_state['values']['remove'])) {
-    _drop_start_home_nav_apply('remove');
+  if (!empty($values['remove_nav'])) {
+    $count = _drop_start_home_page_apply_nav('remove');
+    if ($count) {
+      $done[] = format_plural($count, 'Removed 1 Drop Suite nav block', 'Removed @count Drop Suite nav blocks');
+    }
+  }
+  if (!empty($values['remove_hero'])) {
+    if (_drop_start_home_page_remove_by_plugin('layout:hero')) {
+      $done[] = t('Removed the Hero block');
+    }
+  }
+  if (!empty($values['remove_promoted'])) {
+    if (_drop_start_home_page_remove_by_plugin('views:promoted_cards-block')) {
+      $done[] = t('Removed the Promoted cards block');
+    }
+  }
+
+  if ($done) {
+    backdrop_set_message(t('Home page updated: @list.', array('@list' => implode('; ', $done))) . '.');
   }
 }
 
 /**
- * Applies the add or remove operation to the home layout.
+ * Applies add/remove of the Drop Suite nav blocks. Returns the number of
+ * blocks changed.
  */
-function _drop_start_home_nav_apply($op) {
-  $state = _drop_start_home_nav_state();
+function _drop_start_home_page_apply_nav($op) {
+  $state = _drop_start_home_page_state();
   if (!$state['layout']) {
     backdrop_set_message(t('Home layout could not be loaded.'), 'error');
-    return;
+    return 0;
   }
   $layout = $state['layout'];
+  $count  = 0;
 
   if ($op === 'add') {
-    $region = _drop_start_home_nav_target_region($layout);
-    $added  = 0;
-    foreach (array_keys($state['missing']) as $plugin) {
+    $region = _drop_start_home_page_target_region($layout);
+    foreach (array_keys($state['nav_missing']) as $plugin) {
       list($module, $delta) = explode(':', $plugin, 2);
       $layout->addBlock($module, $delta, $region);
-      $added++;
-    }
-    if ($added) {
-      $layout->save();
-      backdrop_set_message(t('Added @count Drop Suite navigation block(s) to the home layout.', array('@count' => $added)));
+      $count++;
     }
   }
   elseif ($op === 'remove') {
-    $removed = 0;
-    foreach ($state['present'] as $plugin => $uuid) {
+    foreach ($state['nav_present'] as $plugin => $uuid) {
+      $layout->removeBlock($uuid);
+      $count++;
+    }
+  }
+
+  if ($count) {
+    $layout->save();
+  }
+  return $count;
+}
+
+/**
+ * Removes every block in the home layout matching the given plugin. Returns
+ * TRUE if at least one was removed.
+ */
+function _drop_start_home_page_remove_by_plugin($plugin) {
+  $layout = layout_load('home');
+  if (!$layout) {
+    return FALSE;
+  }
+  $removed = 0;
+  foreach ($layout->content as $uuid => $block) {
+    if (!empty($block->plugin) && $block->plugin === $plugin) {
       $layout->removeBlock($uuid);
       $removed++;
     }
-    if ($removed) {
-      $layout->save();
-      backdrop_set_message(t('Removed @count Drop Suite navigation block(s) from the home layout.', array('@count' => $removed)));
-    }
   }
+  if ($removed) {
+    $layout->save();
+  }
+  return $removed > 0;
 }
 
 // ---------------------------------------------------------------------------

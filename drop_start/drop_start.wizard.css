@@ -185,3 +185,12 @@
   background: #f0f0f0;
   color: #888;
 }
+
+/* Modules step: table of Drop Suite modules available to enable */
+.drop-start-module-machine {
+  display: inline-block;
+  font-size: 0.8em;
+  color: #777;
+  background: transparent;
+  padding: 0;
+}

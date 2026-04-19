@@ -233,7 +233,7 @@ function _drop_base_is_narrow_page($path) {
  * bookmarks to the old path land here and get forwarded to the new home.
  */
 function _drop_base_home_nav_redirect() {
-  backdrop_goto('drop/start/step/home_nav', array(), 301);
+  backdrop_goto('drop/start/step/home_page', array(), 301);
 }
 
 /**

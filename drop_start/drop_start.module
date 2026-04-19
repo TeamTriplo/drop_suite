@@ -271,12 +271,12 @@ function drop_start_drop_start_steps() {
       'status_callback' => 'drop_start_step_sample_content_status',
       'description'     => t('Populate your site with demo content you can explore.'),
     ),
-    'home_nav' => array(
-      'title'           => t('Home page navigation'),
+    'home_page' => array(
+      'title'           => t('Home page'),
       'weight'          => -20,
-      'callback'        => 'drop_start_step_home_nav',
-      'status_callback' => 'drop_start_step_home_nav_status',
-      'description'     => t('Add the Drop Suite navigation to your home page layout.'),
+      'callback'        => 'drop_start_step_home_page',
+      'status_callback' => 'drop_start_step_home_page_status',
+      'description'     => t('Set up the Drop Suite home page: add navigation, remove stock Backdrop blocks if you want.'),
     ),
     'done' => array(
       'title'           => t('Done'),
