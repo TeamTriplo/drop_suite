@@ -1,0 +1,141 @@
+/**
+ * @file
+ * Styles for the Drop Start setup wizard.
+ */
+
+/* ---------------------------------------------------------------------------
+   Wizard action bar (bottom of each step: Continue + Skip + Exit)
+   --------------------------------------------------------------------------- */
+
+.drop-start-wizard-skip,
+.drop-start-wizard-exit {
+  display: inline-block;
+  margin-left: 1.5em;
+  font-size: 0.95em;
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  line-height: 1.3;
+}
+
+.drop-start-wizard-exit {
+  margin-left: 1em;
+  color: #888;
+}
+
+.drop-start-wizard-skip:hover,
+.drop-start-wizard-exit:hover {
+  text-decoration: none;
+  border-bottom-style: solid;
+  color: var(--drop-primary, #1565c0);
+}
+
+/* ---------------------------------------------------------------------------
+   Progress indicator at the top of each step
+   --------------------------------------------------------------------------- */
+
+.drop-start-wizard-progress {
+  margin: 0 0 1.5em;
+  padding-bottom: 1em;
+  border-bottom: 1px solid #e3e3e3;
+}
+
+.drop-start-wizard-progress-label {
+  color: #888;
+  font-size: 0.85em;
+  margin: 0 0 0.5em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.drop-start-wizard-pips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.drop-start-step-pip {
+  font-size: 0.9em;
+}
+
+.drop-start-step-pip a {
+  display: inline-block;
+  padding: 0.25em 0.75em;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #666;
+  text-decoration: none;
+}
+
+.drop-start-step-pip a:hover {
+  background: #e3e3e3;
+  color: #222;
+}
+
+.drop-start-step-pip--done a {
+  background: #e6f2ea;
+  color: #2c6b3f;
+}
+
+.drop-start-step-pip--current a {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+  font-weight: 600;
+}
+
+.drop-start-step-pip--current a:hover {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   Overview step-list table (status badges)
+   --------------------------------------------------------------------------- */
+
+.drop-start-step-status {
+  white-space: nowrap;
+}
+
+.drop-start-step-status--configured {
+  color: #2c6b3f;
+  font-weight: 600;
+}
+
+.drop-start-step-status--partial {
+  color: #a86400;
+  font-weight: 600;
+}
+
+.drop-start-step-status--not_started {
+  color: #888;
+}
+
+/* ---------------------------------------------------------------------------
+   Done step status badges
+   --------------------------------------------------------------------------- */
+
+.drop-start-badge {
+  display: inline-block;
+  padding: 0.1em 0.6em;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+  margin-right: 0.4em;
+}
+
+.drop-start-badge--done {
+  background: #e6f2ea;
+  color: #2c6b3f;
+}
+
+.drop-start-badge--partial {
+  background: #fff4de;
+  color: #a86400;
+}
+
+.drop-start-badge--skip {
+  background: #f0f0f0;
+  color: #888;
+}

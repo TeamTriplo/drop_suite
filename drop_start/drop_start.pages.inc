@@ -18,6 +18,7 @@
  */
 function drop_start_overview_page() {
   module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  backdrop_add_css(backdrop_get_path('module', 'drop_start') . '/drop_start.wizard.css');
   $overall = drop_start_wizard_overall_state();
 
   if ($overall === 'not_started') {

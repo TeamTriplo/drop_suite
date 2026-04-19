@@ -118,6 +118,7 @@ function drop_start_wizard_step_form($form, &$form_state, $full_key) {
   $step  = $steps[$full_key];
 
   $form['#drop_start_full_key'] = $full_key;
+  $form['#attached']['css'][] = backdrop_get_path('module', 'drop_start') . '/drop_start.wizard.css';
 
   // Progress indicator.
   $form['progress'] = array(
