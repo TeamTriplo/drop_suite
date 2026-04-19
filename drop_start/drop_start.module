@@ -51,6 +51,19 @@ function drop_start_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Pre-populate the project installer's search and redirect to it. Used
+  // by the Modules wizard step to deep-link "Find it in the installer"
+  // for each missing contrib dependency.
+  $items['drop/start/find-module/%'] = array(
+    'title'            => 'Find module',
+    'page callback'    => 'drop_start_installer_search',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.wizard.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   $items['drop/start/generate'] = array(
     'title'            => 'Generate sample content',
     'page callback'    => 'backdrop_get_form',
@@ -205,16 +218,19 @@ function drop_start_step_status($full_key) {
 
 /**
  * Returns an overall wizard state: 'not_started', 'in_progress', or 'complete'.
+ *
+ * "Complete" means the user clicked Finish on the Done step (drop_start:done
+ * is in state['completed']). This is a deliberate user gesture, not an
+ * "all steps touched" heuristic — admins can skip around, leave steps
+ * undone, and still explicitly close the wizard when they're ready.
  */
 function drop_start_wizard_overall_state() {
   $state = drop_start_wizard_state_get();
-  $steps = drop_start_get_steps();
+  if (in_array('drop_start:done', $state['completed'], TRUE)) {
+    return 'complete';
+  }
   if (empty($state['completed']) && empty($state['skipped'])) {
     return 'not_started';
-  }
-  $touched = count($state['completed']) + count($state['skipped']);
-  if ($touched >= count($steps)) {
-    return 'complete';
   }
   return 'in_progress';
 }
@@ -241,19 +257,19 @@ function drop_start_drop_start_steps() {
       'status_callback' => 'drop_start_step_theme_status',
       'description'     => t('Pick a theme for the admin experience. We recommend Opera.'),
     ),
-    'sample_content' => array(
-      'title'           => t('Sample content'),
-      'weight'          => -60,
-      'callback'        => 'drop_start_step_sample_content',
-      'status_callback' => 'drop_start_step_sample_content_status',
-      'description'     => t('Populate your site with demo content you can explore.'),
-    ),
     'modules' => array(
       'title'       => t('Modules'),
-      'weight'      => -40,
+      'weight'      => -60,
       'callback'    => 'drop_start_step_modules',
       // No status_callback — the wizard's state-based fallback handles it.
       'description' => t('Enable the Drop Suite modules you want to use.'),
+    ),
+    'sample_content' => array(
+      'title'           => t('Sample content'),
+      'weight'          => -40,
+      'callback'        => 'drop_start_step_sample_content',
+      'status_callback' => 'drop_start_step_sample_content_status',
+      'description'     => t('Populate your site with demo content you can explore.'),
     ),
     'home_nav' => array(
       'title'           => t('Home page navigation'),
@@ -270,6 +286,45 @@ function drop_start_drop_start_steps() {
       'required'        => TRUE,
       'description'     => t('Summary of what the wizard set up.'),
     ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ *
+ * Exposes the wizard progress card. Rendered as empty whenever the wizard's
+ * overall state is 'complete', which hides the block on sites that have
+ * finished setup (and on sites where the wizard has not yet started, to
+ * avoid noise for admins before they've clicked Begin).
+ */
+function drop_start_block_info() {
+  $blocks['wizard_progress'] = array(
+    'info'        => t('Drop Suite setup wizard progress'),
+    'description' => t('Persistent reminder of the current wizard step with a Return-to-wizard button. Renders empty once setup is complete.'),
+    'cache'       => BACKDROP_NO_CACHE,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function drop_start_block_view($delta = '') {
+  if ($delta !== 'wizard_progress') {
+    return array();
+  }
+  $overall = drop_start_wizard_overall_state();
+  if ($overall === 'complete') {
+    return array();
+  }
+  module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  $html = _drop_start_wizard_progress_block_html($overall);
+  if (!$html) {
+    return array();
+  }
+  return array(
+    'subject' => NULL,
+    'content' => $html,
   );
 }
 

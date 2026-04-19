@@ -4,6 +4,52 @@
  */
 
 /* ---------------------------------------------------------------------------
+   Persistent wizard-progress block
+   Shown at the top of TOP region on every page while the setup wizard is
+   not yet complete. Gives the admin a one-click way back to the wizard
+   when they detour out to enable modules or configure something else.
+   --------------------------------------------------------------------------- */
+
+.drop-start-progress-block {
+  background: #fff8dc;
+  border: 1px solid #e6d99a;
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 0.6em 1em;
+  margin: 0 0 0.75em;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.drop-start-progress-block-head {
+  margin-bottom: 0.4em;
+}
+
+.drop-start-progress-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em 1em;
+}
+
+.drop-start-progress-block-actions .button {
+  margin: 0;
+}
+
+.drop-start-progress-jump {
+  color: #7a6d2e;
+  font-size: 0.9em;
+}
+
+.drop-start-progress-jump a {
+  color: #5a4f20;
+}
+
+.drop-start-progress-jump a:hover {
+  color: var(--drop-primary, #1565c0);
+}
+
+/* ---------------------------------------------------------------------------
    Wizard action bar (bottom of each step: Continue + Skip + Exit)
    --------------------------------------------------------------------------- */
 

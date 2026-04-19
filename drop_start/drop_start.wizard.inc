@@ -5,6 +5,89 @@
  */
 
 // ---------------------------------------------------------------------------
+// Progress block (persistent reminder, rendered on every page until setup
+// is complete).
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the HTML body for the wizard-progress block, or empty when the
+ * wizard should render nothing.
+ *
+ * @param string $overall
+ *   'not_started' | 'in_progress' | 'complete'.
+ */
+function _drop_start_wizard_progress_block_html($overall) {
+  // Attach the block's styles. Also loaded on wizard pages — no conflict,
+  // backdrop_add_css() deduplicates.
+  backdrop_add_css(backdrop_get_path('module', 'drop_start') . '/drop_start.wizard.css');
+
+  $state = drop_start_wizard_state_get();
+  $steps = drop_start_get_steps();
+  if (empty($steps)) {
+    return '';
+  }
+
+  // Pick the step to resume from: current if set, otherwise first.
+  $resume_key = !empty($state['current']) && isset($steps[$state['current']])
+    ? $state['current']
+    : array_keys($steps)[0];
+
+  $resume_step = $steps[$resume_key];
+  $resume_path = _drop_start_step_path($resume_key);
+
+  // Progress: X of Y.
+  $all_keys = array_keys($steps);
+  $total    = count($all_keys);
+  $done     = count($state['completed']) + count($state['skipped']);
+
+  $heading = $overall === 'not_started'
+    ? t('Drop Suite setup wizard')
+    : t('Drop Suite setup wizard — in progress');
+
+  $status = $overall === 'not_started'
+    ? t('Click Start to begin.')
+    : t('Step @n of @total: %title', array(
+        '@n'     => array_search($resume_key, $all_keys, TRUE) + 1,
+        '@total' => $total,
+        '%title' => $resume_step['title'],
+      ));
+
+  $resume_label = $overall === 'not_started' ? t('Start setup') : t('Return to wizard');
+
+  $html  = '<div class="drop-start-progress-block">';
+  $html .= '<div class="drop-start-progress-block-head">';
+  $html .= '<strong>' . check_plain($heading) . '</strong>';
+  $html .= ' — ' . $status;
+  $html .= '</div>';
+  $html .= '<div class="drop-start-progress-block-actions">';
+  $html .= l($resume_label, $resume_path, array(
+    'attributes' => array('class' => array('button', 'button-primary')),
+  ));
+
+  // Quick-jump: any remaining steps (not completed, not skipped).
+  $remaining = array();
+  foreach ($all_keys as $fk) {
+    if (in_array($fk, $state['completed'], TRUE)) continue;
+    if (in_array($fk, $state['skipped'], TRUE)) continue;
+    if ($fk === $resume_key) continue;
+    $remaining[$fk] = $steps[$fk]['title'];
+  }
+  if (!empty($remaining) && $overall === 'in_progress') {
+    $links = array();
+    foreach ($remaining as $fk => $title) {
+      $links[] = l($title, _drop_start_step_path($fk));
+    }
+    $html .= ' <span class="drop-start-progress-jump">'
+      . t('Jump to: ') . implode(' · ', $links)
+      . '</span>';
+  }
+
+  $html .= '</div>';
+  $html .= '</div>';
+  return $html;
+}
+
+// ---------------------------------------------------------------------------
 // Routing
 // ---------------------------------------------------------------------------
 
@@ -72,6 +155,24 @@ function drop_start_wizard_restart() {
   backdrop_static_reset('drop_start_get_steps');
   backdrop_set_message(t('Setup wizard reset. Starting over.'));
   backdrop_goto('drop/start');
+}
+
+/**
+ * Page callback: drop/start/find-module/{name}.
+ *
+ * Pre-populates the installer's text search filter (session-based) and
+ * redirects to /admin/modules/install. The admin lands on the installer
+ * with the missing module's name already filled in.
+ */
+function drop_start_installer_search($name) {
+  if (!module_exists('installer')) {
+    backdrop_set_message(t('The project installer module is not enabled. Enable it at the modules page first.'), 'warning');
+    backdrop_goto('drop/start/step/modules');
+    return;
+  }
+  // Installer browser stores the module-tab search filter under this key.
+  $_SESSION['installer_browser_text_filter_module'] = $name;
+  backdrop_goto('admin/modules/install');
 }
 
 /**
@@ -430,11 +531,16 @@ function drop_start_step_sample_content_submit($form, &$form_state) {
 // ---------------------------------------------------------------------------
 
 /**
- * Shows a summary of currently-enabled Drop modules and links out to the
- * dedicated modules page for enable/disable. We intentionally don't embed
- * the full modules form in-line: enabling modules runs install hooks and
- * rebuilds the menu, which doesn't play nicely inside a wizard subform.
- * The admin heads to /drop/settings/modules, saves, and returns here.
+ * Shows a summary of currently-enabled Drop modules, offers to enable any
+ * contrib dependencies already downloaded on disk, and links out to the
+ * dedicated modules page for the main enable/disable.
+ *
+ * We intentionally don't embed the full modules form in-line: enabling
+ * modules runs install hooks and rebuilds the menu, which doesn't play
+ * nicely inside a wizard subform. What we DO embed is the one operation
+ * that's safe and common in a fresh install — enabling already-downloaded
+ * contrib dependencies so the scoped modules page can actually enable the
+ * Drop modules that need them.
  */
 function drop_start_step_modules($form, &$form_state) {
   $subform = array();
@@ -462,6 +568,74 @@ function drop_start_step_modules($form, &$form_state) {
     );
   }
 
+  // Survey contrib dependencies of Drop Suite modules and narrate the
+  // state so the admin understands what Color Field / Book / Entity Plus
+  // / Entity Reference are, why they're listed, and whether they even
+  // matter (only needed if the Drop module that depends on them is
+  // actually wanted).
+  $dep_survey = _drop_start_step_modules_contrib_dep_survey();
+
+  if (!empty($dep_survey['disabled'])) {
+    $options = array();
+    foreach ($dep_survey['disabled'] as $name => $info) {
+      $options[$name] = t('@label — needed if you want: @by', array(
+        '@label' => $info['label'],
+        '@by'    => implode(', ', array_unique($info['needed_by'])),
+      ));
+    }
+    $subform['deps_on_disk'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Already downloaded — enable to use'),
+      '#description' => t('These contrib modules are already on this site but are turned off. Each one is only needed if you plan to use the Drop Suite module that depends on it. Check the ones you want and click Continue to turn them on — the Drop modules that need them will then be enable-able on the modules page below.'),
+    );
+    $subform['deps_on_disk']['enable_deps'] = array(
+      '#type'          => 'checkboxes',
+      '#title'         => t('Enable these modules'),
+      '#title_display' => 'invisible',
+      '#options'       => $options,
+      '#default_value' => array_keys($options),
+    );
+  }
+
+  if (!empty($dep_survey['missing'])) {
+    $installer_available = module_exists('installer');
+    $items = array();
+    foreach ($dep_survey['missing'] as $name => $info) {
+      if ($installer_available) {
+        $link = l(t('Find in the project installer'), 'drop/start/find-module/' . $name, array(
+          'attributes' => array('target' => '_blank'),
+        ));
+      }
+      else {
+        $link = l(t('Find on backdropcms.org'), 'https://backdropcms.org/project/' . $name, array(
+          'external'   => TRUE,
+          'attributes' => array('target' => '_blank'),
+        ));
+      }
+      $items[] = t('<strong>@label</strong> — needed if you want: @by. !link', array(
+        '@label' => $info['label'],
+        '@by'    => implode(', ', array_unique($info['needed_by'])),
+        '!link'  => $link,
+      ));
+    }
+    $subform['deps_missing'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Not on this site yet — download if needed'),
+      '#description' => $installer_available
+        ? t('Some Drop Suite modules depend on separate contrib projects that are not yet on this site. You only need these if you plan to use the dependent Drop module. Each link below opens the project installer with the module name pre-filled in a new tab — install from there, then come back to this step.')
+        : t('Some Drop Suite modules depend on separate contrib projects that are not yet on this site. You only need these if you plan to use the dependent Drop module. Find and install each one, then come back to this step.'),
+    );
+    $subform['deps_missing']['list'] = array(
+      '#markup' => theme('item_list', array('items' => $items)),
+    );
+  }
+
+  if (!empty($dep_survey['enabled']) && empty($dep_survey['disabled']) && empty($dep_survey['missing'])) {
+    $subform['deps_ok'] = array(
+      '#markup' => '<p><strong>' . t('✓ All contrib dependencies for Drop Suite modules are downloaded and enabled.') . '</strong></p>',
+    );
+  }
+
   $subform['go'] = array(
     '#markup' => '<p>'
       . l(t('Open the modules page'), 'drop/settings/modules', array(
@@ -473,6 +647,32 @@ function drop_start_step_modules($form, &$form_state) {
   );
 
   return $subform;
+}
+
+/**
+ * Custom submit: enable any contrib deps the admin checked, and stay on
+ * this step so the re-rendered page reflects the new state (the contrib
+ * deps are gone from the "available" list, and the main modules link now
+ * unblocks the Drop modules that needed them).
+ */
+function drop_start_step_modules_submit($form, &$form_state) {
+  if (empty($form_state['values']['enable_deps'])) {
+    return;
+  }
+  $to_enable = array_values(array_filter($form_state['values']['enable_deps']));
+  if (empty($to_enable)) {
+    return;
+  }
+  if (module_enable($to_enable)) {
+    backdrop_set_message(format_plural(count($to_enable),
+      'Enabled 1 contrib dependency: @list.',
+      'Enabled @count contrib dependencies: @list.',
+      array('@list' => implode(', ', $to_enable))
+    ));
+  }
+  // Stay on this step so the admin sees the updated state.
+  $form_state['drop_start_no_advance'] = TRUE;
+  $form_state['redirect'] = _drop_start_step_path('drop_start:modules');
 }
 
 /**
@@ -491,6 +691,59 @@ function _drop_start_step_modules_enabled() {
   }
   ksort($enabled);
   return $enabled;
+}
+
+/**
+ * Surveys all non-Drop contrib deps referenced by Drop modules and buckets
+ * them by current state:
+ *   - enabled:  downloaded AND enabled on this site
+ *   - disabled: downloaded but disabled (admin can flip here)
+ *   - missing:  not downloaded (admin needs the project installer)
+ *
+ * Each bucket is keyed by module machine name, with {label, needed_by[]}.
+ * 'needed_by' lists the Drop modules that depend on this contrib.
+ *
+ * Used by the Modules wizard step to narrate the dep situation clearly so
+ * admins understand what each contrib is for and whether they even need it.
+ */
+function _drop_start_step_modules_contrib_dep_survey() {
+  $drop_modules = drop_base_get_drop_module_names();
+  $all = system_rebuild_module_data();
+  $buckets = array('enabled' => array(), 'disabled' => array(), 'missing' => array());
+
+  foreach (array_keys($drop_modules) as $drop_mod) {
+    if (empty($all[$drop_mod]) || empty($all[$drop_mod]->requires)) {
+      continue;
+    }
+    $drop_label = !empty($all[$drop_mod]->info['name']) ? $all[$drop_mod]->info['name'] : $drop_mod;
+    foreach (array_keys($all[$drop_mod]->requires) as $dep) {
+      // Skip inter-Drop dependencies — those aren't contrib concerns.
+      if (isset($drop_modules[$dep])) {
+        continue;
+      }
+      // Determine bucket.
+      if (empty($all[$dep])) {
+        $bucket = 'missing';
+        $label  = $dep;
+      }
+      elseif (!empty($all[$dep]->status)) {
+        $bucket = 'enabled';
+        $label  = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
+      }
+      else {
+        $bucket = 'disabled';
+        $label  = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
+      }
+      if (!isset($buckets[$bucket][$dep])) {
+        $buckets[$bucket][$dep] = array('label' => $label, 'needed_by' => array());
+      }
+      $buckets[$bucket][$dep]['needed_by'][] = $drop_label;
+    }
+  }
+  foreach ($buckets as $key => $_) {
+    ksort($buckets[$key]);
+  }
+  return $buckets;
 }
 
 // ---------------------------------------------------------------------------

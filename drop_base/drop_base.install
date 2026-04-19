@@ -221,6 +221,10 @@ function _drop_base_setup_default_layout() {
   // and the page title/content.
   _drop_base_reorder_tabs_below_section_nav($layout);
 
+  // Defensive dedup: drops any accidental duplicate UUID references that
+  // may have crept into positions from template switches or earlier bugs.
+  _drop_base_dedupe_layout_positions($layout);
+
   $layout->save();
   backdrop_set_message(t('Drop Suite layout and blocks configured.'));
 }
@@ -306,19 +310,46 @@ function _drop_base_reorder_tabs_below_section_nav($layout) {
   if (!$tabs_uuid || !$snav_uuid) {
     return;
   }
-  $positions = $layout->positions['top'];
-  $tabs_pos = array_search($tabs_uuid, $positions, TRUE);
-  $snav_pos = array_search($snav_uuid, $positions, TRUE);
-  if ($tabs_pos === FALSE || $snav_pos === FALSE || $tabs_pos > $snav_pos) {
-    // Already in correct order (or blocks missing from the region).
+  // Defensive: drop any existing occurrences of the tabs UUID, then insert
+  // exactly once, immediately after drop_section_nav. This self-heals
+  // layouts that accumulated duplicate position references from earlier
+  // template switches or addBlock races.
+  $positions = array_values(array_diff($layout->positions['top'], array($tabs_uuid)));
+  $snav_pos  = array_search($snav_uuid, $positions, TRUE);
+  if ($snav_pos === FALSE) {
+    // Section nav not in TOP; leave tabs out too and bail.
+    $layout->positions['top'] = $positions;
     return;
   }
-  // Remove tabs from current position and insert immediately after snav.
-  array_splice($positions, $tabs_pos, 1);
-  // Recompute snav position after the removal.
-  $snav_pos = array_search($snav_uuid, $positions, TRUE);
   array_splice($positions, $snav_pos + 1, 0, array($tabs_uuid));
   $layout->positions['top'] = $positions;
+}
+
+/**
+ * De-duplicates UUIDs within each region's positions array. Keeps the first
+ * occurrence of each UUID and drops the rest. Safe to call on any layout.
+ *
+ * @return int
+ *   Number of duplicate references removed across all regions.
+ */
+function _drop_base_dedupe_layout_positions($layout) {
+  $removed = 0;
+  foreach ($layout->positions as $region => $uuids) {
+    $seen = array();
+    $clean = array();
+    foreach ($uuids as $uuid) {
+      if (isset($seen[$uuid])) {
+        $removed++;
+        continue;
+      }
+      $seen[$uuid] = TRUE;
+      $clean[] = $uuid;
+    }
+    if ($clean !== $uuids) {
+      $layout->positions[$region] = $clean;
+    }
+  }
+  return $removed;
 }
 
 /**
@@ -467,6 +498,31 @@ function drop_base_update_1204() {
     ));
   }
   return t('No Drop Suite layouts needed reordering.');
+}
+
+/**
+ * De-duplicate block-position references across all layouts.
+ *
+ * Backdrop's layout API allows a single UUID to be referenced multiple
+ * times in the same region's positions array, which triggers the "block
+ * has incorrectly been positioned multiple times" warning. This update
+ * cleans up any such duplicates. Seen in the wild on sites where a
+ * template switch + manual layout edits produced an extra position
+ * reference for the page_components:tabs block.
+ */
+function drop_base_update_1206() {
+  $cleaned = array();
+  foreach (layout_load_all() as $name => $layout) {
+    $removed = _drop_base_dedupe_layout_positions($layout);
+    if ($removed > 0) {
+      $layout->save();
+      $cleaned[] = $name . ' (' . $removed . ')';
+    }
+  }
+  if ($cleaned) {
+    return t('Removed duplicate position references in: @list.', array('@list' => implode(', ', $cleaned)));
+  }
+  return t('No layouts had duplicate position references.');
 }
 
 /**
