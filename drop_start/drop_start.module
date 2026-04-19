@@ -244,19 +244,19 @@ function drop_start_drop_start_steps() {
       'status_callback' => 'drop_start_step_theme_status',
       'description'     => t('Pick a theme for the admin experience. We recommend Opera.'),
     ),
-    'sample_content' => array(
-      'title'           => t('Sample content'),
-      'weight'          => -60,
-      'callback'        => 'drop_start_step_sample_content',
-      'status_callback' => 'drop_start_step_sample_content_status',
-      'description'     => t('Populate your site with demo content you can explore.'),
-    ),
     'modules' => array(
       'title'       => t('Modules'),
-      'weight'      => -40,
+      'weight'      => -60,
       'callback'    => 'drop_start_step_modules',
       // No status_callback — the wizard's state-based fallback handles it.
       'description' => t('Enable the Drop Suite modules you want to use.'),
+    ),
+    'sample_content' => array(
+      'title'           => t('Sample content'),
+      'weight'          => -40,
+      'callback'        => 'drop_start_step_sample_content',
+      'status_callback' => 'drop_start_step_sample_content_status',
+      'description'     => t('Populate your site with demo content you can explore.'),
     ),
     'home_nav' => array(
       'title'           => t('Home page navigation'),
