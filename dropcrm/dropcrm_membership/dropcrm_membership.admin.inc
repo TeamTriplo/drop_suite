@@ -199,27 +199,27 @@ function dropcrm_membership_form($form, &$form_state, $membership = NULL) {
   }
   $form_state['crm_membership'] = $membership;
 
-  $form['cid'] = array(
-    '#type'              => 'entityreference',
-    '#title'             => t('Contact'),
-    '#era_entity_type'   => 'crm_contact',
-    '#default_value'     => !empty($membership->cid) ? $membership->cid : NULL,
-    '#required'          => TRUE,
-    '#description'       => t('The CRM contact who is the member.'),
-    '#disabled'          => !$is_new,
-  );
-  // Fall back to a plain autocomplete textfield if the entityreference element
-  // isn't available. (In practice it is, since dropcrm depends on the module.)
-  if (!module_exists('entityreference')) {
-    $form['cid'] = array(
-      '#type'              => 'textfield',
-      '#title'             => t('Contact'),
-      '#autocomplete_path' => 'crm/autocomplete/contacts',
-      '#default_value'     => !empty($membership->cid) ? $membership->cid : '',
-      '#required'          => TRUE,
-      '#disabled'          => !$is_new,
-    );
+  // Contact picker — textfield with dropcrm's contact autocomplete callback.
+  // The callback returns entries like "Julia Whitney [cid:42]" — the cid is
+  // parsed out in the submit handler.
+  $contact_default = '';
+  if (!empty($membership->cid)) {
+    $existing = entity_load('crm_contact', array($membership->cid));
+    if ($existing) {
+      $existing = reset($existing);
+      $contact_default = $existing->label() . ' [cid:' . $membership->cid . ']';
+    }
   }
+  $form['cid'] = array(
+    '#type'              => 'textfield',
+    '#title'             => t('Member (contact)'),
+    '#description'       => t('The person, organization, or household being enrolled. Start typing a name; pick a match from the list. This is the member — Membership Type below is the plan they are signing up for.'),
+    '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
+    '#default_value'     => $contact_default,
+    '#required'          => TRUE,
+    '#disabled'          => !$is_new,
+    '#maxlength'         => 255,
+  );
 
   $form['member_id'] = array(
     '#type'          => 'textfield',
@@ -293,6 +293,25 @@ function dropcrm_membership_form($form, &$form_state, $membership = NULL) {
  */
 function dropcrm_membership_form_validate($form, &$form_state) {
   $v = $form_state['values'];
+
+  // Parse the contact picker's "Name [cid:NNN]" autocomplete format.
+  // Only parse on a new membership (field is disabled when editing).
+  if (empty($form_state['crm_membership']->mid)) {
+    $cid = _dropcrm_membership_parse_cid($v['cid']);
+    if (!$cid) {
+      form_set_error('cid', t('Please pick a contact from the autocomplete suggestions.'));
+    }
+    else {
+      $exists = db_query('SELECT cid FROM {crm_contact} WHERE cid = :cid', array(':cid' => $cid))->fetchField();
+      if (!$exists) {
+        form_set_error('cid', t('That contact could not be found. Pick again from the autocomplete suggestions.'));
+      }
+      else {
+        $form_state['values']['cid'] = $cid;
+      }
+    }
+  }
+
   // Uniqueness check for member_id.
   if (!empty($v['member_id'])) {
     $query = db_select('crm_membership', 'm')
@@ -329,12 +348,9 @@ function dropcrm_membership_form_submit($form, &$form_state) {
   $membership = $form_state['crm_membership'];
   $is_new = empty($membership->mid);
 
-  // Normalize cid (might be entityreference array or plain int).
-  $cid = $v['cid'];
-  if (is_array($cid)) {
-    $cid = isset($cid['target_id']) ? $cid['target_id'] : reset($cid);
-  }
-  $membership->cid       = (int) $cid;
+  // By this point validate has parsed $v['cid'] to a plain int. On edit the
+  // field is disabled and cid is unchanged on the entity.
+  $membership->cid       = (int) $v['cid'];
   $membership->member_id = trim($v['member_id']) !== '' ? trim($v['member_id']) : NULL;
   $membership->type      = $v['type'];
   $membership->status    = (int) $v['status'];
@@ -711,6 +727,20 @@ function _dropcrm_membership_date_to_element($date) {
 
 function _dropcrm_membership_date_default_today() {
   return _dropcrm_membership_date_to_element(format_date(REQUEST_TIME, 'custom', 'Y-m-d'));
+}
+
+/**
+ * Parses a cid out of the "Name [cid:NNN]" autocomplete format emitted by
+ * dropcrm_contact_autocomplete(). Returns 0 if no cid can be extracted.
+ */
+function _dropcrm_membership_parse_cid($value) {
+  if (is_numeric($value)) {
+    return (int) $value;
+  }
+  if (is_string($value) && preg_match('/\[cid:(\d+)\]/', $value, $m)) {
+    return (int) $m[1];
+  }
+  return 0;
 }
 
 /**
