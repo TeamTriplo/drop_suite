@@ -285,11 +285,13 @@ function dropcrm_membership_form($form, &$form_state, $membership = NULL) {
       '#default_value' => 1,
       '#description'   => t('Uncheck to set end date manually (or leave blank for lifetime).'),
     );
+    $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+    $default_end = _dropcrm_membership_add_term_length($today, '1 year');
     $form['initial_term']['end_date'] = array(
       '#type'          => 'date',
       '#title'         => t('End date'),
-      '#description'   => t('Used only if auto-calculate is off.'),
-      '#default_value' => NULL,
+      '#description'   => t('Used only if auto-calculate is off. Leave blank for a lifetime membership.'),
+      '#default_value' => _dropcrm_membership_date_to_element($default_end),
     );
   }
 
