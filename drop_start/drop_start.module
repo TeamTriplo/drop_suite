@@ -19,6 +19,38 @@ function drop_start_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Setup wizard: a single route handles any step by key.
+  $items['drop/start/step/%'] = array(
+    'title'            => 'Setup wizard',
+    'page callback'    => 'drop_start_wizard_step_page',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.wizard.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Skip the current step (records in state, advances).
+  $items['drop/start/step/%/skip'] = array(
+    'title'            => 'Skip step',
+    'page callback'    => 'drop_start_wizard_step_skip',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.wizard.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Reset wizard state back to the beginning.
+  $items['drop/start/restart'] = array(
+    'title'            => 'Restart wizard',
+    'page callback'    => 'drop_start_wizard_restart',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.wizard.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   $items['drop/start/generate'] = array(
     'title'            => 'Generate sample content',
     'page callback'    => 'backdrop_get_form',
@@ -42,6 +74,205 @@ function drop_start_menu() {
   return $items;
 }
 
+// ---------------------------------------------------------------------------
+// Setup wizard — step registry and state
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all wizard steps contributed by enabled modules, sorted by weight.
+ *
+ * @return array
+ *   Array keyed by full step key ("module:key"). Each entry is the step
+ *   definition merged with '_module' and '_key' metadata.
+ */
+function drop_start_get_steps() {
+  $steps = &backdrop_static(__FUNCTION__);
+  if (isset($steps)) {
+    return $steps;
+  }
+  $steps = array();
+  foreach (module_implements('drop_start_steps') as $module) {
+    $items = module_invoke($module, 'drop_start_steps');
+    if (!is_array($items)) {
+      continue;
+    }
+    foreach ($items as $key => $info) {
+      $info['_module']   = isset($info['module']) ? $info['module'] : $module;
+      $info['_key']      = $key;
+      $info['_full_key'] = $info['_module'] . ':' . $key;
+      if (!isset($info['weight'])) {
+        $info['weight'] = 0;
+      }
+      $steps[$info['_full_key']] = $info;
+    }
+  }
+  uasort($steps, '_drop_start_sort_by_weight');
+  return $steps;
+}
+
+/**
+ * uasort callback.
+ */
+function _drop_start_sort_by_weight($a, $b) {
+  return $a['weight'] - $b['weight'];
+}
+
+/**
+ * Returns the current wizard state.
+ *
+ * Shape: {current: 'module:key'|NULL, completed: [full_keys], skipped: [full_keys]}.
+ */
+function drop_start_wizard_state_get() {
+  $state = state_get('drop_start_wizard');
+  if (!is_array($state)) {
+    $state = array();
+  }
+  return $state + array(
+    'current'   => NULL,
+    'completed' => array(),
+    'skipped'   => array(),
+  );
+}
+
+/**
+ * Persists the wizard state.
+ */
+function drop_start_wizard_state_set(array $state) {
+  state_set('drop_start_wizard', $state);
+  backdrop_static_reset('drop_start_get_steps');
+}
+
+/**
+ * Marks a step complete (or skipped) and advances current to the next step.
+ *
+ * @param string $full_key
+ *   The full step key ('module:key').
+ * @param bool $skipped
+ *   TRUE if the step was skipped rather than completed.
+ *
+ * @return string|null
+ *   The next step's full key, or NULL if there are no more steps.
+ */
+function drop_start_wizard_advance($full_key, $skipped = FALSE) {
+  $state = drop_start_wizard_state_get();
+  $bucket = $skipped ? 'skipped' : 'completed';
+  if (!in_array($full_key, $state[$bucket], TRUE)) {
+    $state[$bucket][] = $full_key;
+  }
+  // Remove from the opposite bucket in case a skipped step is later completed.
+  $other = $skipped ? 'completed' : 'skipped';
+  $state[$other] = array_values(array_diff($state[$other], array($full_key)));
+
+  $state['current'] = _drop_start_wizard_next_step($full_key);
+  drop_start_wizard_state_set($state);
+  return $state['current'];
+}
+
+/**
+ * Returns the full_key of the step immediately after $after, or NULL.
+ */
+function _drop_start_wizard_next_step($after) {
+  $keys = array_keys(drop_start_get_steps());
+  $pos  = array_search($after, $keys, TRUE);
+  if ($pos === FALSE || !isset($keys[$pos + 1])) {
+    return NULL;
+  }
+  return $keys[$pos + 1];
+}
+
+/**
+ * Returns a step's status by running its status_callback, if any.
+ */
+function drop_start_step_status($full_key) {
+  $steps = drop_start_get_steps();
+  if (!isset($steps[$full_key])) {
+    return 'not_started';
+  }
+  $step = $steps[$full_key];
+  if (!empty($step['status_callback']) && function_exists($step['status_callback'])) {
+    $status = call_user_func($step['status_callback']);
+    if (in_array($status, array('configured', 'partial', 'not_started'), TRUE)) {
+      return $status;
+    }
+  }
+  // Infer from state as a fallback.
+  $state = drop_start_wizard_state_get();
+  if (in_array($full_key, $state['completed'], TRUE)) {
+    return 'configured';
+  }
+  return 'not_started';
+}
+
+/**
+ * Returns an overall wizard state: 'not_started', 'in_progress', or 'complete'.
+ */
+function drop_start_wizard_overall_state() {
+  $state = drop_start_wizard_state_get();
+  $steps = drop_start_get_steps();
+  if (empty($state['completed']) && empty($state['skipped'])) {
+    return 'not_started';
+  }
+  $touched = count($state['completed']) + count($state['skipped']);
+  if ($touched >= count($steps)) {
+    return 'complete';
+  }
+  return 'in_progress';
+}
+
+/**
+ * Implements hook_drop_start_steps().
+ *
+ * Declares Drop Start's own welcome + done bookend steps.
+ */
+function drop_start_drop_start_steps() {
+  return array(
+    'welcome' => array(
+      'title'           => t('Welcome'),
+      'weight'          => -100,
+      'callback'        => 'drop_start_step_welcome',
+      'status_callback' => 'drop_start_step_welcome_status',
+      'required'        => TRUE,
+      'description'     => t('What Drop Suite is and what this wizard will set up.'),
+    ),
+    'theme' => array(
+      'title'           => t('Theme'),
+      'weight'          => -80,
+      'callback'        => 'drop_start_step_theme',
+      'status_callback' => 'drop_start_step_theme_status',
+      'description'     => t('Pick a theme for the admin experience. We recommend Opera.'),
+    ),
+    'sample_content' => array(
+      'title'           => t('Sample content'),
+      'weight'          => -60,
+      'callback'        => 'drop_start_step_sample_content',
+      'status_callback' => 'drop_start_step_sample_content_status',
+      'description'     => t('Populate your site with demo content you can explore.'),
+    ),
+    'modules' => array(
+      'title'       => t('Modules'),
+      'weight'      => -40,
+      'callback'    => 'drop_start_step_modules',
+      // No status_callback — the wizard's state-based fallback handles it.
+      'description' => t('Enable the Drop Suite modules you want to use.'),
+    ),
+    'home_nav' => array(
+      'title'           => t('Home page navigation'),
+      'weight'          => -20,
+      'callback'        => 'drop_start_step_home_nav',
+      'status_callback' => 'drop_start_step_home_nav_status',
+      'description'     => t('Add the Drop Suite navigation to your home page layout.'),
+    ),
+    'done' => array(
+      'title'           => t('Done'),
+      'weight'          => 100,
+      'callback'        => 'drop_start_step_done',
+      'status_callback' => 'drop_start_step_done_status',
+      'required'        => TRUE,
+      'description'     => t('Summary of what the wizard set up.'),
+    ),
+  );
+}
+
 /**
  * Implements hook_permission().
  */
@@ -56,15 +287,28 @@ function drop_start_permission() {
 
 /**
  * Implements hook_drop_settings_info().
+ *
+ * The Setup wizard card is visually distinct (class: drop-settings-card--wizard)
+ * and ordered first on the dashboard. Its description adapts to wizard state.
  */
 function drop_start_drop_settings_info() {
+  module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  $overall = drop_start_wizard_overall_state();
+
+  $descriptions = array(
+    'not_started' => t('Set up your Drop Suite site — pick a theme, populate demo content, enable modules, and configure your home page.'),
+    'in_progress' => t('Resume the setup wizard. You can pick up where you left off or jump to any step.'),
+    'complete'    => t('Setup is complete. Re-run any step, or restart the wizard.'),
+  );
+
   return array(
-    'drop_start' => array(
-      'title' => t('Drop Start'),
-      'description' => t('Generate or remove sample content for demos and onboarding.'),
-      'path' => 'drop/start',
-      'permission' => 'administer drop_start',
-      'weight' => 50,
+    'drop_start_wizard' => array(
+      'title'       => t('Setup wizard'),
+      'description' => $descriptions[$overall],
+      'path'        => 'drop/start',
+      'permission'  => 'administer drop_start',
+      'weight'      => -100,
+      'class'       => array('drop-settings-card--wizard'),
     ),
   );
 }

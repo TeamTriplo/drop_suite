@@ -410,9 +410,12 @@ Two patterns, chosen by *scope of ownership*:
   (`drop/settings/navigation`).
 
 **Drop Base is a special case.** Because drop_base provides platform-wide
-surfaces (page widths, primary nav, home nav), its settings use the
-centralized path shape: `drop/settings/base`, `drop/settings/navigation`,
-`drop/settings/home-nav` — not `drop/base/settings/*`.
+surfaces (page widths, primary nav), its settings use the centralized
+path shape: `drop/settings/base`, `drop/settings/navigation` — not
+`drop/base/settings/*`. (The home-nav tool historically lived at
+`drop/settings/home-nav`; it has since moved into the Drop Start setup
+wizard at `drop/start/step/home_nav`. The old path still 301-redirects
+for existing bookmarks.)
 
 **Tools are not settings.** Generators, maintenance utilities, and
 one-shot actions live outside `/settings/` entirely. Drop Start at

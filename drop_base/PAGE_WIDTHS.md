@@ -38,6 +38,7 @@ against intended behavior.
 | Updates | `drop/updates` (feed) · `drop/updates/add` · `drop/updates/{uid}/edit` · `drop/updates/{uid}/delete` |
 | Meeting | `drop/meeting` |
 | Settings (all) | `drop/settings*` · `drop/tickets/settings*` · `drop/crm/settings*` · `drop/monitor/settings*` · `drop/docs/settings*` · `drop/time/settings*` · `drop/files/settings*` |
+| Setup wizard | `drop/start*` (overview + all wizard steps) |
 
 ## Wide pages (per-user `--drop-page-width`, default 1600px)
 

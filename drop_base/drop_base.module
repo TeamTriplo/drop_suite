@@ -214,6 +214,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/docs/settings#',
     '#^drop/time/settings#',
     '#^drop/files/settings#',
+    // Drop Start setup wizard (overview + per-step pages).
+    '#^drop/start#',
   );
 
   foreach ($patterns as $pattern) {
@@ -222,6 +224,16 @@ function _drop_base_is_narrow_page($path) {
     }
   }
   return FALSE;
+}
+
+/**
+ * Page callback: 301 redirect from /drop/settings/home-nav to the wizard step.
+ *
+ * The home-page-navigation tool moved into the Drop Start wizard. Any
+ * bookmarks to the old path land here and get forwarded to the new home.
+ */
+function _drop_base_home_nav_redirect() {
+  backdrop_goto('drop/start/step/home_nav', array(), 301);
 }
 
 /**
@@ -1342,14 +1354,13 @@ function drop_base_menu() {
     'file'             => 'drop_base.nav_admin.inc',
   );
 
-  // --- Home page navigation setup ---
+  // --- Home page navigation (moved to Drop Start wizard; 301 redirect) ---
   $items['drop/settings/home-nav'] = array(
     'title'            => 'Home page navigation',
-    'description'      => 'Add Drop Suite navigation blocks to the Backdrop home page.',
-    'page callback'    => 'drop_base_home_nav_page',
+    'page callback'    => '_drop_base_home_nav_redirect',
     'access callback'  => 'user_access',
     'access arguments' => array('administer site configuration'),
-    'file'             => 'drop_base.pages.inc',
+    'type'             => MENU_CALLBACK,
   );
 
   // --- Drop Suite modules (scoped enable/disable page) ---
@@ -1614,13 +1625,6 @@ function drop_base_drop_settings_info() {
       'path' => 'drop/settings/modules',
       'permission' => 'administer drop suite modules',
       'weight' => -10,
-    ),
-    'drop_home_nav' => array(
-      'title' => t('Home page navigation'),
-      'description' => t('Add the Drop Suite primary navigation to your Backdrop home page layout.'),
-      'path' => 'drop/settings/home-nav',
-      'permission' => 'administer site configuration',
-      'weight' => 5,
     ),
     'drop_navigation' => array(
       'title' => t('Primary navigation'),

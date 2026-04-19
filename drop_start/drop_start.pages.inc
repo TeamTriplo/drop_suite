@@ -10,41 +10,97 @@
 
 /**
  * Page callback: Drop Start overview.
+ *
+ * Renders one of three modes based on wizard state:
+ *   - not_started: welcome splash + Begin setup button.
+ *   - in_progress: resume card pointing at current step + step index.
+ *   - complete:    summary of configured state + re-run links.
  */
 function drop_start_overview_page() {
-  backdrop_set_title(t('Drop Start'));
+  module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  backdrop_add_css(backdrop_get_path('module', 'drop_start') . '/drop_start.wizard.css');
+  $overall = drop_start_wizard_overall_state();
 
-  $available = drop_start_available_modules();
-  $total     = drop_start_content_total();
-  $counts    = drop_start_content_counts();
+  if ($overall === 'not_started') {
+    return _drop_start_overview_not_started();
+  }
+  if ($overall === 'in_progress') {
+    return _drop_start_overview_in_progress();
+  }
+  return _drop_start_overview_complete();
+}
 
-  $output = '<div class="drop-start-overview">';
+/**
+ * Overview renderer: never-started state.
+ */
+function _drop_start_overview_not_started() {
+  backdrop_set_title(t('Set up Drop Suite'));
 
-  // Available modules.
-  $output .= '<h3>' . t('Available modules') . '</h3>';
-  if (empty($available)) {
-    $output .= '<p>' . t('No Drop Suite modules are enabled.') . '</p>';
+  $steps   = drop_start_get_steps();
+  $first   = $steps ? reset($steps) : NULL;
+  $entry   = $first ? 'drop/start/step/' . $first['_key'] : NULL;
+
+  $output  = '<div class="drop-start-overview drop-start-overview--welcome">';
+  $output .= '<p>' . t('This wizard walks you through the essentials for setting up a Drop Suite site: pick a theme, populate demo content, enable the modules you want, and configure your front page.') . '</p>';
+  $output .= '<p>' . t('Each step is optional (except the bookends). You can skip anything, and you can re-run the wizard later from Settings.') . '</p>';
+
+  if ($entry) {
+    $output .= '<p>'
+      . l(t('Begin setup'), $entry, array('attributes' => array('class' => array('button', 'button-primary'))))
+      . '</p>';
+  }
+
+  $output .= _drop_start_overview_step_list();
+  $output .= '</div>';
+  return $output;
+}
+
+/**
+ * Overview renderer: in-progress state.
+ */
+function _drop_start_overview_in_progress() {
+  backdrop_set_title(t('Set up Drop Suite'));
+  $state = drop_start_wizard_state_get();
+  $steps = drop_start_get_steps();
+
+  $current      = isset($steps[$state['current']]) ? $steps[$state['current']] : NULL;
+  $resume_path  = $current ? 'drop/start/step/' . $current['_key'] : NULL;
+
+  $output  = '<div class="drop-start-overview drop-start-overview--resume">';
+  if ($current) {
+    $output .= '<p>' . t('You left off at: %step.', array('%step' => $current['title'])) . '</p>';
+    $output .= '<p>' . l(t('Resume setup'), $resume_path, array(
+      'attributes' => array('class' => array('button', 'button-primary')),
+    )) . ' ' . l(t('Restart wizard'), 'drop/start/restart') . '</p>';
   }
   else {
-    $items = array();
-    foreach ($available as $module => $label) {
-      $items[] = check_plain($label);
-    }
-    $output .= theme('item_list', array('items' => $items));
+    $output .= '<p>' . t('Setup is in progress. Jump to any step below.') . '</p>';
   }
 
-  // Sample content status.
-  $output .= '<h3>' . t('Sample content') . '</h3>';
-  if ($total === 0) {
-    $output .= '<p>' . t('No sample content has been generated yet.') . '</p>';
-    $output .= '<p>' . l(t('Generate sample content'), 'drop/start/generate', array(
-      'attributes' => array('class' => array('button')),
-    )) . '</p>';
-  }
-  else {
-    $output .= '<p>' . t('@count items of sample content exist on this site:', array('@count' => $total)) . '</p>';
+  $output .= _drop_start_overview_step_list();
+  $output .= '</div>';
+  return $output;
+}
+
+/**
+ * Overview renderer: complete state.
+ */
+function _drop_start_overview_complete() {
+  backdrop_set_title(t('Drop Suite setup'));
+
+  $output  = '<div class="drop-start-overview drop-start-overview--complete">';
+  $output .= '<p>' . t('Your Drop Suite site is set up. You can re-run any step below, or restart the whole wizard.') . '</p>';
+  $output .= '<p>' . l(t('Restart wizard'), 'drop/start/restart', array(
+    'attributes' => array('class' => array('button')),
+  )) . '</p>';
+  $output .= _drop_start_overview_step_list();
+
+  // Preserve the original sample-content management surface at the bottom.
+  $total  = drop_start_content_total();
+  $counts = drop_start_content_counts();
+  if ($total > 0) {
+    $output .= '<h3>' . t('Sample content on this site') . '</h3>';
     $rows = array();
-    // Map entity types to friendly names.
     $type_labels = _drop_start_entity_type_labels();
     foreach ($counts as $type => $count) {
       $label = isset($type_labels[$type]) ? $type_labels[$type] : $type;
@@ -55,18 +111,47 @@ function drop_start_overview_page() {
       'rows'   => $rows,
     ));
     $output .= '<p>'
-      . l(t('Delete sample content'), 'drop/start/delete', array(
-          'attributes' => array('class' => array('button', 'button-danger')),
-        ))
+      . l(t('Delete sample content'), 'drop/start/delete', array('attributes' => array('class' => array('button', 'button-danger'))))
       . ' '
-      . l(t('Generate more'), 'drop/start/generate', array(
-          'attributes' => array('class' => array('button')),
-        ))
+      . l(t('Generate more'), 'drop/start/generate', array('attributes' => array('class' => array('button'))))
       . '</p>';
   }
 
   $output .= '</div>';
   return $output;
+}
+
+/**
+ * Renders a table of all wizard steps with their status + jump links.
+ */
+function _drop_start_overview_step_list() {
+  $steps = drop_start_get_steps();
+  if (empty($steps)) {
+    return '';
+  }
+
+  $status_label = array(
+    'configured'  => t('Done'),
+    'partial'     => t('Partial'),
+    'not_started' => t('Not started'),
+  );
+
+  $rows = array();
+  foreach ($steps as $full_key => $step) {
+    $status = drop_start_step_status($full_key);
+    $link   = l($step['title'], 'drop/start/step/' . $step['_key']);
+    $desc   = !empty($step['description']) ? check_plain($step['description']) : '';
+    $rows[] = array(
+      array('data' => $link . ($desc ? '<br /><small>' . $desc . '</small>' : ''), 'class' => array('drop-start-step-title')),
+      array('data' => $status_label[$status], 'class' => array('drop-start-step-status', 'drop-start-step-status--' . $status)),
+    );
+  }
+
+  return '<h3>' . t('Setup steps') . '</h3>'
+    . theme('table', array(
+      'header' => array(t('Step'), t('Status')),
+      'rows'   => $rows,
+    ));
 }
 
 /**
