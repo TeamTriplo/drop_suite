@@ -1,0 +1,439 @@
+<?php
+/**
+ * @file
+ * Tests for the DropCRM Membership module.
+ */
+
+/**
+ * Shared base: contact + membership + term + payment factory helpers.
+ */
+abstract class DropCRMMembershipTestBase extends BackdropWebTestCase {
+
+  /** @var object User with full membership administration. */
+  protected $adminUser;
+
+  /** @var object User with manage membership only. */
+  protected $manageUser;
+
+  /** @var object User with only view access. */
+  protected $viewUser;
+
+  /**
+   * Set up: enable module, create standard users and a test contact.
+   */
+  public function setUp() {
+    $modules = array('dropcrm', 'dropcrm_membership', 'entity_plus', 'entityreference', 'views');
+    parent::setUp($modules);
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer crm',
+      'administer dropcrm_membership',
+      'manage dropcrm_membership',
+      'access dropcrm_membership',
+      'cancel dropcrm_membership',
+    ));
+    $this->manageUser = $this->backdropCreateUser(array(
+      'access dropcrm_membership',
+      'manage dropcrm_membership',
+    ));
+    $this->viewUser = $this->backdropCreateUser(array(
+      'access dropcrm_membership',
+    ));
+  }
+
+  /**
+   * Creates and saves a test organization (simplest contact bundle).
+   */
+  protected function createTestContact($name = 'Test Member Org') {
+    $contact = entity_create('crm_contact', array(
+      'type'   => 'crm_organization',
+      'name'   => $name,
+      'status' => 1,
+    ));
+    $contact->save();
+    return $contact;
+  }
+
+  /**
+   * Creates a membership with a single term. All dates are YYYY-MM-DD strings.
+   */
+  protected function createMembership(array $values = array()) {
+    $values += array(
+      'type'       => 'individual',
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+      'start_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('+1 year'), 'custom', 'Y-m-d'),
+    );
+    if (empty($values['cid'])) {
+      $contact = $this->createTestContact();
+      $values['cid'] = $contact->cid;
+    }
+
+    $membership = entity_create('crm_membership', array(
+      'cid'       => $values['cid'],
+      'member_id' => isset($values['member_id']) ? $values['member_id'] : NULL,
+      'type'      => $values['type'],
+      'status'    => $values['status'],
+    ));
+    $membership->save();
+
+    $term = entity_create('crm_membership_term', array(
+      'mid'        => $membership->mid,
+      'start_date' => $values['start_date'],
+      'end_date'   => $values['end_date'],
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+      'notes'      => '',
+    ));
+    $term->save();
+
+    return array($membership, $term);
+  }
+
+  /**
+   * Reloads a membership from the database, clearing the entity cache.
+   */
+  protected function reloadMembership($mid) {
+    entity_get_controller('crm_membership')->resetCache(array($mid));
+    $m = entity_load('crm_membership', array($mid));
+    return reset($m);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// State machine tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Verifies ACTIVE → GRACE → LAPSED transitions under cron.
+ */
+class DropCRMMembershipStateMachineTest extends DropCRMMembershipTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Membership State Machine',
+      'description' => 'Verifies ACTIVE → GRACE → LAPSED transitions at correct date boundaries.',
+      'group'       => 'DropCRM Membership',
+    );
+  }
+
+  /**
+   * Membership with a future end_date stays ACTIVE under cron.
+   */
+  public function testActiveRemainsActive() {
+    list($m, ) = $this->createMembership(array(
+      'end_date' => format_date(strtotime('+30 days'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_ACTIVE, 'Membership with future end stays ACTIVE after cron.');
+  }
+
+  /**
+   * Membership whose end_date just passed moves to GRACE.
+   */
+  public function testActiveTransitionsToGrace() {
+    list($m, ) = $this->createMembership(array(
+      'start_date' => format_date(strtotime('-395 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-1 day'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_GRACE, 'Membership past end_date moves to GRACE.');
+  }
+
+  /**
+   * GRACE membership past grace_days boundary moves to LAPSED.
+   */
+  public function testGraceTransitionsToLapsed() {
+    // Default grace period for "individual" is 30 days.
+    list($m, ) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_GRACE,
+      'start_date' => format_date(strtotime('-400 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-31 days'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_LAPSED, 'Grace membership past grace_days moves to LAPSED.');
+  }
+
+  /**
+   * GRACE membership still within grace_days stays in GRACE.
+   */
+  public function testGraceHoldsWithinWindow() {
+    list($m, ) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_GRACE,
+      'start_date' => format_date(strtotime('-380 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-15 days'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_GRACE, 'Grace membership within grace_days stays GRACE.');
+  }
+
+  /**
+   * CANCELLED memberships are never touched by cron.
+   */
+  public function testCancelledIgnored() {
+    list($m, ) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_CANCELLED,
+      'start_date' => format_date(strtotime('-400 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-100 days'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_CANCELLED, 'Cancelled membership untouched by cron.');
+  }
+
+  /**
+   * Lifetime terms (end_date IS NULL) stay ACTIVE indefinitely.
+   */
+  public function testLifetimeStaysActive() {
+    list($m, ) = $this->createMembership(array(
+      'start_date' => format_date(strtotime('-1000 days'), 'custom', 'Y-m-d'),
+      'end_date'   => NULL,
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_ACTIVE, 'Lifetime membership stays ACTIVE after cron.');
+  }
+
+  /**
+   * auto_lapse_after_grace = FALSE should prevent the grace→lapsed step.
+   */
+  public function testAutoLapseDisabled() {
+    config_set('dropcrm_membership.settings', 'auto_lapse_after_grace', FALSE);
+    list($m, ) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_GRACE,
+      'start_date' => format_date(strtotime('-400 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-100 days'), 'custom', 'Y-m-d'),
+    ));
+    dropcrm_membership_cron();
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_GRACE, 'Grace membership stays GRACE when auto_lapse is off.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Renewal tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Verifies renewal creates a new term and does not mutate prior terms.
+ */
+class DropCRMMembershipRenewalTest extends DropCRMMembershipTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Membership Renewal',
+      'description' => 'Renewing creates a new term, flips status to active, preserves history.',
+      'group'       => 'DropCRM Membership',
+    );
+  }
+
+  /**
+   * A lapsed membership that is renewed becomes ACTIVE with a new term row.
+   */
+  public function testLapsedRenewalCreatesNewTerm() {
+    list($m, $original_term) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_LAPSED,
+      'start_date' => format_date(strtotime('-400 days'), 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('-40 days'), 'custom', 'Y-m-d'),
+    ));
+    $original_end = $original_term->end_date;
+
+    // Add a new term.
+    $new_term = entity_create('crm_membership_term', array(
+      'mid'        => $m->mid,
+      'start_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('+1 year'), 'custom', 'Y-m-d'),
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+      'notes'      => 'renewal',
+    ));
+    $new_term->save();
+    _dropcrm_membership_recompute_status($m->mid);
+
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->status, DROPCRM_MEMBERSHIP_STATUS_ACTIVE, 'Membership flipped back to ACTIVE after renewal.');
+
+    // Prior term must be untouched.
+    $orig = entity_load('crm_membership_term', array($original_term->tid));
+    $orig = reset($orig);
+    $this->assertEqual($orig->end_date, $original_end, 'Original term end_date not mutated by renewal.');
+
+    // Two term rows exist for this membership.
+    $count = db_query('SELECT COUNT(*) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $m->mid))->fetchField();
+    $this->assertEqual($count, 2, 'Two term rows exist after renewal.');
+  }
+
+  /**
+   * Joined date is derived from the earliest term and does not change on renewal.
+   */
+  public function testJoinedDateStable() {
+    $original_start = format_date(strtotime('-400 days'), 'custom', 'Y-m-d');
+    list($m, ) = $this->createMembership(array(
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_LAPSED,
+      'start_date' => $original_start,
+      'end_date'   => format_date(strtotime('-40 days'), 'custom', 'Y-m-d'),
+    ));
+
+    // Simulate renewal.
+    $new_term = entity_create('crm_membership_term', array(
+      'mid'        => $m->mid,
+      'start_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+      'end_date'   => format_date(strtotime('+1 year'), 'custom', 'Y-m-d'),
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+    ));
+    $new_term->save();
+
+    $m = $this->reloadMembership($m->mid);
+    $this->assertEqual($m->joinedDate(), $original_start, 'Joined date is the earliest term start, stable after renewal.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payment tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Payments record correctly and total_paid aggregates.
+ */
+class DropCRMMembershipPaymentTest extends DropCRMMembershipTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Membership Payment',
+      'description' => 'Payments record correctly and total_paid sum aggregates across all payments.',
+      'group'       => 'DropCRM Membership',
+    );
+  }
+
+  public function testTotalPaidAggregates() {
+    list($m, $t) = $this->createMembership();
+    $amounts = array(25.00, 25.00, 10.50);
+    foreach ($amounts as $amount) {
+      $p = entity_create('crm_membership_payment', array(
+        'mid'       => $m->mid,
+        'tid'       => $t->tid,
+        'amount'    => $amount,
+        'paid_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+        'method'    => 'Check',
+      ));
+      $p->save();
+    }
+    $total = _dropcrm_membership_total_paid($m->mid);
+    $this->assertEqual($total, 60.50, 'Total paid sums all payments.');
+  }
+
+  public function testPaymentLinkToTerm() {
+    list($m, $t) = $this->createMembership();
+    $p = entity_create('crm_membership_payment', array(
+      'mid'       => $m->mid,
+      'tid'       => $t->tid,
+      'amount'    => 99.99,
+      'paid_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+      'method'    => 'Credit Card',
+      'reference' => 'txn-abc',
+    ));
+    $p->save();
+    $this->assertTrue($p->pid > 0, 'Payment saved with pid.');
+
+    $loaded = entity_load('crm_membership_payment', array($p->pid));
+    $loaded = reset($loaded);
+    $this->assertEqual($loaded->tid, $t->tid, 'Payment associated with expected term.');
+    $this->assertEqual($loaded->reference, 'txn-abc', 'Payment reference preserved.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Access tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Permission gates work as designed.
+ */
+class DropCRMMembershipAccessTest extends DropCRMMembershipTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Membership Access',
+      'description' => 'Permission gates block unauthorized users from managing memberships and canceling.',
+      'group'       => 'DropCRM Membership',
+    );
+  }
+
+  public function testViewerCannotReachManageForm() {
+    list($m, ) = $this->createMembership();
+    $this->backdropLogin($this->viewUser);
+    $this->backdropGet('drop/crm/memberships/' . $m->mid . '/renew');
+    $this->assertResponse(403, 'Viewer cannot access renewal form.');
+  }
+
+  public function testManagerCannotCancel() {
+    list($m, ) = $this->createMembership();
+    $this->backdropLogin($this->manageUser);
+    $this->backdropGet('drop/crm/memberships/' . $m->mid . '/cancel');
+    $this->assertResponse(403, 'Manage-only user cannot cancel.');
+  }
+
+  public function testAdminCanAll() {
+    list($m, ) = $this->createMembership();
+    $this->backdropLogin($this->adminUser);
+
+    $this->backdropGet('drop/crm/memberships/' . $m->mid);
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/memberships/' . $m->mid . '/renew');
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/memberships/' . $m->mid . '/cancel');
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/memberships/add');
+    $this->assertResponse(200);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Activity integration tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Renewal and cancellation log corresponding crm_activity rows.
+ */
+class DropCRMMembershipActivityIntegrationTest extends DropCRMMembershipTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Membership Activity Integration',
+      'description' => 'Renewal and cancellation each create a crm_activity on the contact timeline.',
+      'group'       => 'DropCRM Membership',
+    );
+  }
+
+  public function testRenewalCreatesActivity() {
+    list($m, ) = $this->createMembership();
+    module_load_include('inc', 'dropcrm_membership', 'dropcrm_membership.admin');
+
+    _dropcrm_membership_log_activity($m, 'membership_renewal', format_date(REQUEST_TIME, 'custom', 'Y-m-d'), format_date(strtotime('+1 year'), 'custom', 'Y-m-d'));
+
+    $aid = db_query('SELECT aid FROM {crm_activity} WHERE type = :type ORDER BY aid DESC LIMIT 1', array(':type' => 'membership_renewal'))->fetchField();
+    $this->assertTrue($aid > 0, 'Renewal activity row created.');
+
+    // Verify the contact reference field was populated.
+    $activity = entity_load('crm_activity', array($aid));
+    $activity = reset($activity);
+    $linked_cid = isset($activity->field_crm_contacts[LANGUAGE_NONE][0]['target_id'])
+      ? $activity->field_crm_contacts[LANGUAGE_NONE][0]['target_id']
+      : NULL;
+    $this->assertEqual($linked_cid, $m->cid, 'Renewal activity is linked to the contact.');
+  }
+
+  public function testCancelCreatesActivity() {
+    list($m, ) = $this->createMembership();
+    module_load_include('inc', 'dropcrm_membership', 'dropcrm_membership.admin');
+
+    _dropcrm_membership_log_activity($m, 'membership_cancelled');
+    $aid = db_query('SELECT aid FROM {crm_activity} WHERE type = :type ORDER BY aid DESC LIMIT 1', array(':type' => 'membership_cancelled'))->fetchField();
+    $this->assertTrue($aid > 0, 'Cancellation activity row created.');
+  }
+}

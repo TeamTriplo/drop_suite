@@ -9,6 +9,37 @@
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns whether the CSV importer UI should be exposed.
+ *
+ * Gated on the droptickets.settings:import_enabled config flag, which
+ * defaults to FALSE. The flag is flipped via Drop Labs (drop_labs module)
+ * or, on grandfathered sites, by droptickets_update_1017().
+ */
+function _droptickets_import_enabled() {
+  return (bool) config_get('droptickets.settings', 'import_enabled');
+}
+
+/**
+ * Implements hook_drop_labs_info().
+ *
+ * Declares the CSV importer as an experimental feature for Drop Labs to toggle.
+ * Has no effect unless drop_labs is installed — the hook is dormant data then.
+ */
+function droptickets_drop_labs_info() {
+  return array(
+    'csv_import' => array(
+      'title'       => t('Ticket CSV import (JIRA format)'),
+      'description' => t('Adds a /drop/tickets/import page that accepts a CSV export from JIRA and creates one ticket per row.'),
+      'caveats'     => t('Only maps Summary to title and Description to body. Status, priority, type, assignee, dates, comments, labels, and attachments are not imported. All rows land as open tasks at priority 3. Useful for seeding a project, not for a full JIRA migration.'),
+      'module'      => 'droptickets',
+      'config_name' => 'droptickets.settings',
+      'config_key'  => 'import_enabled',
+      'default'     => FALSE,
+    ),
+  );
+}
+
+/**
  * Implements hook_config_info().
  */
 function droptickets_config_info() {
@@ -592,16 +623,18 @@ function droptickets_menu() {
     'type'             => MENU_CALLBACK,
   );
 
-  // Delete an import batch.
-  $items['drop/tickets/import/%/delete'] = array(
-    'title'            => 'Delete import',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('droptickets_import_delete_form', 3),
-    'access callback'  => 'user_access',
-    'access arguments' => array('administer droptickets'),
-    'file'             => 'droptickets.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
+  // Delete an import batch. Gated on Labs-managed flag.
+  if (_droptickets_import_enabled()) {
+    $items['drop/tickets/import/%/delete'] = array(
+      'title'            => 'Delete import',
+      'page callback'    => 'backdrop_get_form',
+      'page arguments'   => array('droptickets_import_delete_form', 3),
+      'access callback'  => 'user_access',
+      'access arguments' => array('administer droptickets'),
+      'file'             => 'droptickets.admin.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
 
   // Inline image upload for comment textarea paste (AJAX).
   $items['drop/tickets/upload-image'] = array(
@@ -722,21 +755,23 @@ function droptickets_menu() {
     'type'             => MENU_CALLBACK,
   );
 
-  // JIRA CSV import.
-  $items['drop/tickets/import'] = array(
-    'title'            => 'Import from JIRA',
-    'page callback'    => 'backdrop_get_form',
-    'page arguments'   => array('droptickets_import_form'),
-    'access callback'  => 'user_access',
-    'access arguments' => array('administer droptickets'),
-    'file'             => 'droptickets.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
+  // CSV import (JIRA format). Gated on Labs-managed flag.
+  if (_droptickets_import_enabled()) {
+    $items['drop/tickets/import'] = array(
+      'title'            => 'Import from JIRA',
+      'page callback'    => 'backdrop_get_form',
+      'page arguments'   => array('droptickets_import_form'),
+      'access callback'  => 'user_access',
+      'access arguments' => array('administer droptickets'),
+      'file'             => 'droptickets.admin.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
 
   // Admin hub card — settings entry under admin/drop.
   $items['admin/drop/tickets'] = array(
     'title'            => 'DropTickets settings',
-    'description'      => t('Configure stale-ticket thresholds, Slack notifications, and JIRA import options.'),
+    'description'      => t('Configure stale-ticket thresholds, Slack notifications, and other DropTickets options.'),
     'page callback'    => 'backdrop_goto',
     'page arguments'   => array('drop/tickets/settings'),
     'access callback'  => 'user_access',
