@@ -1773,14 +1773,18 @@ function drop_base_team_page() {
 
   $role_labels = user_roles();
   $can_see_tickets = module_exists('droptickets') && user_access('access droptickets');
+  $can_see_users   = user_access('access user profiles');
+  $has_crm_link    = module_exists('dropcrm_user');
 
   $rows = array();
   foreach ($ordered as $account) {
     $last_seen = $account->access
       ? t('@time ago', array('@time' => format_interval(REQUEST_TIME - $account->access)))
       : t('Never');
-    $name = $can_see_tickets
-      ? l($account->name, 'drop/tickets/member/' . $account->uid)
+
+    // Name links to user profile when available, otherwise plain.
+    $name = $can_see_users
+      ? l($account->name, 'user/' . $account->uid)
       : check_plain($account->name);
 
     $user_role_labels = array();
@@ -1795,12 +1799,25 @@ function drop_base_team_page() {
     }
     $roles_display = $user_role_labels ? implode(', ', $user_role_labels) : '—';
 
-    $rows[] = array($name, $roles_display, $last_seen);
+    // Contextual links: Tickets + Contact (if each is available).
+    $links = array();
+    if ($can_see_tickets) {
+      $links[] = l(t('Tickets'), 'drop/tickets/member/' . $account->uid);
+    }
+    if ($has_crm_link) {
+      $contact = dropcrm_user_get_contact($account->uid);
+      if ($contact) {
+        $links[] = l(t('Contact'), 'drop/crm/contact/' . $contact->cid);
+      }
+    }
+    $links_display = $links ? implode(' · ', $links) : '—';
+
+    $rows[] = array($name, $roles_display, $last_seen, $links_display);
   }
 
   return array(
     '#theme'  => 'table',
-    '#header' => array(t('Name'), t('Roles'), t('Last online')),
+    '#header' => array(t('Name'), t('Roles'), t('Last online'), t('Links')),
     '#rows'   => $rows,
     '#attributes' => array('class' => array('drop-team-table')),
   );
