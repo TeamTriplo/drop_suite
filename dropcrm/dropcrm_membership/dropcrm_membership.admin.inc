@@ -115,6 +115,24 @@ function dropcrm_membership_view_page($membership) {
   $types = _dropcrm_membership_types();
   $type_label = isset($types[$membership->type]['label']) ? $types[$membership->type]['label'] : $membership->type;
 
+  // Action bar — per-entity verbs. Edit sits with View in Local Tasks (not
+  // here). Delete is admin-only since it loses all history; soft-remove is
+  // via Cancel.
+  $actions = array();
+  if (dropcrm_membership_access('update', $membership)) {
+    $actions[] = l(t('Renew'), 'drop/crm/memberships/' . $membership->mid . '/renew');
+    $actions[] = l(t('Record payment'), 'drop/crm/memberships/' . $membership->mid . '/payment/add');
+  }
+  if (user_access('cancel dropcrm_membership') && (int) $membership->status !== DROPCRM_MEMBERSHIP_STATUS_CANCELLED) {
+    $actions[] = l(t('Cancel membership'), 'drop/crm/memberships/' . $membership->mid . '/cancel');
+  }
+  if ($actions) {
+    $build['actions'] = array(
+      '#markup' => drop_base_page_actions($actions),
+      '#weight' => -100,
+    );
+  }
+
   // Summary.
   $rows = array();
   $rows[] = array(t('Contact'), $contact ? l($contact->label(), 'drop/crm/contact/' . $contact->cid) : t('(unknown)'));

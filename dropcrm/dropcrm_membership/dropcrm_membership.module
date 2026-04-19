@@ -451,6 +451,7 @@ function dropcrm_membership_menu() {
     'weight'           => 0,
   );
 
+  // Renew — invoked from the action bar on the view page, not a local task.
   $items['drop/crm/memberships/%crm_membership/renew'] = array(
     'title'            => 'Renew',
     'page callback'    => 'backdrop_get_form',
@@ -458,10 +459,9 @@ function dropcrm_membership_menu() {
     'access callback'  => 'dropcrm_membership_access',
     'access arguments' => array('update', 3),
     'file'             => 'dropcrm_membership.admin.inc',
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 5,
   );
 
+  // Record payment — action-bar verb, not a local task.
   $items['drop/crm/memberships/%crm_membership/payment/add'] = array(
     'title'            => 'Record payment',
     'page callback'    => 'backdrop_get_form',
@@ -469,8 +469,6 @@ function dropcrm_membership_menu() {
     'access callback'  => 'dropcrm_membership_access',
     'access arguments' => array('update', 3),
     'file'             => 'dropcrm_membership.admin.inc',
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 10,
   );
 
   $items['drop/crm/memberships/%crm_membership/payment/%crm_membership_payment/edit'] = array(
@@ -490,14 +488,13 @@ function dropcrm_membership_menu() {
     'file'             => 'dropcrm_membership.admin.inc',
   );
 
+  // Cancel — action-bar verb, not a local task.
   $items['drop/crm/memberships/%crm_membership/cancel'] = array(
     'title'            => 'Cancel',
     'page callback'    => 'backdrop_get_form',
     'page arguments'   => array('dropcrm_membership_cancel_form', 3),
     'access arguments' => array('cancel dropcrm_membership'),
     'file'             => 'dropcrm_membership.admin.inc',
-    'type'             => MENU_LOCAL_TASK,
-    'weight'           => 20,
   );
 
   return $items;
