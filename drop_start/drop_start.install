@@ -20,30 +20,46 @@ function drop_start_install() {
 }
 
 /**
- * Adds drop_start:wizard_progress to the default layout's TOP region, at
- * position 0 (above the Drop Navigation). Idempotent — does nothing if the
- * block is already placed.
+ * Adds drop_start:wizard_progress to the TOP region of the default and
+ * admin_default layouts, at position 0. Placing on both layouts means the
+ * admin can detour into /admin/* (e.g. the modules page) during setup and
+ * still have a one-click path back to the wizard. Idempotent per layout.
  */
 function _drop_start_install_progress_block() {
   module_load_include('install', 'drop_base');
-  $layout = layout_load('default');
-  if (!$layout) {
-    return;
+  foreach (array('default', 'admin_default') as $layout_name) {
+    $layout = layout_load($layout_name);
+    if (!$layout) {
+      continue;
+    }
+    // Most admin layouts don't have a 'top' region by default. Skip
+    // gracefully rather than creating a region that doesn't render.
+    if (!isset($layout->positions['top']) && !_drop_start_layout_template_has_top($layout)) {
+      continue;
+    }
+    $uuid = _drop_base_ensure_block_in_region($layout, 'drop_start:wizard_progress', 'top');
+    if (!$uuid) {
+      continue;
+    }
+    if (!empty($layout->positions['top'])) {
+      $positions = $layout->positions['top'];
+      $positions = array_values(array_diff($positions, array($uuid)));
+      array_unshift($positions, $uuid);
+      $layout->positions['top'] = $positions;
+    }
+    $layout->save();
   }
-  $uuid = _drop_base_ensure_block_in_region($layout, 'drop_start:wizard_progress', 'top');
-  if (!$uuid) {
-    // Already present — nothing to do. Don't re-save.
-    return;
+}
+
+/**
+ * Checks whether a layout's template defines a 'top' region.
+ */
+function _drop_start_layout_template_has_top($layout) {
+  if (empty($layout->layout_template)) {
+    return FALSE;
   }
-  // Move the newly-added block to position 0 in the TOP region so it renders
-  // above the Drop Navigation.
-  if (!empty($layout->positions['top'])) {
-    $positions = $layout->positions['top'];
-    $positions = array_values(array_diff($positions, array($uuid)));
-    array_unshift($positions, $uuid);
-    $layout->positions['top'] = $positions;
-  }
-  $layout->save();
+  $info = layout_get_layout_template_info($layout->layout_template);
+  return !empty($info['regions']['top']);
 }
 
 /**
@@ -106,4 +122,15 @@ function drop_start_uninstall() {
 function drop_start_update_1100() {
   _drop_start_install_progress_block();
   return t('Added the wizard-progress block to the default layout.');
+}
+
+/**
+ * Also place the wizard-progress block on the admin_default layout so the
+ * admin can find their way back to the wizard from any /admin/* page.
+ * Idempotent — reuses _drop_start_install_progress_block(), which now
+ * handles both layouts.
+ */
+function drop_start_update_1101() {
+  _drop_start_install_progress_block();
+  return t('Added the wizard-progress block to the admin_default layout.');
 }
