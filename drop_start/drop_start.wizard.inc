@@ -572,6 +572,40 @@ function drop_start_step_modules($form, &$form_state) {
     );
   }
 
+  // Drop Suite modules that are on this site but not yet enabled.
+  // drop_base and drop_start are always filtered out since they're the
+  // required substrate — admin can't do without them mid-wizard.
+  $drop_survey = _drop_start_step_modules_drop_survey();
+  if (!empty($drop_survey['disabled'])) {
+    $header = array(
+      'name'        => t('Module'),
+      'description' => t('Description'),
+    );
+    $rows = array();
+    foreach ($drop_survey['disabled'] as $machine => $info) {
+      $rows[$machine] = array(
+        'name' => array(
+          'data' => '<strong>' . check_plain($info['name']) . '</strong>'
+            . '<br /><code class="drop-start-module-machine">' . check_plain($machine) . '</code>',
+        ),
+        'description' => array(
+          'data' => check_plain($info['description']),
+        ),
+      );
+    }
+    $subform['drop_on_disk'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Drop Suite modules available to enable'),
+      '#description' => t('These Drop Suite modules are already on this site but not yet turned on. Check the ones you want, then click Continue.'),
+    );
+    $subform['drop_on_disk']['enable_drop_modules'] = array(
+      '#type'    => 'tableselect',
+      '#header'  => $header,
+      '#options' => $rows,
+      '#empty'   => t('None available.'),
+    );
+  }
+
   // Survey contrib dependencies of Drop Suite modules and narrate the
   // state so the admin understands what Color Field / Book / Entity Plus
   // / Entity Reference are, why they're listed, and whether they even
@@ -654,25 +688,44 @@ function drop_start_step_modules($form, &$form_state) {
 }
 
 /**
- * Custom submit: enable any contrib deps the admin checked, and stay on
- * this step so the re-rendered page reflects the new state (the contrib
- * deps are gone from the "available" list, and the main modules link now
- * unblocks the Drop modules that needed them).
+ * Custom submit: enable any contrib deps or Drop Suite modules the admin
+ * checked, and stay on this step so the re-rendered page reflects the new
+ * state.
+ *
+ * Both sets are fed to a single module_enable() call — Backdrop's enable
+ * flow resolves the dependency graph, so a Drop module whose contrib dep
+ * was checked in the same submit will pick up that dep correctly.
  */
 function drop_start_step_modules_submit($form, &$form_state) {
-  if (empty($form_state['values']['enable_deps'])) {
+  $deps = !empty($form_state['values']['enable_deps'])
+    ? array_values(array_filter($form_state['values']['enable_deps']))
+    : array();
+  $drop = !empty($form_state['values']['enable_drop_modules'])
+    ? array_values(array_filter($form_state['values']['enable_drop_modules']))
+    : array();
+
+  if (empty($deps) && empty($drop)) {
     return;
   }
-  $to_enable = array_values(array_filter($form_state['values']['enable_deps']));
-  if (empty($to_enable)) {
-    return;
-  }
+
+  $to_enable = array_values(array_unique(array_merge($deps, $drop)));
   if (module_enable($to_enable)) {
-    backdrop_set_message(format_plural(count($to_enable),
-      'Enabled 1 contrib dependency: @list.',
-      'Enabled @count contrib dependencies: @list.',
-      array('@list' => implode(', ', $to_enable))
-    ));
+    $messages = array();
+    if (!empty($deps)) {
+      $messages[] = format_plural(count($deps),
+        'Enabled 1 contrib dependency: @list.',
+        'Enabled @count contrib dependencies: @list.',
+        array('@list' => implode(', ', $deps))
+      );
+    }
+    if (!empty($drop)) {
+      $messages[] = format_plural(count($drop),
+        'Enabled 1 Drop Suite module: @list.',
+        'Enabled @count Drop Suite modules: @list.',
+        array('@list' => implode(', ', $drop))
+      );
+    }
+    backdrop_set_message(implode(' ', $messages));
   }
   // Stay on this step so the admin sees the updated state.
   $form_state['drop_start_no_advance'] = TRUE;
@@ -695,6 +748,40 @@ function _drop_start_step_modules_enabled() {
   }
   ksort($enabled);
   return $enabled;
+}
+
+/**
+ * Surveys Drop Suite modules and buckets them by state.
+ *
+ * @return array
+ *   Three buckets: 'enabled', 'disabled' (on disk, not enabled), and
+ *   'missing' (not on disk). Each bucket is keyed by machine name with
+ *   {name, description} metadata. drop_base and drop_start are always
+ *   filtered out — they're the required substrate.
+ */
+function _drop_start_step_modules_drop_survey() {
+  $drop_modules = drop_base_get_drop_module_names();
+  $all = system_rebuild_module_data();
+  $skip = array('drop_base' => TRUE, 'drop_start' => TRUE);
+  $buckets = array('enabled' => array(), 'disabled' => array(), 'missing' => array());
+
+  foreach (array_keys($drop_modules) as $machine) {
+    if (isset($skip[$machine])) {
+      continue;
+    }
+    if (empty($all[$machine])) {
+      $buckets['missing'][$machine] = array('name' => $machine, 'description' => '');
+      continue;
+    }
+    $name = !empty($all[$machine]->info['name']) ? $all[$machine]->info['name'] : $machine;
+    $desc = !empty($all[$machine]->info['description']) ? $all[$machine]->info['description'] : '';
+    $bucket = !empty($all[$machine]->status) ? 'enabled' : 'disabled';
+    $buckets[$bucket][$machine] = array('name' => $name, 'description' => $desc);
+  }
+  foreach ($buckets as $key => $_) {
+    ksort($buckets[$key]);
+  }
+  return $buckets;
 }
 
 /**
