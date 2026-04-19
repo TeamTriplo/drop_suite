@@ -395,6 +395,42 @@ function _drop_start_generate_users() {
       'label' => 'David O\'Connor',
       'roles' => array('team_member'),
     ),
+    'venue_pm' => array(
+      'name'  => 'amir.patel',
+      'mail'  => 'amir.patel@example.com',
+      'label' => 'Amir Patel',
+      'roles' => array('project_manager', 'team_member'),
+    ),
+    'broadcaster' => array(
+      'name'  => 'keiko.tanaka',
+      'mail'  => 'keiko.tanaka@example.com',
+      'label' => 'Keiko Tanaka',
+      'roles' => array('team_member'),
+    ),
+    'athlete_services' => array(
+      'name'  => 'lena.novak',
+      'mail'  => 'lena.novak@example.com',
+      'label' => 'Lena Novak',
+      'roles' => array('team_member'),
+    ),
+    'security' => array(
+      'name'  => 'marcus.johnson',
+      'mail'  => 'marcus.johnson@example.com',
+      'label' => 'Marcus Johnson',
+      'roles' => array('team_member'),
+    ),
+    'logistics' => array(
+      'name'  => 'yasmin.khalid',
+      'mail'  => 'yasmin.khalid@example.com',
+      'label' => 'Yasmin Khalid',
+      'roles' => array('team_member'),
+    ),
+    'media' => array(
+      'name'  => 'emma.lindqvist',
+      'mail'  => 'emma.lindqvist@example.com',
+      'label' => 'Emma Lindqvist',
+      'roles' => array('team_member'),
+    ),
   );
 
   $uids = array();
