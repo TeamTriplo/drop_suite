@@ -334,10 +334,21 @@ a.drop-section-add {
   line-height: 1.2;
 }
 
-/* Local task tabs — lighter than Backdrop's default admin box-tab style.
+/* Section Navigation and Page Tabs: cap at narrow-page width on all pages,
+   centered on the viewport. Keeps these header elements in a stable
+   horizontal position regardless of the content width below. */
+.l-top .block-drop-base-drop-section-nav,
+.l-top nav.tabs {
+  max-width: var(--drop-narrow-page-width, 1000px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Local task tabs — rendered as a segmented pill group.
+   View / Edit / Revisions are exclusive modes of the same entity, so they
+   read as a connected segmented control rather than individual pills.
    Neutralises Basis theme's dark banner (nav.tabs:before in basis/skin.css
-   line 881) so tabs sit on the page background and the folder-tab styling
-   below reads correctly. */
+   line 881). */
 .l-top .tabs {
   margin-bottom: 0.4rem;
 }
@@ -347,36 +358,52 @@ a.drop-section-add {
 }
 
 .l-top ul.tabs.primary {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
   background: transparent;
-  border-bottom: 1px solid #d0d0d0;
+  border: 1px solid #c8c8c8;
+  border-radius: 999px;
+  overflow: hidden;
   margin: 0 0 0.5rem;
   padding: 0;
+  list-style: none;
+}
+
+.l-top ul.tabs.primary li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.l-top ul.tabs.primary li + li {
+  border-left: 1px solid #c8c8c8;
 }
 
 .l-top ul.tabs.primary li a {
-  background: #f2f2f2;
-  border: 1px solid #d4d4d4;
-  border-bottom: none;
-  border-radius: 3px 3px 0 0;
+  display: block;
+  background: #fff;
+  border: none;
+  border-radius: 0;
   color: #555;
-  font-size: 0.8em;
+  font-size: 0.82em;
   font-weight: 600;
   letter-spacing: 0.01em;
-  padding: 0.3em 0.8em;
+  padding: 0.35em 0.95em;
+  text-decoration: none;
   text-transform: none;
 }
 
 .l-top ul.tabs.primary li a:hover {
-  background: #e6e6e6;
+  background: #f2f2f2;
   color: #222;
   text-decoration: none;
 }
 
-.l-top ul.tabs.primary li.active a {
-  background: #fff;
-  border-bottom-color: #fff;
-  color: var(--drop-primary, #1565c0);
-  font-weight: 700;
+.l-top ul.tabs.primary li.active a,
+.l-top ul.tabs.primary li.active a:hover {
+  background: var(--drop-primary, #1565c0);
+  color: #fff;
 }
 
 /* ---------------------------------------------------------------------------

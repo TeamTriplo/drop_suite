@@ -31,13 +31,20 @@
 function drop_base_preprocess_layout(&$variables) {
   $path = current_path();
 
+  // Expose the configured narrow-page width as a CSS variable on every page
+  // so static CSS can cap the Section Nav and Page Tabs blocks to the same
+  // width on wide pages (keeps header elements in a stable position).
+  $narrow_width = (int) config_get('drop_base.settings', 'narrow_page_width');
+  if ($narrow_width) {
+    backdrop_add_css(':root { --drop-narrow-page-width: ' . $narrow_width . 'px; }', 'inline');
+  }
+
   // Narrow-page detection runs for ALL paths, since a few matched routes
   // live outside drop/* (e.g. node/add/doc).
   if (_drop_base_is_narrow_page($path)) {
     $variables['classes'][] = 'drop-narrow-page';
-    $width = config_get('drop_base.settings', 'narrow_page_width');
-    if ($width) {
-      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . (int) $width . 'px; margin: 0 auto; }', 'inline');
+    if ($narrow_width) {
+      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . $narrow_width . 'px; margin: 0 auto; }', 'inline');
     }
   }
 
