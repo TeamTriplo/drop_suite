@@ -255,6 +255,13 @@ function drop_start_drop_start_steps() {
       // No status_callback — the wizard's state-based fallback handles it.
       'description' => t('Enable the Drop Suite modules you want to use.'),
     ),
+    'home_nav' => array(
+      'title'           => t('Home page navigation'),
+      'weight'          => -20,
+      'callback'        => 'drop_start_step_home_nav',
+      'status_callback' => 'drop_start_step_home_nav_status',
+      'description'     => t('Add the Drop Suite navigation to your home page layout.'),
+    ),
     'done' => array(
       'title'           => t('Done'),
       'weight'          => 100,

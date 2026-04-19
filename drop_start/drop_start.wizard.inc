@@ -494,6 +494,181 @@ function _drop_start_step_modules_enabled() {
 }
 
 // ---------------------------------------------------------------------------
+// Step: Home page navigation
+// ---------------------------------------------------------------------------
+//
+// Moved from drop_base in phase 5 of the wizard build (tid 566). The old
+// /drop/settings/home-nav route now 301-redirects to this step.
+
+/**
+ * The Drop Suite navigation blocks that can be added to the home layout.
+ * Keyed by plugin name (module:delta).
+ */
+function _drop_start_home_nav_blocks() {
+  return array(
+    'drop_base:drop_nav'         => t('Drop Navigation'),
+    'drop_base:drop_section_nav' => t('Drop Section Navigation'),
+  );
+}
+
+/**
+ * Inspects the home layout and returns which Drop nav blocks are present.
+ *
+ * @return array
+ *   - layout: Loaded home Layout object (or FALSE if missing).
+ *   - present: plugin => uuid for blocks already in the layout.
+ *   - missing: plugin => label for blocks not yet in the layout.
+ */
+function _drop_start_home_nav_state() {
+  $state = array('layout' => FALSE, 'present' => array(), 'missing' => array());
+  $layout = layout_load('home');
+  if (!$layout) {
+    return $state;
+  }
+  $state['layout'] = $layout;
+  $wanted = _drop_start_home_nav_blocks();
+  foreach ($layout->content as $uuid => $block) {
+    if (isset($block->plugin) && isset($wanted[$block->plugin])) {
+      $state['present'][$block->plugin] = $uuid;
+    }
+  }
+  $state['missing'] = array_diff_key($wanted, $state['present']);
+  return $state;
+}
+
+/**
+ * Picks the best region on the home layout to place Drop Suite nav blocks.
+ */
+function _drop_start_home_nav_target_region($layout) {
+  foreach (array('navigation', 'top', 'header') as $preferred) {
+    if (isset($layout->positions[$preferred])) {
+      return $preferred;
+    }
+  }
+  $keys = array_keys($layout->positions);
+  return reset($keys);
+}
+
+/**
+ * Wizard step: Home page navigation.
+ */
+function drop_start_step_home_nav($form, &$form_state) {
+  $subform = array();
+  $state = _drop_start_home_nav_state();
+
+  $subform['intro'] = array(
+    '#markup' => '<h2>' . t('Home page navigation') . '</h2>'
+      . '<p>' . t('The Backdrop home page uses its own layout, so the Drop Suite primary navigation that appears on the rest of your site is not shown there by default. This step can add the Drop Suite nav blocks to the top of your home layout so people arriving at the home page can jump straight into tickets, tasks, and other Drop modules.') . '</p>'
+      . '<p>' . t('You can always fine-tune placement later at <em>Structure → Layouts → Home page</em>.') . '</p>',
+  );
+
+  if (!$state['layout']) {
+    $subform['no_layout'] = array(
+      '#markup' => '<p><strong>' . t('No home layout was found.') . '</strong> ' . t('This site does not appear to have a layout named "home", so there is nothing to update here. Click Continue to move on.') . '</p>',
+    );
+    return $subform;
+  }
+
+  $wanted = _drop_start_home_nav_blocks();
+  $rows = array();
+  foreach ($wanted as $plugin => $label) {
+    $rows[] = array(
+      check_plain($label),
+      isset($state['present'][$plugin]) ? t('Present') : '<em>' . t('Not added') . '</em>',
+    );
+  }
+  $subform['status'] = array(
+    '#markup' => theme('table', array(
+      'header' => array(t('Navigation block'), t('Status on home layout')),
+      'rows'   => $rows,
+    )),
+  );
+
+  if (empty($state['missing'])) {
+    $subform['already'] = array(
+      '#markup' => '<p><strong>' . t('✓ All Drop Suite navigation blocks are already on the home layout.') . '</strong></p>',
+    );
+    $subform['remove'] = array(
+      '#type'        => 'checkbox',
+      '#title'       => t('Remove Drop Suite navigation from home page'),
+      '#default_value' => FALSE,
+      '#description' => t('Check to revert. Leave unchecked and click Continue to keep the current layout.'),
+    );
+  }
+  else {
+    $subform['add'] = array(
+      '#type'          => 'checkbox',
+      '#title'         => t('Add Drop Suite navigation to home page'),
+      '#default_value' => TRUE,
+      '#description'   => t('Uncheck to skip. You can always return to this step later.'),
+    );
+  }
+
+  return $subform;
+}
+
+/**
+ * Status: 'configured' if all blocks present, 'not_started' otherwise.
+ */
+function drop_start_step_home_nav_status() {
+  $state = _drop_start_home_nav_state();
+  if (!$state['layout']) {
+    // No home layout to configure — count as configured.
+    return 'configured';
+  }
+  return empty($state['missing']) ? 'configured' : 'not_started';
+}
+
+/**
+ * Custom submit: apply the add/remove choice, if any.
+ */
+function drop_start_step_home_nav_submit($form, &$form_state) {
+  if (!empty($form_state['values']['add'])) {
+    _drop_start_home_nav_apply('add');
+  }
+  elseif (!empty($form_state['values']['remove'])) {
+    _drop_start_home_nav_apply('remove');
+  }
+}
+
+/**
+ * Applies the add or remove operation to the home layout.
+ */
+function _drop_start_home_nav_apply($op) {
+  $state = _drop_start_home_nav_state();
+  if (!$state['layout']) {
+    backdrop_set_message(t('Home layout could not be loaded.'), 'error');
+    return;
+  }
+  $layout = $state['layout'];
+
+  if ($op === 'add') {
+    $region = _drop_start_home_nav_target_region($layout);
+    $added  = 0;
+    foreach (array_keys($state['missing']) as $plugin) {
+      list($module, $delta) = explode(':', $plugin, 2);
+      $layout->addBlock($module, $delta, $region);
+      $added++;
+    }
+    if ($added) {
+      $layout->save();
+      backdrop_set_message(t('Added @count Drop Suite navigation block(s) to the home layout.', array('@count' => $added)));
+    }
+  }
+  elseif ($op === 'remove') {
+    $removed = 0;
+    foreach ($state['present'] as $plugin => $uuid) {
+      $layout->removeBlock($uuid);
+      $removed++;
+    }
+    if ($removed) {
+      $layout->save();
+      backdrop_set_message(t('Removed @count Drop Suite navigation block(s) from the home layout.', array('@count' => $removed)));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step: Done
 // ---------------------------------------------------------------------------
 

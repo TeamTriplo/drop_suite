@@ -227,6 +227,16 @@ function _drop_base_is_narrow_page($path) {
 }
 
 /**
+ * Page callback: 301 redirect from /drop/settings/home-nav to the wizard step.
+ *
+ * The home-page-navigation tool moved into the Drop Start wizard. Any
+ * bookmarks to the old path land here and get forwarded to the new home.
+ */
+function _drop_base_home_nav_redirect() {
+  backdrop_goto('drop/start/step/home_nav', array(), 301);
+}
+
+/**
  * Returns a renderable local-action entry for the pin/unpin button, or NULL.
  *
  * Used by hook_menu_local_tasks_alter() to inject the pin action into the
@@ -1344,14 +1354,13 @@ function drop_base_menu() {
     'file'             => 'drop_base.nav_admin.inc',
   );
 
-  // --- Home page navigation setup ---
+  // --- Home page navigation (moved to Drop Start wizard; 301 redirect) ---
   $items['drop/settings/home-nav'] = array(
     'title'            => 'Home page navigation',
-    'description'      => 'Add Drop Suite navigation blocks to the Backdrop home page.',
-    'page callback'    => 'drop_base_home_nav_page',
+    'page callback'    => '_drop_base_home_nav_redirect',
     'access callback'  => 'user_access',
     'access arguments' => array('administer site configuration'),
-    'file'             => 'drop_base.pages.inc',
+    'type'             => MENU_CALLBACK,
   );
 
   // --- Drop Suite modules (scoped enable/disable page) ---
