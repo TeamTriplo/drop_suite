@@ -426,6 +426,74 @@ function drop_start_step_sample_content_submit($form, &$form_state) {
 }
 
 // ---------------------------------------------------------------------------
+// Step: Modules
+// ---------------------------------------------------------------------------
+
+/**
+ * Shows a summary of currently-enabled Drop modules and links out to the
+ * dedicated modules page for enable/disable. We intentionally don't embed
+ * the full modules form in-line: enabling modules runs install hooks and
+ * rebuilds the menu, which doesn't play nicely inside a wizard subform.
+ * The admin heads to /drop/settings/modules, saves, and returns here.
+ */
+function drop_start_step_modules($form, &$form_state) {
+  $subform = array();
+
+  $subform['intro'] = array(
+    '#markup' => '<h2>' . t('Enable Drop Suite modules') . '</h2>'
+      . '<p>' . t('Pick which Drop Suite modules you want on this site. You can always change your selection later from the same page.') . '</p>',
+  );
+
+  $enabled_list = _drop_start_step_modules_enabled();
+
+  if (!empty($enabled_list)) {
+    $items = array();
+    foreach ($enabled_list as $machine => $info) {
+      $items[] = '<strong>' . check_plain($info['name']) . '</strong> <small class="drop-start-module-machine">(' . check_plain($machine) . ')</small>';
+    }
+    $subform['enabled'] = array(
+      '#markup' => '<h3>' . t('Currently enabled') . '</h3>'
+        . theme('item_list', array('items' => $items)),
+    );
+  }
+  else {
+    $subform['none'] = array(
+      '#markup' => '<p><em>' . t('No Drop Suite modules are enabled yet.') . '</em></p>',
+    );
+  }
+
+  $subform['go'] = array(
+    '#markup' => '<p>'
+      . l(t('Open the modules page'), 'drop/settings/modules', array(
+          'attributes' => array('class' => array('button', 'button-primary')),
+          'query' => backdrop_get_destination(),
+        ))
+      . '</p>'
+      . '<p class="description">' . t('The modules page opens in the same tab. After saving, return here with your browser\'s Back button (or revisit this wizard step) and click Continue.') . '</p>',
+  );
+
+  return $subform;
+}
+
+/**
+ * Returns enabled Drop Suite modules keyed by machine name.
+ */
+function _drop_start_step_modules_enabled() {
+  $drop_modules = drop_base_get_drop_module_names();
+  $all = system_rebuild_module_data();
+  $enabled = array();
+  foreach (array_keys($drop_modules) as $module) {
+    if (!empty($all[$module]) && !empty($all[$module]->status)) {
+      $enabled[$module] = array(
+        'name' => !empty($all[$module]->info['name']) ? $all[$module]->info['name'] : $module,
+      );
+    }
+  }
+  ksort($enabled);
+  return $enabled;
+}
+
+// ---------------------------------------------------------------------------
 // Step: Done
 // ---------------------------------------------------------------------------
 

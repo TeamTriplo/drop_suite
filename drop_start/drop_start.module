@@ -248,6 +248,13 @@ function drop_start_drop_start_steps() {
       'status_callback' => 'drop_start_step_sample_content_status',
       'description'     => t('Populate your site with demo content you can explore.'),
     ),
+    'modules' => array(
+      'title'       => t('Modules'),
+      'weight'      => -40,
+      'callback'    => 'drop_start_step_modules',
+      // No status_callback — the wizard's state-based fallback handles it.
+      'description' => t('Enable the Drop Suite modules you want to use.'),
+    ),
     'done' => array(
       'title'           => t('Done'),
       'weight'          => 100,
