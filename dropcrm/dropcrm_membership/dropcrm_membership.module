@@ -839,18 +839,23 @@ function dropcrm_membership_block_view($delta = '', $settings = array(), $contex
 // ---------------------------------------------------------------------------
 
 /**
- * Implements hook_entity_view().
+ * Implements hook_dropcrm_contact_view_alter().
  *
- * Adds a "Memberships" section to crm_contact view pages.
+ * Adds a "Memberships" section to the contact view page. DropCRM's contact
+ * view callback (dropcrm_contact_view) is a custom render pipeline that does
+ * not call entity_view() for person bundles, so hook_entity_view never fires
+ * on them. The dropcrm_contact_view alter hook runs for every bundle and is
+ * the correct extension point.
  */
-function dropcrm_membership_entity_view($entity, $type, $view_mode, $langcode) {
-  if ($type !== 'crm_contact') {
-    return;
-  }
+function dropcrm_membership_dropcrm_contact_view_alter(&$output, $contact) {
   if (!user_access('access dropcrm_membership')) {
     return;
   }
-  $rows = db_query('SELECT mid, member_id, type, status FROM {crm_membership} WHERE cid = :cid ORDER BY mid DESC', array(':cid' => $entity->cid))->fetchAll();
+
+  $rows = db_query('SELECT mid, member_id, type, status FROM {crm_membership} WHERE cid = :cid ORDER BY mid DESC', array(':cid' => $contact->cid))->fetchAll();
+
+  // Hide the section entirely when there are no memberships and the viewer
+  // cannot add one — nothing actionable to show.
   if (empty($rows) && !user_access('manage dropcrm_membership')) {
     return;
   }
@@ -883,11 +888,11 @@ function dropcrm_membership_entity_view($entity, $type, $view_mode, $langcode) {
   );
   if (user_access('manage dropcrm_membership')) {
     $content['add_link'] = array(
-      '#markup' => '<p>' . l(t('Add membership'), 'drop/crm/memberships/add', array('query' => array('cid' => $entity->cid))) . '</p>',
+      '#markup' => '<p>' . l(t('Add membership'), 'drop/crm/memberships/add', array('query' => array('cid' => $contact->cid))) . '</p>',
     );
   }
 
-  $entity->content['memberships'] = array(
+  $output['memberships'] = array(
     '#prefix' => '<div class="crm-contact-memberships"><h3>' . t('Memberships') . '</h3>',
     '#suffix' => '</div>',
     '#weight' => 18,
