@@ -205,16 +205,19 @@ function drop_start_step_status($full_key) {
 
 /**
  * Returns an overall wizard state: 'not_started', 'in_progress', or 'complete'.
+ *
+ * "Complete" means the user clicked Finish on the Done step (drop_start:done
+ * is in state['completed']). This is a deliberate user gesture, not an
+ * "all steps touched" heuristic — admins can skip around, leave steps
+ * undone, and still explicitly close the wizard when they're ready.
  */
 function drop_start_wizard_overall_state() {
   $state = drop_start_wizard_state_get();
-  $steps = drop_start_get_steps();
+  if (in_array('drop_start:done', $state['completed'], TRUE)) {
+    return 'complete';
+  }
   if (empty($state['completed']) && empty($state['skipped'])) {
     return 'not_started';
-  }
-  $touched = count($state['completed']) + count($state['skipped']);
-  if ($touched >= count($steps)) {
-    return 'complete';
   }
   return 'in_progress';
 }
