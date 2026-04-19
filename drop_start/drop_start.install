@@ -20,14 +20,27 @@ function drop_start_install() {
 }
 
 /**
- * Adds drop_start:wizard_progress to the TOP region of the default and
- * admin_default layouts, at position 0. Placing on both layouts means the
- * admin can detour into /admin/* (e.g. the modules page) during setup and
- * still have a one-click path back to the wizard. Idempotent per layout.
+ * Adds drop_start:wizard_progress to the TOP region of the drop_pages and
+ * admin_default layouts, at position 0. drop_pages covers /drop/* pages;
+ * admin_default covers /admin/* pages so the admin can detour and still
+ * have a one-click path back to the wizard. Idempotent per layout.
+ *
+ * As a migration step, also strips the block from the default layout if
+ * it was placed there by earlier versions of this installer.
  */
 function _drop_start_install_progress_block() {
   module_load_include('install', 'drop_base');
-  foreach (array('default', 'admin_default') as $layout_name) {
+
+  // Remove any stale placement on the default layout (pre-drop_pages split).
+  $default = layout_load('default');
+  if ($default) {
+    $removed = _drop_base_remove_blocks_by_plugin($default, array('drop_start:wizard_progress'));
+    if ($removed) {
+      $default->save();
+    }
+  }
+
+  foreach (array('drop_pages', 'admin_default') as $layout_name) {
     $layout = layout_load($layout_name);
     if (!$layout) {
       continue;
@@ -133,4 +146,13 @@ function drop_start_update_1100() {
 function drop_start_update_1101() {
   _drop_start_install_progress_block();
   return t('Added the wizard-progress block to the admin_default layout.');
+}
+
+/**
+ * Re-place the wizard-progress block: strip it from default (which reverted
+ * to stock in drop_base_update_1207) and add it to drop_pages instead.
+ */
+function drop_start_update_1102() {
+  _drop_start_install_progress_block();
+  return t('Moved the wizard-progress block to the drop_pages layout.');
 }

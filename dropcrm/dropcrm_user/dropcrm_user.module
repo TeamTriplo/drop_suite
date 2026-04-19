@@ -76,7 +76,7 @@ function dropcrm_user_user_view($account, $view_mode, $langcode) {
   }
 
   $account->content['dropcrm_user'] = array(
-    '#type'   => 'user_profile_item',
+    '#type'   => 'item',
     '#title'  => t('CRM Contact'),
     '#markup' => $markup,
     '#weight' => 20,

@@ -237,6 +237,32 @@ function _drop_base_home_nav_redirect() {
 }
 
 /**
+ * Implements hook_layout_load_by_router_item_alter().
+ *
+ * Injects the drop_pages layout for any non-admin router path under /drop,
+ * so Drop Suite pages use the drop_suite template while the rest of the
+ * site falls through to the regular default layout. Enumerating 300+
+ * concrete router paths in a layout's additional_paths is impractical;
+ * this hook is the cleaner alternative.
+ */
+function drop_base_layout_load_by_router_item_alter(&$layouts, $router_item) {
+  $path = isset($router_item['path']) ? $router_item['path'] : '';
+  if ($path !== 'drop' && strpos($path, 'drop/') !== 0) {
+    return;
+  }
+  // /admin/* paths use admin_default; leave them alone.
+  if (path_is_admin($path)) {
+    return;
+  }
+  $drop_pages = layout_load('drop_pages');
+  if (!$drop_pages || !empty($drop_pages->disabled)) {
+    return;
+  }
+  // Prepend so drop_pages wins over the default layout.
+  $layouts = array('drop_pages' => $drop_pages) + $layouts;
+}
+
+/**
  * Returns a renderable local-action entry for the pin/unpin button, or NULL.
  *
  * Used by hook_menu_local_tasks_alter() to inject the pin action into the
@@ -1747,14 +1773,18 @@ function drop_base_team_page() {
 
   $role_labels = user_roles();
   $can_see_tickets = module_exists('droptickets') && user_access('access droptickets');
+  $can_see_users   = user_access('access user profiles');
+  $has_crm_link    = module_exists('dropcrm_user');
 
   $rows = array();
   foreach ($ordered as $account) {
     $last_seen = $account->access
       ? t('@time ago', array('@time' => format_interval(REQUEST_TIME - $account->access)))
       : t('Never');
-    $name = $can_see_tickets
-      ? l($account->name, 'drop/tickets/member/' . $account->uid)
+
+    // Name links to user profile when available, otherwise plain.
+    $name = $can_see_users
+      ? l($account->name, 'user/' . $account->uid)
       : check_plain($account->name);
 
     $user_role_labels = array();
@@ -1769,12 +1799,25 @@ function drop_base_team_page() {
     }
     $roles_display = $user_role_labels ? implode(', ', $user_role_labels) : '—';
 
-    $rows[] = array($name, $roles_display, $last_seen);
+    // Contextual links: Tickets + Contact (if each is available).
+    $links = array();
+    if ($can_see_tickets) {
+      $links[] = l(t('Tickets'), 'drop/tickets/member/' . $account->uid);
+    }
+    if ($has_crm_link) {
+      $contact = dropcrm_user_get_contact($account->uid);
+      if ($contact) {
+        $links[] = l(t('Contact'), 'drop/crm/contact/' . $contact->cid);
+      }
+    }
+    $links_display = $links ? implode(' · ', $links) : '—';
+
+    $rows[] = array($name, $roles_display, $last_seen, $links_display);
   }
 
   return array(
     '#theme'  => 'table',
-    '#header' => array(t('Name'), t('Roles'), t('Last online')),
+    '#header' => array(t('Name'), t('Roles'), t('Last online'), t('Links')),
     '#rows'   => $rows,
     '#attributes' => array('class' => array('drop-team-table')),
   );
