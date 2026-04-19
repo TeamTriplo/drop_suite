@@ -74,12 +74,39 @@ function dropcrm_membership_schema() {
         'not null'    => TRUE,
         'default'     => 0,
       ),
+      // Denormalized cache columns, maintained by hook_crm_membership_term_*
+      // and hook_crm_membership_payment_* in dropcrm_membership.module.
+      // Exposed to Views as native base-table fields so admin lists + the
+      // expiring-soon block and per-contact block stay one row per membership.
+      'current_end_date' => array(
+        'description' => "Latest term's end_date (YYYY-MM-DD). NULL for lifetime terms or memberships with no terms.",
+        'mysql_type'  => 'date',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => FALSE,
+      ),
+      'last_payment_date' => array(
+        'description' => "Most recent payment's paid_date (YYYY-MM-DD). NULL if no payments recorded.",
+        'mysql_type'  => 'date',
+        'type'        => 'varchar',
+        'length'      => 10,
+        'not null'    => FALSE,
+      ),
+      'total_paid' => array(
+        'description' => 'Sum of all payments recorded against this membership.',
+        'type'        => 'numeric',
+        'precision'   => 10,
+        'scale'       => 2,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
     ),
     'primary key' => array('mid'),
     'indexes' => array(
-      'cid'             => array('cid'),
-      'status'          => array('status'),
-      'status_type'     => array('status', 'type'),
+      'cid'               => array('cid'),
+      'status'            => array('status'),
+      'status_type'       => array('status', 'type'),
+      'current_end_date'  => array('current_end_date'),
     ),
     'unique keys' => array(
       'member_id' => array('member_id'),
@@ -344,4 +371,84 @@ function dropcrm_membership_update_1000() {
     $count++;
   }
   return t('Backfilled Member IDs for @count membership(s).', array('@count' => $count));
+}
+
+/**
+ * Add three denormalized cache columns to crm_membership and backfill from
+ * existing term / payment data. Exposes current_end_date, last_payment_date,
+ * and total_paid as native base-table fields for Views UI use.
+ */
+function dropcrm_membership_update_1001() {
+  $spec = array(
+    'current_end_date' => array(
+      'description' => 'Latest term end_date. NULL for lifetime or no terms.',
+      'mysql_type'  => 'date',
+      'type'        => 'varchar',
+      'length'      => 10,
+      'not null'    => FALSE,
+    ),
+    'last_payment_date' => array(
+      'description' => 'Most recent payment paid_date. NULL if no payments.',
+      'mysql_type'  => 'date',
+      'type'        => 'varchar',
+      'length'      => 10,
+      'not null'    => FALSE,
+    ),
+    'total_paid' => array(
+      'description' => 'Sum of all payments.',
+      'type'        => 'numeric',
+      'precision'   => 10,
+      'scale'       => 2,
+      'not null'    => TRUE,
+      'default'     => 0,
+    ),
+  );
+  foreach ($spec as $col => $def) {
+    if (!db_field_exists('crm_membership', $col)) {
+      db_add_field('crm_membership', $col, $def);
+    }
+  }
+  if (!db_index_exists('crm_membership', 'current_end_date')) {
+    db_add_index('crm_membership', 'current_end_date', array('current_end_date'));
+  }
+
+  // Backfill. Use one query per aggregate for simplicity; small data size.
+  db_query("
+    UPDATE {crm_membership} m
+    LEFT JOIN (
+      SELECT mid, end_date
+      FROM (
+        SELECT mid, end_date,
+               ROW_NUMBER() OVER (PARTITION BY mid ORDER BY start_date DESC, tid DESC) AS rn
+        FROM {crm_membership_term}
+      ) ranked
+      WHERE rn = 1
+    ) t ON t.mid = m.mid
+    SET m.current_end_date = t.end_date
+  ");
+  db_query("
+    UPDATE {crm_membership} m
+    LEFT JOIN (
+      SELECT mid, paid_date
+      FROM (
+        SELECT mid, paid_date,
+               ROW_NUMBER() OVER (PARTITION BY mid ORDER BY paid_date DESC, pid DESC) AS rn
+        FROM {crm_membership_payment}
+      ) ranked
+      WHERE rn = 1
+    ) p ON p.mid = m.mid
+    SET m.last_payment_date = p.paid_date
+  ");
+  db_query("
+    UPDATE {crm_membership} m
+    LEFT JOIN (
+      SELECT mid, COALESCE(SUM(amount), 0) AS total
+      FROM {crm_membership_payment}
+      GROUP BY mid
+    ) p ON p.mid = m.mid
+    SET m.total_paid = COALESCE(p.total, 0)
+  ");
+
+  $count = (int) db_query('SELECT COUNT(*) FROM {crm_membership}')->fetchField();
+  return t('Added current_end_date, last_payment_date, total_paid columns and backfilled @count membership(s).', array('@count' => $count));
 }

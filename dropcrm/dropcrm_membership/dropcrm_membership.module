@@ -180,14 +180,35 @@ function dropcrm_membership_entity_property_info() {
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
   );
-  // Computed property: earliest term start_date = effective joined date.
-  $m['joined_date'] = array(
-    'label'           => t('Joined Date'),
+  // Denormalized cache columns — kept fresh by hook_crm_membership_term_*
+  // and hook_crm_membership_payment_*. Declared as schema-backed properties
+  // so EntityPlusDefaultViewsController exposes them as native fields on
+  // the crm_membership base table (filterable, sortable, no relationship
+  // join required).
+  $m['current_end_date'] = array(
+    'label'           => t('Current term ends'),
     'type'            => 'date',
-    'description'     => t('Earliest term start date for this membership.'),
-    'getter callback' => '_dropcrm_membership_joined_date_get',
-    'computed'        => TRUE,
+    'description'     => t('End date of the latest term. NULL for lifetime memberships or memberships with no terms.'),
+    'schema field'    => 'current_end_date',
+    'getter callback' => '_dropcrm_membership_date_get',
   );
+  $m['last_payment_date'] = array(
+    'label'           => t('Last payment date'),
+    'type'            => 'date',
+    'description'     => t("Most recent payment's paid date. NULL if no payments recorded."),
+    'schema field'    => 'last_payment_date',
+    'getter callback' => '_dropcrm_membership_date_get',
+  );
+  $m['total_paid'] = array(
+    'label'           => t('Total paid'),
+    'type'            => 'decimal',
+    'description'     => t('Sum of all payments recorded against this membership.'),
+    'schema field'    => 'total_paid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  // Keep joined_date as a method on the entity class (not a property) — it's
+  // only used in PHP code paths and never changes after initial creation, so
+  // there's no reason to maintain it as a denormalized column.
 
   // --- crm_membership_term properties ---
   $t = &$info['crm_membership_term']['properties'];
@@ -488,6 +509,24 @@ function dropcrm_membership_menu() {
     'file'             => 'dropcrm_membership.admin.inc',
   );
 
+  // Term edit + delete — edit is 'manage', delete gated on 'administer'
+  // like payment delete.
+  $items['drop/crm/memberships/%crm_membership/term/%crm_membership_term/edit'] = array(
+    'title'            => 'Edit term',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_term_form', 3, 5),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+  $items['drop/crm/memberships/%crm_membership/term/%crm_membership_term/delete'] = array(
+    'title'            => 'Delete term',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_term_delete_form', 3, 5),
+    'access arguments' => array('administer dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
   // Cancel — action-bar verb, not a local task.
   $items['drop/crm/memberships/%crm_membership/cancel'] = array(
     'title'            => 'Cancel',
@@ -524,6 +563,14 @@ function crm_membership_load($mid) {
  */
 function crm_membership_payment_load($pid) {
   $entities = entity_load('crm_membership_payment', array($pid));
+  return $entities ? reset($entities) : FALSE;
+}
+
+/**
+ * Menu loader for %crm_membership_term.
+ */
+function crm_membership_term_load($tid) {
+  $entities = entity_load('crm_membership_term', array($tid));
   return $entities ? reset($entities) : FALSE;
 }
 
@@ -637,15 +684,85 @@ function _dropcrm_membership_payment_method_options() {
 }
 
 /**
- * Getter: computed joined_date property on crm_membership (earliest term's
- * start_date). Returns a Unix timestamp for Views date handler compatibility.
+ * Recomputes the three denormalized cache columns on a membership row from
+ * the current crm_membership_term and crm_membership_payment data.
+ *
+ * Called from the entity CRUD hooks on term and payment so the membership
+ * row always reflects the current latest-term and payment totals. Uses
+ * db_update (not $membership->save()) to avoid recursion with entity save
+ * hooks and to skip triggering entity-level cache invalidation when only
+ * the derived columns change.
  */
-function _dropcrm_membership_joined_date_get($membership, array $options, $name, $type, $info) {
-  $earliest = db_query('SELECT MIN(start_date) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $membership->mid))->fetchField();
-  if (empty($earliest) || $earliest === '0000-00-00') {
-    return NULL;
+function _dropcrm_membership_recompute_derived($mid) {
+  $mid = (int) $mid;
+  if (!$mid) {
+    return;
   }
-  return strtotime($earliest);
+
+  $end_date = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
+  if (empty($end_date) || $end_date === '0000-00-00') {
+    $end_date = NULL;
+  }
+
+  $paid_date = db_query('SELECT paid_date FROM {crm_membership_payment} WHERE mid = :mid ORDER BY paid_date DESC, pid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
+  if (empty($paid_date) || $paid_date === '0000-00-00') {
+    $paid_date = NULL;
+  }
+
+  $total_paid = (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
+
+  db_update('crm_membership')
+    ->fields(array(
+      'current_end_date'  => $end_date,
+      'last_payment_date' => $paid_date,
+      'total_paid'        => $total_paid,
+    ))
+    ->condition('mid', $mid)
+    ->execute();
+
+  entity_get_controller('crm_membership')->resetCache(array($mid));
+}
+
+/**
+ * Implements hook_crm_membership_term_insert().
+ */
+function dropcrm_membership_crm_membership_term_insert($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_term_update().
+ */
+function dropcrm_membership_crm_membership_term_update($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_term_delete().
+ */
+function dropcrm_membership_crm_membership_term_delete($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_insert().
+ */
+function dropcrm_membership_crm_membership_payment_insert($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_update().
+ */
+function dropcrm_membership_crm_membership_payment_update($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_delete().
+ */
+function dropcrm_membership_crm_membership_payment_delete($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
 }
 
 /**
