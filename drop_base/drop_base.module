@@ -214,6 +214,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/docs/settings#',
     '#^drop/time/settings#',
     '#^drop/files/settings#',
+    // Drop Start setup wizard (overview + per-step pages).
+    '#^drop/start#',
   );
 
   foreach ($patterns as $pattern) {
