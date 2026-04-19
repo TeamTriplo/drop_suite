@@ -334,9 +334,16 @@ a.drop-section-add {
   line-height: 1.2;
 }
 
-/* Local task tabs — lighter than Backdrop's default admin box-tab style */
+/* Local task tabs — lighter than Backdrop's default admin box-tab style.
+   Neutralises Basis theme's dark banner (nav.tabs:before in basis/skin.css
+   line 881) so tabs sit on the page background and the folder-tab styling
+   below reads correctly. */
 .l-top .tabs {
   margin-bottom: 0.4rem;
+}
+
+.l-top nav.tabs:before {
+  background-color: transparent;
 }
 
 .l-top ul.tabs.primary {
