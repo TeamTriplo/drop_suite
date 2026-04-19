@@ -170,8 +170,12 @@ function drop_start_installer_search($name) {
     backdrop_goto('drop/start/step/modules');
     return;
   }
-  // Installer browser stores the module-tab search filter under this key.
-  $_SESSION['installer_browser_text_filter_module'] = $name;
+  // The installer search hits backdropcms.org's index, which matches on
+  // project labels and descriptions — not machine names. A search for
+  // "entity_ui" returns nothing; "Entity UI" finds it. Convert underscores
+  // to spaces so "entity_ui" → "entity ui", which matches the human label.
+  $search_text = str_replace('_', ' ', $name);
+  $_SESSION['installer_browser_text_filter_module'] = $search_text;
   backdrop_goto('admin/modules/install');
 }
 
@@ -342,7 +346,7 @@ function drop_start_step_welcome($form, &$form_state) {
   $subform = array();
   $subform['intro'] = array(
     '#markup' => '<h2>' . t('Welcome to Drop Suite') . '</h2>'
-      . '<p>' . t('Drop Suite is a bundle of modules that turns your Backdrop site into a productivity hub — tickets, CRM, tasks, goals, time tracking, and more.') . '</p>'
+      . '<p>' . t('Drop Suite is a bundle of modules that turns your Backdrop site into a productivity hub — CRM, Strategic Goals, Team Ticket Management, and more.') . '</p>'
       . '<p>' . t('This wizard walks you through the essentials. Each step is optional except for Welcome and Done. You can skip anything you want to handle later, and you can re-run the wizard at any time from Settings.') . '</p>'
       . '<p>' . t('Click %continue to begin.', array('%continue' => t('Continue'))) . '</p>',
   );
