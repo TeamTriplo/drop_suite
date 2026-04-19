@@ -225,20 +225,29 @@ function _drop_base_is_narrow_page($path) {
 }
 
 /**
- * Returns a rendered pin/unpin action link for report pages, or empty string.
+ * Returns a renderable local-action entry for the pin/unpin button, or NULL.
+ *
+ * Used by hook_menu_local_tasks_alter() to inject the pin action into the
+ * Page Local Actions block on report pages. Returns NULL if the current path
+ * is not a known report, or the viewer lacks access.
+ *
+ * The render structure matches Backdrop's local-action conventions: a
+ * '#theme' => 'menu_local_action' wrapper with a '#link' array. When the
+ * user is at the pin limit, a non-link <li> is returned via '#markup'
+ * because there is no action to perform.
  *
  * @param string $path
  *   The current page path.
  *
- * @return string
- *   Rendered HTML, or empty string if not on a known report page.
+ * @return array|null
+ *   Render array suitable for $data['actions']['output'][], or NULL.
  */
-function _drop_base_report_pin_action($path) {
+function _drop_base_report_pin_action_item($path) {
   global $user;
 
   $all_reports = drop_base_get_all_reports();
   if (empty($all_reports)) {
-    return '';
+    return NULL;
   }
 
   // Build a path → report_id lookup.
@@ -257,7 +266,7 @@ function _drop_base_report_pin_action($path) {
     }
   }
   if (!isset($report_by_path[$path])) {
-    return '';
+    return NULL;
   }
 
   $report_id = $report_by_path[$path];
@@ -267,7 +276,7 @@ function _drop_base_report_pin_action($path) {
   if (!empty($report['access callback'])) {
     $args = !empty($report['access arguments']) ? $report['access arguments'] : array();
     if (!call_user_func_array($report['access callback'], $args)) {
-      return '';
+      return NULL;
     }
   }
 
@@ -275,18 +284,18 @@ function _drop_base_report_pin_action($path) {
   $is_pinned = in_array($report_id, $pins);
   $at_limit  = (count($pins) >= 8);
 
+  // At-limit state has no action — render as a plain non-link <li>.
+  if (!$is_pinned && $at_limit) {
+    $icon = icon('push-pin', array('attributes' => array('width' => 14, 'height' => 14)));
+    return array(
+      '#markup' => '<li><span class="drop-pin-link drop-pin-disabled">' . $icon . t('Pin limit reached (8)') . '</span></li>',
+    );
+  }
+
   if ($is_pinned) {
     $icon  = icon('push-pin-slash', array('attributes' => array('width' => 14, 'height' => 14)));
     $label = t('Unpin report');
     $class = 'drop-pin-link drop-pin-active';
-  }
-  elseif ($at_limit) {
-    $icon  = icon('push-pin', array('attributes' => array('width' => 14, 'height' => 14)));
-    $label = t('Pin limit reached (8)');
-    $class = 'drop-pin-link drop-pin-disabled';
-    return '<ul class="action-links drop-pin-action-list"><li>'
-      . '<span class="' . $class . '">' . $icon . $label . '</span>'
-      . '</li></ul>';
   }
   else {
     $icon  = icon('push-pin', array('attributes' => array('width' => 14, 'height' => 14)));
@@ -294,14 +303,33 @@ function _drop_base_report_pin_action($path) {
     $class = 'drop-pin-link';
   }
 
-  $href = 'drop-base/pin-report/' . $report_id;
-  $link = l($icon . $label, $href, array(
-    'html'       => TRUE,
-    'query'      => backdrop_get_destination(),
-    'attributes' => array('class' => array($class)),
-  ));
+  return array(
+    '#theme' => 'menu_local_action',
+    '#link' => array(
+      'title' => $icon . $label,
+      'href'  => 'drop-base/pin-report/' . $report_id,
+      'localized_options' => array(
+        'html'       => TRUE,
+        'query'      => backdrop_get_destination(),
+        'attributes' => array('class' => array($class)),
+      ),
+    ),
+  );
+}
 
-  return '<ul class="action-links drop-pin-action-list"><li>' . $link . '</li></ul>';
+/**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Injects the report pin/unpin button into the Page Local Actions list on
+ * report pages. Replaces the deprecated drop_pin_action block — keeps the
+ * action co-located with other local actions like "+ New ticket" rather
+ * than occupying its own block slot in the layout.
+ */
+function drop_base_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  $item = _drop_base_report_pin_action_item(current_path());
+  if ($item) {
+    $data['actions']['output'][] = $item;
+  }
 }
 
 /**
@@ -332,11 +360,6 @@ function drop_base_block_info() {
     'description' => t('Secondary navigation bar for the current Drop Suite section (module-specific links). Replaces Backdrop tabs on Drop pages.'),
     'cache'       => BACKDROP_NO_CACHE,
   );
-  $blocks['drop_pin_action'] = array(
-    'info'        => t('Drop Pin Action'),
-    'description' => t('Pin/unpin report button for the current Drop Suite report page. Place in the layout where action links should appear.'),
-    'cache'       => BACKDROP_NO_CACHE,
-  );
   return $blocks;
 }
 
@@ -357,17 +380,6 @@ function drop_base_block_view($delta = '') {
 
   if ($delta === 'drop_section_nav') {
     $html = _drop_base_section_nav_block();
-    if (!$html) {
-      return array();
-    }
-    return array(
-      'subject' => NULL,
-      'content' => $html,
-    );
-  }
-
-  if ($delta === 'drop_pin_action') {
-    $html = _drop_base_report_pin_action(current_path());
     if (!$html) {
       return array();
     }
@@ -1388,17 +1400,6 @@ function drop_base_menu() {
     'type'            => MENU_CALLBACK,
   );
   return $items;
-}
-
-/**
- * Implements hook_menu_local_tasks_alter().
- *
- * Pinned reports are now displayed in the Drop Section Navigation block
- * (_drop_base_section_nav_block), so they no longer need to be injected as
- * Local Tasks tabs here.
- */
-function drop_base_menu_local_tasks_alter(&$data, $router_item, $root_path) {
-  // No-op: section nav handles pinned report display.
 }
 
 // ---------------------------------------------------------------------------

@@ -194,43 +194,27 @@ function _drop_base_setup_default_layout() {
     }
   }
 
-  // Remove the "Page title combo" block if present.
-  foreach ($layout->content as $uuid => $block) {
-    if (isset($block->plugin) && $block->plugin === 'system:page_components:title_combo') {
-      $layout->removeBlock($uuid);
-      break;
-    }
-  }
+  // Remove blocks we don't want in the Drop Suite layout.
+  _drop_base_remove_blocks_by_plugin($layout, array(
+    'system:page_components:title_combo',
+    // drop_pin_action block is deprecated in favor of injecting the pin
+    // link into Page Local Actions via hook_menu_local_tasks_alter().
+    'drop_base:drop_pin_action',
+  ));
 
-  // Ensure essential PageComponents blocks are present. Check each one and
-  // add it if missing — the core default layout may not include all of them.
-  $essential_blocks = array(
+  // Ensure the required blocks are present in the TOP region. Idempotent:
+  // running this helper twice will not create duplicates.
+  $wanted = array(
     'system:page_components:tabs',
     'system:page_components:messages',
     'system:page_components:action_links',
+    'system:page_components:title',
+    'drop_base:drop_nav',
+    'drop_base:drop_section_nav',
   );
-  foreach ($essential_blocks as $plugin) {
-    $found = FALSE;
-    foreach ($layout->content as $block) {
-      if (isset($block->plugin) && $block->plugin === $plugin) {
-        $found = TRUE;
-        break;
-      }
-    }
-    if (!$found) {
-      // Plugin format is "module:delta" where delta may contain colons.
-      $colon = strpos($plugin, ':');
-      $module = substr($plugin, 0, $colon);
-      $delta = substr($plugin, $colon + 1);
-      $layout->addBlock($module, $delta, 'top');
-    }
+  foreach ($wanted as $plugin) {
+    _drop_base_ensure_block_in_region($layout, $plugin, 'top');
   }
-
-  // Add Drop Suite blocks to the TOP region.
-  $layout->addBlock('system', 'page_components:title', 'top');
-  $layout->addBlock('drop_base', 'drop_nav', 'top');
-  $layout->addBlock('drop_base', 'drop_pin_action', 'top');
-  $layout->addBlock('drop_base', 'drop_section_nav', 'top');
 
   // Reorder the TOP region so Local Tasks (page_components:tabs) renders
   // below Drop Section Navigation, not above the main nav. Core's default
@@ -243,6 +227,59 @@ function _drop_base_setup_default_layout() {
 
   $layout->save();
   backdrop_set_message(t('Drop Suite layout and blocks configured.'));
+}
+
+/**
+ * Idempotent add: ensures a block with the given plugin exists in a region.
+ *
+ * @param Layout $layout
+ *   Layout object (loaded via layout_load).
+ * @param string $plugin
+ *   Plugin identifier in the form "module:delta". Delta may contain colons
+ *   (e.g. "system:page_components:tabs") — everything after the first colon
+ *   is treated as the delta.
+ * @param string $region
+ *   Region machine name.
+ *
+ * @return string|null
+ *   The new block's UUID if added, or NULL if a block with this plugin was
+ *   already present anywhere in the layout.
+ */
+function _drop_base_ensure_block_in_region($layout, $plugin, $region) {
+  foreach ($layout->content as $block) {
+    if (isset($block->plugin) && $block->plugin === $plugin) {
+      return NULL;
+    }
+  }
+  $colon  = strpos($plugin, ':');
+  $module = substr($plugin, 0, $colon);
+  $delta  = substr($plugin, $colon + 1);
+  $block  = $layout->addBlock($module, $delta, $region);
+  return isset($block->uuid) ? $block->uuid : NULL;
+}
+
+/**
+ * Removes any blocks in the layout whose plugin matches the given list.
+ *
+ * @param Layout $layout
+ *   Layout object (loaded via layout_load).
+ * @param array $plugins
+ *   List of plugin identifiers ("module:delta") to remove. Matches all
+ *   occurrences — in case a block was accidentally added twice.
+ *
+ * @return int
+ *   Number of blocks removed.
+ */
+function _drop_base_remove_blocks_by_plugin($layout, array $plugins) {
+  $plugins = array_flip($plugins);
+  $removed = 0;
+  foreach ($layout->content as $uuid => $block) {
+    if (isset($block->plugin) && isset($plugins[$block->plugin])) {
+      $layout->removeBlock($uuid);
+      $removed++;
+    }
+  }
+  return $removed;
 }
 
 /**
@@ -434,5 +471,30 @@ function drop_base_update_1204() {
     ));
   }
   return t('No Drop Suite layouts needed reordering.');
+}
+
+/**
+ * Remove the deprecated drop_pin_action block from all layouts.
+ *
+ * Pin/unpin for reports now renders inside the Page Local Actions list via
+ * hook_menu_local_tasks_alter(). The standalone block is no longer
+ * registered. This update strips any placements from existing layouts so
+ * they don't render as empty/missing.
+ */
+function drop_base_update_1205() {
+  $cleaned = array();
+  foreach (layout_load_all() as $name => $layout) {
+    $removed = _drop_base_remove_blocks_by_plugin($layout, array('drop_base:drop_pin_action'));
+    if ($removed > 0) {
+      $layout->save();
+      $cleaned[] = $name . ' (' . $removed . ')';
+    }
+  }
+  if ($cleaned) {
+    return t('Removed deprecated drop_pin_action block from: @list.', array(
+      '@list' => implode(', ', $cleaned),
+    ));
+  }
+  return t('No layouts contained the deprecated drop_pin_action block.');
 }
 
