@@ -158,6 +158,24 @@ function drop_start_wizard_restart() {
 }
 
 /**
+ * Page callback: drop/start/find-module/{name}.
+ *
+ * Pre-populates the installer's text search filter (session-based) and
+ * redirects to /admin/modules/install. The admin lands on the installer
+ * with the missing module's name already filled in.
+ */
+function drop_start_installer_search($name) {
+  if (!module_exists('installer')) {
+    backdrop_set_message(t('The project installer module is not enabled. Enable it at the modules page first.'), 'warning');
+    backdrop_goto('drop/start/step/modules');
+    return;
+  }
+  // Installer browser stores the module-tab search filter under this key.
+  $_SESSION['installer_browser_text_filter_module'] = $name;
+  backdrop_goto('admin/modules/install');
+}
+
+/**
  * Resolves a URL step key (e.g. 'welcome' or 'drop_start:welcome') to a
  * full namespaced key. Accepts either form; returns NULL on no match.
  *
@@ -567,8 +585,8 @@ function drop_start_step_modules($form, &$form_state) {
     }
     $subform['deps_on_disk'] = array(
       '#type'        => 'fieldset',
-      '#title'       => t('Enable contrib dependencies on disk'),
-      '#description' => t('These contrib modules are downloaded to this site but not yet enabled. Each one is only needed if you plan to use the Drop Suite module that depends on it. Enabling them here unblocks the matching Drop modules on the modules page below.'),
+      '#title'       => t('Already downloaded — enable to use'),
+      '#description' => t('These contrib modules are already on this site but are turned off. Each one is only needed if you plan to use the Drop Suite module that depends on it. Check the ones you want and click Continue to turn them on — the Drop modules that need them will then be enable-able on the modules page below.'),
     );
     $subform['deps_on_disk']['enable_deps'] = array(
       '#type'          => 'checkboxes',
@@ -580,20 +598,32 @@ function drop_start_step_modules($form, &$form_state) {
   }
 
   if (!empty($dep_survey['missing'])) {
+    $installer_available = module_exists('installer');
     $items = array();
     foreach ($dep_survey['missing'] as $name => $info) {
-      $items[] = t('<strong>@label</strong> — needed if you want: @by. <a href="@proj" target="_blank">Find it on backdropcms.org</a>.', array(
+      if ($installer_available) {
+        $link = l(t('Find in the project installer'), 'drop/start/find-module/' . $name, array(
+          'attributes' => array('target' => '_blank'),
+        ));
+      }
+      else {
+        $link = l(t('Find on backdropcms.org'), 'https://backdropcms.org/project/' . $name, array(
+          'external'   => TRUE,
+          'attributes' => array('target' => '_blank'),
+        ));
+      }
+      $items[] = t('<strong>@label</strong> — needed if you want: @by. !link', array(
         '@label' => $info['label'],
         '@by'    => implode(', ', array_unique($info['needed_by'])),
-        '@proj'  => 'https://backdropcms.org/project/' . $name,
+        '!link'  => $link,
       ));
     }
     $subform['deps_missing'] = array(
       '#type'        => 'fieldset',
-      '#title'       => t('Contrib dependencies not installed on this site'),
-      '#description' => t('Some Drop Suite modules depend on separate contrib projects that are not yet downloaded. You only need these if you plan to use the dependent module. Install them via the <a href="@inst" target="_blank">project installer</a>, then come back to this step.', array(
-        '@inst' => url('admin/installer'),
-      )),
+      '#title'       => t('Not on this site yet — download if needed'),
+      '#description' => $installer_available
+        ? t('Some Drop Suite modules depend on separate contrib projects that are not yet on this site. You only need these if you plan to use the dependent Drop module. Each link below opens the project installer with the module name pre-filled in a new tab — install from there, then come back to this step.')
+        : t('Some Drop Suite modules depend on separate contrib projects that are not yet on this site. You only need these if you plan to use the dependent Drop module. Find and install each one, then come back to this step.'),
     );
     $subform['deps_missing']['list'] = array(
       '#markup' => theme('item_list', array('items' => $items)),
@@ -602,7 +632,7 @@ function drop_start_step_modules($form, &$form_state) {
 
   if (!empty($dep_survey['enabled']) && empty($dep_survey['disabled']) && empty($dep_survey['missing'])) {
     $subform['deps_ok'] = array(
-      '#markup' => '<p><strong>' . t('✓ All contrib dependencies for Drop Suite modules are installed and enabled.') . '</strong></p>',
+      '#markup' => '<p><strong>' . t('✓ All contrib dependencies for Drop Suite modules are downloaded and enabled.') . '</strong></p>',
     );
   }
 

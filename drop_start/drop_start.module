@@ -51,6 +51,19 @@ function drop_start_menu() {
     'type'             => MENU_CALLBACK,
   );
 
+  // Pre-populate the project installer's search and redirect to it. Used
+  // by the Modules wizard step to deep-link "Find it in the installer"
+  // for each missing contrib dependency.
+  $items['drop/start/find-module/%'] = array(
+    'title'            => 'Find module',
+    'page callback'    => 'drop_start_installer_search',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop_start'),
+    'file'             => 'drop_start.wizard.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   $items['drop/start/generate'] = array(
     'title'            => 'Generate sample content',
     'page callback'    => 'backdrop_get_form',
