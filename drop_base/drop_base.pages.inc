@@ -38,7 +38,13 @@ function drop_base_settings_dashboard() {
   $output = '<div class="drop-settings-dashboard">';
 
   foreach ($items as $key => $item) {
-    $output .= '<div class="drop-settings-card">';
+    $classes = array('drop-settings-card');
+    if (!empty($item['class'])) {
+      foreach ((array) $item['class'] as $c) {
+        $classes[] = $c;
+      }
+    }
+    $output .= '<div class="' . implode(' ', array_map('check_plain', $classes)) . '">';
     $output .= '<h3>' . l(check_plain($item['title']), $item['path']) . '</h3>';
     if (!empty($item['description'])) {
       $output .= '<p>' . check_plain($item['description']) . '</p>';

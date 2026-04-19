@@ -266,15 +266,28 @@ function drop_start_permission() {
 
 /**
  * Implements hook_drop_settings_info().
+ *
+ * The Setup wizard card is visually distinct (class: drop-settings-card--wizard)
+ * and ordered first on the dashboard. Its description adapts to wizard state.
  */
 function drop_start_drop_settings_info() {
+  module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  $overall = drop_start_wizard_overall_state();
+
+  $descriptions = array(
+    'not_started' => t('Set up your Drop Suite site — pick a theme, populate demo content, enable modules, and configure your home page.'),
+    'in_progress' => t('Resume the setup wizard. You can pick up where you left off or jump to any step.'),
+    'complete'    => t('Setup is complete. Re-run any step, or restart the wizard.'),
+  );
+
   return array(
-    'drop_start' => array(
-      'title' => t('Drop Start'),
-      'description' => t('Generate or remove sample content for demos and onboarding.'),
-      'path' => 'drop/start',
-      'permission' => 'administer drop_start',
-      'weight' => 50,
+    'drop_start_wizard' => array(
+      'title'       => t('Setup wizard'),
+      'description' => $descriptions[$overall],
+      'path'        => 'drop/start',
+      'permission'  => 'administer drop_start',
+      'weight'      => -100,
+      'class'       => array('drop-settings-card--wizard'),
     ),
   );
 }

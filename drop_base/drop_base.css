@@ -658,6 +658,27 @@ span.drop-pin-link.drop-pin-disabled {
   color: #64748b;
 }
 
+/* Setup wizard card — highlighted to draw the eye on fresh installs. */
+.drop-settings-card--wizard {
+  grid-column: 1 / -1;
+  background: #f0f7ff;
+  border-color: #1565c0;
+  border-left-width: 4px;
+}
+
+.drop-settings-card--wizard h3 {
+  font-size: 1.1rem;
+}
+
+.drop-settings-card--wizard h3 a {
+  color: #1565c0;
+}
+
+.drop-settings-card--wizard p {
+  color: #334155;
+  font-size: 0.95rem;
+}
+
 .drop-settings-footer {
   margin-top: 1.5rem;
   padding-top: 0.75rem;

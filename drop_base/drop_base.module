@@ -1617,13 +1617,6 @@ function drop_base_drop_settings_info() {
       'permission' => 'administer drop suite modules',
       'weight' => -10,
     ),
-    'drop_home_nav' => array(
-      'title' => t('Home page navigation'),
-      'description' => t('Add the Drop Suite primary navigation to your Backdrop home page layout.'),
-      'path' => 'drop/settings/home-nav',
-      'permission' => 'administer site configuration',
-      'weight' => 5,
-    ),
     'drop_navigation' => array(
       'title' => t('Primary navigation'),
       'description' => t('Reorder, rename, hide, and add shortcuts to the Drop Suite nav bar.'),

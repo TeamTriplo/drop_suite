@@ -9,6 +9,10 @@
  */
 function drop_start_install() {
   drop_base_grant_admin_permissions('drop_start');
+
+  backdrop_set_message(t('Drop Suite installed. <a href="@wizard">Run the setup wizard</a> to configure your site.', array(
+    '@wizard' => url('drop/start'),
+  )));
 }
 
 /**
