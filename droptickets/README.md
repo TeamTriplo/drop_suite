@@ -1,7 +1,7 @@
 # DropTickets
 
 Lightweight ticket tracking for small teams. Per-project ticket numbering,
-kanban board, watcher notifications, Slack integration, and JIRA import.
+kanban board, watcher notifications, and Slack integration.
 
 ## Features
 
@@ -48,12 +48,6 @@ kanban board, watcher notifications, Slack integration, and JIRA import.
 - Silence checkbox on create form (when webhook is configured)
 - Emoji reaction notifications (throttled: 1 per actor per ticket per 5 min)
 
-### JIRA import
-
-- CSV import with title, description, external link from Issue key
-- Batch tracking with delete capability
-- Imported tickets hidden by default with "Activate" workflow
-
 ### Project Mode
 
 Context-preserving navigation — when viewing tickets from a report page,
@@ -80,5 +74,15 @@ Context-preserving navigation — when viewing tickets from a report page,
 
 ## Configuration
 
-- `drop/tickets/settings` — notification lifetime, stale days, JIRA base URL,
-  flag limits, default watchers, emoji reactions toggle, Slack webhook URL
+- `drop/tickets/settings` — notification lifetime, stale days, flag limits,
+  default watchers, emoji reactions toggle, Slack webhook URL
+
+## Experimental features (via Drop Labs)
+
+Some features are gated on Drop Labs and off by default. Install the
+`drop_labs` module to expose the toggle UI at `drop/settings/labs`.
+
+- **CSV import (JIRA format)** — adds `drop/tickets/import` for importing
+  JIRA CSV exports. Maps only Summary → title and Description → body; does
+  not import status, priority, assignee, dates, comments, or attachments.
+  All rows land as open tasks at priority 3.

@@ -118,7 +118,7 @@ function droptickets_schema() {
         'length'      => 512,
         'not null'    => FALSE,
         'default'     => NULL,
-        'description' => 'Optional external URL, e.g. original JIRA issue link.',
+        'description' => 'Optional external URL linking this ticket to another tracker.',
       ),
       'parent_tid' => array(
         'type'        => 'int',
@@ -306,7 +306,7 @@ function droptickets_schema() {
   );
 
   $schema['drop_ticket_import'] = array(
-    'description' => 'Tracks batches of tickets imported from external sources (e.g. JIRA CSV).',
+    'description' => 'Tracks batches of tickets imported from external sources (e.g. CSV import).',
     'fields' => array(
       'import_id' => array(
         'type'     => 'varchar',
@@ -1763,4 +1763,31 @@ function droptickets_update_1033() {
   if ($permissions) {
     user_role_grant_permissions('team_member', $permissions);
   }
+}
+
+/**
+ * Grandfather the CSV importer: on sites already using it, keep it visible.
+ *
+ * The importer UI is now gated on droptickets.settings:import_enabled (off by
+ * default) and toggled via Drop Labs. On existing sites that have either
+ * imported tickets before or configured a JIRA base URL, we flip the flag ON
+ * so nothing disappears at update time. Fresh installs get FALSE via
+ * config/droptickets.settings.json.
+ */
+function droptickets_update_1034() {
+  $config = config('droptickets.settings');
+  if ($config->get('import_enabled') !== NULL) {
+    return;
+  }
+
+  $has_imports = db_query('SELECT 1 FROM {drop_ticket_import} LIMIT 1')->fetchField();
+  $jira_url    = (string) $config->get('jira_base_url');
+
+  $enabled = ((bool) $has_imports) || ($jira_url !== '');
+  $config->set('import_enabled', $enabled);
+  $config->save();
+
+  return $enabled
+    ? t('Grandfathered CSV importer as enabled (existing imports or JIRA base URL detected).')
+    : t('CSV importer left disabled (no prior use detected). Install drop_labs to toggle.');
 }

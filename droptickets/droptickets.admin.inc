@@ -284,7 +284,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#title'         => t('External link'),
     '#default_value' => ($is_edit && !empty($ticket->external_link)) ? $ticket->external_link : '',
     '#maxlength'     => 512,
-    '#description'   => t('Optional URL, e.g. the original JIRA issue.'),
+    '#description'   => t('Optional URL, e.g. a link to the original issue in another tracker.'),
     '#weight'        => -10,
   );
 
@@ -1047,20 +1047,25 @@ function droptickets_settings_form($form, &$form_state) {
     '#default_value' => $default_watcher_uids,
   );
 
-  // --- Import ---
-  $form['import'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Import'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-  );
-  $form['import']['jira_base_url'] = array(
-    '#type'          => 'textfield',
-    '#title'         => t('JIRA base URL'),
-    '#description'   => t('e.g. <code>https://yourteam.atlassian.net</code>. Used for ticket links when importing CSV.'),
-    '#default_value' => $config->get('jira_base_url'),
-    '#maxlength'     => 255,
-  );
+  // --- JIRA import --- (gated on Labs-managed import_enabled flag)
+  if (_droptickets_import_enabled()) {
+    $form['import'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('JIRA import'),
+      '#description' => t('Settings for the JIRA CSV importer at <a href="@url">@url</a>.', array(
+        '@url' => url('drop/tickets/import'),
+      )),
+      '#collapsible' => TRUE,
+      '#collapsed'   => TRUE,
+    );
+    $form['import']['jira_base_url'] = array(
+      '#type'          => 'textfield',
+      '#title'         => t('JIRA base URL'),
+      '#description'   => t('Your team\'s JIRA site — e.g. <code>https://yourteam.atlassian.net</code>. When imported CSV rows include an <em>Issue key</em> column, this URL is prepended to build a link back to the original JIRA issue (stored in the ticket\'s External link field).'),
+      '#default_value' => $config->get('jira_base_url'),
+      '#maxlength'     => 255,
+    );
+  }
 
   // --- Review mode ---
   $form['review'] = array(
