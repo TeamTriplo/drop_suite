@@ -830,11 +830,14 @@ function _dropcrm_generate_activity_subject(CrmActivity $activity) {
 function dropcrm_menu() {
   $items = array();
 
-  // CRM overview — parent page for all tabs.
+  // CRM landing page — shows the "People by Last Contact" report so admins
+  // land on an actionable working surface instead of a welcome page. The
+  // report is also reachable (unchanged) at /drop/crm/reports/last-contact
+  // to preserve bookmarks.
   $items['drop/crm'] = array(
     'title'            => 'CRM',
-    'description'      => 'Manage contacts, activities, and CRM settings.',
-    'page callback'    => 'dropcrm_admin_overview',
+    'description'      => 'People prioritized by how long since your last contact.',
+    'page callback'    => 'dropcrm_report_last_contact',
     'page arguments'   => array(),
     'access arguments' => array('access crm'),
     'file'             => 'dropcrm.admin.inc',
