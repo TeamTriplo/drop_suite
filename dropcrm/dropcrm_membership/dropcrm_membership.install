@@ -326,3 +326,22 @@ function _dropcrm_membership_ensure_activity_types() {
     $config->save();
   }
 }
+
+/**
+ * Backfill auto-generated Member IDs for existing memberships that have
+ * none set (member_id IS NULL or empty). Member IDs are now auto-generated
+ * on create; this catches anything created before that change.
+ */
+function dropcrm_membership_update_1000() {
+  module_load_include('module', 'dropcrm_membership');
+  $mids = db_query("SELECT mid FROM {crm_membership} WHERE member_id IS NULL OR member_id = ''")->fetchCol();
+  $count = 0;
+  foreach ($mids as $mid) {
+    db_update('crm_membership')
+      ->fields(array('member_id' => _dropcrm_membership_generate_member_id($mid)))
+      ->condition('mid', $mid)
+      ->execute();
+    $count++;
+  }
+  return t('Backfilled Member IDs for @count membership(s).', array('@count' => $count));
+}

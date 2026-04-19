@@ -239,13 +239,16 @@ function dropcrm_membership_form($form, &$form_state, $membership = NULL) {
     '#maxlength'         => 255,
   );
 
-  $form['member_id'] = array(
-    '#type'          => 'textfield',
-    '#title'         => t('Member ID'),
-    '#description'   => t('Optional human-friendly identifier (e.g. M-0042). Must be unique if set.'),
-    '#default_value' => $membership->member_id,
-    '#maxlength'     => 64,
-  );
+  // Member ID is auto-generated on save. Shown here read-only on edit so the
+  // admin can see it; hidden on create since it isn't assigned yet.
+  if (!$is_new && !empty($membership->member_id)) {
+    $form['member_id_display'] = array(
+      '#type'        => 'item',
+      '#title'       => t('Member ID'),
+      '#markup'      => '<code>' . check_plain($membership->member_id) . '</code>',
+      '#description' => t('Assigned automatically when the membership was created.'),
+    );
+  }
 
   $form['type'] = array(
     '#type'          => 'select',
@@ -330,19 +333,6 @@ function dropcrm_membership_form_validate($form, &$form_state) {
     }
   }
 
-  // Uniqueness check for member_id.
-  if (!empty($v['member_id'])) {
-    $query = db_select('crm_membership', 'm')
-      ->fields('m', array('mid'))
-      ->condition('member_id', $v['member_id']);
-    if (!empty($form_state['crm_membership']->mid)) {
-      $query->condition('mid', $form_state['crm_membership']->mid, '<>');
-    }
-    $existing = $query->execute()->fetchField();
-    if ($existing) {
-      form_set_error('member_id', t('That Member ID is already in use.'));
-    }
-  }
   // If creating: validate initial term dates.
   if (empty($form_state['crm_membership']->mid)) {
     $start = _dropcrm_membership_date_from_element($v['start_date']);
@@ -368,12 +358,19 @@ function dropcrm_membership_form_submit($form, &$form_state) {
 
   // By this point validate has parsed $v['cid'] to a plain int. On edit the
   // field is disabled and cid is unchanged on the entity.
-  $membership->cid       = (int) $v['cid'];
-  $membership->member_id = trim($v['member_id']) !== '' ? trim($v['member_id']) : NULL;
-  $membership->type      = $v['type'];
-  $membership->status    = (int) $v['status'];
+  $membership->cid    = (int) $v['cid'];
+  $membership->type   = $v['type'];
+  $membership->status = (int) $v['status'];
 
   $membership->save();
+
+  // Auto-assign Member ID derived from the entity's mid. Saves twice on
+  // create because mid isn't known until after the first save. Existing
+  // memberships with a manually-set member_id are left alone.
+  if (empty($membership->member_id)) {
+    $membership->member_id = _dropcrm_membership_generate_member_id($membership->mid);
+    $membership->save();
+  }
 
   if ($is_new) {
     $start_date = _dropcrm_membership_date_from_element($v['start_date']);
