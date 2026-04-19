@@ -241,6 +241,13 @@ function drop_start_drop_start_steps() {
       'status_callback' => 'drop_start_step_theme_status',
       'description'     => t('Pick a theme for the admin experience. We recommend Opera.'),
     ),
+    'sample_content' => array(
+      'title'           => t('Sample content'),
+      'weight'          => -60,
+      'callback'        => 'drop_start_step_sample_content',
+      'status_callback' => 'drop_start_step_sample_content_status',
+      'description'     => t('Populate your site with demo content you can explore.'),
+    ),
     'done' => array(
       'title'           => t('Done'),
       'weight'          => 100,

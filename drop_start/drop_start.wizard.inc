@@ -344,6 +344,88 @@ function drop_start_step_theme_submit($form, &$form_state) {
 }
 
 // ---------------------------------------------------------------------------
+// Step: Sample content
+// ---------------------------------------------------------------------------
+
+/**
+ * Embeds the existing drop_start_generate_form as a wizard step. The step
+ * body has a "Generate now" checkbox controlling whether the submit handler
+ * actually runs the generator — otherwise Continue just advances.
+ */
+function drop_start_step_sample_content($form, &$form_state) {
+  $subform = array();
+
+  $subform['intro'] = array(
+    '#markup' => '<h2>' . t('Sample content') . '</h2>'
+      . '<p>' . t('Drop Start can populate your site with an Olympics event-planning demo. Gives you real tickets, contacts, projects, and more to explore while you set up the rest.') . '</p>',
+  );
+
+  $available = drop_start_available_modules();
+  if (empty($available)) {
+    $subform['empty'] = array(
+      '#markup' => '<p><em>' . t('No Drop Suite modules are enabled yet. Come back here after the Modules step to populate demo content.') . '</em></p>',
+    );
+    return $subform;
+  }
+
+  $existing_total = drop_start_content_total();
+  if ($existing_total > 0) {
+    $subform['existing'] = array(
+      '#markup' => '<div class="messages warning"><p>'
+        . t('@count demo items already exist on this site. Generating again will add more on top.', array('@count' => $existing_total))
+        . '</p></div>',
+    );
+  }
+
+  $subform['do_generate'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Generate demo content now'),
+    '#default_value' => ($existing_total === 0),
+    '#description'   => t('Uncheck to skip generation on this step. You can always run it later from the Setup wizard card.'),
+  );
+
+  $options = array();
+  foreach ($available as $module => $label) {
+    $options[$module] = $label;
+  }
+
+  $subform['modules'] = array(
+    '#type'          => 'checkboxes',
+    '#title'         => t('Generate content for'),
+    '#options'       => $options,
+    '#default_value' => array_keys($options),
+    '#states'        => array(
+      'visible' => array(':input[name="do_generate"]' => array('checked' => TRUE)),
+    ),
+  );
+
+  return $subform;
+}
+
+function drop_start_step_sample_content_status() {
+  return drop_start_content_total() > 0 ? 'configured' : 'not_started';
+}
+
+/**
+ * Custom submit handler: run the generator if the user checked the box.
+ */
+function drop_start_step_sample_content_submit($form, &$form_state) {
+  if (empty($form_state['values']['do_generate'])) {
+    return;
+  }
+  $selected = array_filter($form_state['values']['modules']);
+  if (empty($selected)) {
+    backdrop_set_message(t('No modules selected for demo content. Nothing generated.'), 'warning');
+    return;
+  }
+  module_load_include('inc', 'drop_start', 'drop_start.pages');
+  // Reuse the existing generator. It reads $form_state['values']['modules'],
+  // so build a minimal state to pass in.
+  $sub_state = array('values' => array('modules' => $selected));
+  drop_start_generate_form_submit($form, $sub_state);
+}
+
+// ---------------------------------------------------------------------------
 // Step: Done
 // ---------------------------------------------------------------------------
 
