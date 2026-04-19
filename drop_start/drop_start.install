@@ -10,9 +10,40 @@
 function drop_start_install() {
   drop_base_grant_admin_permissions('drop_start');
 
+  // Place the persistent wizard-progress block at the top of the default
+  // layout's TOP region. The block renders empty once setup is complete.
+  _drop_start_install_progress_block();
+
   backdrop_set_message(t('Drop Suite installed. <a href="@wizard">Run the setup wizard</a> to configure your site.', array(
     '@wizard' => url('drop/start'),
   )));
+}
+
+/**
+ * Adds drop_start:wizard_progress to the default layout's TOP region, at
+ * position 0 (above the Drop Navigation). Idempotent — does nothing if the
+ * block is already placed.
+ */
+function _drop_start_install_progress_block() {
+  module_load_include('install', 'drop_base');
+  $layout = layout_load('default');
+  if (!$layout) {
+    return;
+  }
+  $uuid = _drop_base_ensure_block_in_region($layout, 'drop_start:wizard_progress', 'top');
+  if (!$uuid) {
+    // Already present — nothing to do. Don't re-save.
+    return;
+  }
+  // Move the newly-added block to position 0 in the TOP region so it renders
+  // above the Drop Navigation.
+  if (!empty($layout->positions['top'])) {
+    $positions = $layout->positions['top'];
+    $positions = array_values(array_diff($positions, array($uuid)));
+    array_unshift($positions, $uuid);
+    $layout->positions['top'] = $positions;
+  }
+  $layout->save();
 }
 
 /**
@@ -64,4 +95,15 @@ function drop_start_schema() {
 function drop_start_uninstall() {
   // Remove the tracking table — but do NOT delete the sample content itself.
   // If users want to clean up content they should use the UI before uninstalling.
+}
+
+/**
+ * Place the persistent wizard-progress block on existing installs.
+ *
+ * Fresh installs get this via drop_start_install(). This update hook covers
+ * sites that already had drop_start enabled before the block existed.
+ */
+function drop_start_update_1100() {
+  _drop_start_install_progress_block();
+  return t('Added the wizard-progress block to the default layout.');
 }

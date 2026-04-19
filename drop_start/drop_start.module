@@ -274,6 +274,45 @@ function drop_start_drop_start_steps() {
 }
 
 /**
+ * Implements hook_block_info().
+ *
+ * Exposes the wizard progress card. Rendered as empty whenever the wizard's
+ * overall state is 'complete', which hides the block on sites that have
+ * finished setup (and on sites where the wizard has not yet started, to
+ * avoid noise for admins before they've clicked Begin).
+ */
+function drop_start_block_info() {
+  $blocks['wizard_progress'] = array(
+    'info'        => t('Drop Suite setup wizard progress'),
+    'description' => t('Persistent reminder of the current wizard step with a Return-to-wizard button. Renders empty once setup is complete.'),
+    'cache'       => BACKDROP_NO_CACHE,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function drop_start_block_view($delta = '') {
+  if ($delta !== 'wizard_progress') {
+    return array();
+  }
+  $overall = drop_start_wizard_overall_state();
+  if ($overall === 'complete') {
+    return array();
+  }
+  module_load_include('inc', 'drop_start', 'drop_start.wizard');
+  $html = _drop_start_wizard_progress_block_html($overall);
+  if (!$html) {
+    return array();
+  }
+  return array(
+    'subject' => NULL,
+    'content' => $html,
+  );
+}
+
+/**
  * Implements hook_permission().
  */
 function drop_start_permission() {
