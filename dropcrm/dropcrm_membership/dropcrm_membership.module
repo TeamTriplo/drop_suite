@@ -712,6 +712,35 @@ function _dropcrm_membership_total_paid($mid) {
 }
 
 // ---------------------------------------------------------------------------
+// CRM sub-nav
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_drop_section_links().
+ *
+ * Adds a "Memberships" link to the CRM sub-navigation, between Activities
+ * (weight 0) and Reports (weight 20+). Only shown to users with membership
+ * access — the link itself would 403 for users without it, but hiding it
+ * keeps the sidebar uncluttered.
+ */
+function dropcrm_membership_drop_section_links($section) {
+  if ($section !== 'crm') {
+    return array();
+  }
+  if (!user_access('access dropcrm_membership')) {
+    return array();
+  }
+  return array(
+    'memberships' => array(
+      'title'        => t('Memberships'),
+      'href'         => 'drop/crm/memberships',
+      'weight'       => 5,
+      'active_paths' => array('drop/crm/memberships'),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Blocks (dashboard widget)
 // ---------------------------------------------------------------------------
 
