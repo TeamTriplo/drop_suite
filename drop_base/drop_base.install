@@ -232,8 +232,60 @@ function _drop_base_setup_default_layout() {
   $layout->addBlock('drop_base', 'drop_pin_action', 'top');
   $layout->addBlock('drop_base', 'drop_section_nav', 'top');
 
+  // Reorder the TOP region so Local Tasks (page_components:tabs) renders
+  // below Drop Section Navigation, not above the main nav. Core's default
+  // layout places tabs first; Drop Suite's two-tier nav (drop_nav +
+  // drop_section_nav) renders inside the same region, so left alone the
+  // tabs bar visually precedes the nav. Per the Drop Suite style guide's
+  // Navigation section, Local Tasks should sit between the section nav
+  // and the page title/content.
+  _drop_base_reorder_tabs_below_section_nav($layout);
+
   $layout->save();
   backdrop_set_message(t('Drop Suite layout and blocks configured.'));
+}
+
+/**
+ * Moves the page_components:tabs block in the TOP region so it renders
+ * immediately after drop_base:drop_section_nav. Idempotent — if either
+ * block is missing or the order is already correct, does nothing.
+ *
+ * Used by drop_base_install and the corresponding update hook so existing
+ * sites self-heal on bee updb.
+ */
+function _drop_base_reorder_tabs_below_section_nav($layout) {
+  if (empty($layout->positions['top'])) {
+    return;
+  }
+  $tabs_uuid = NULL;
+  $snav_uuid = NULL;
+  foreach ($layout->content as $uuid => $block) {
+    if (!isset($block->plugin)) {
+      continue;
+    }
+    if ($block->plugin === 'system:page_components:tabs') {
+      $tabs_uuid = $uuid;
+    }
+    elseif ($block->plugin === 'drop_base:drop_section_nav') {
+      $snav_uuid = $uuid;
+    }
+  }
+  if (!$tabs_uuid || !$snav_uuid) {
+    return;
+  }
+  $positions = $layout->positions['top'];
+  $tabs_pos = array_search($tabs_uuid, $positions, TRUE);
+  $snav_pos = array_search($snav_uuid, $positions, TRUE);
+  if ($tabs_pos === FALSE || $snav_pos === FALSE || $tabs_pos > $snav_pos) {
+    // Already in correct order (or blocks missing from the region).
+    return;
+  }
+  // Remove tabs from current position and insert immediately after snav.
+  array_splice($positions, $tabs_pos, 1);
+  // Recompute snav position after the removal.
+  $snav_pos = array_search($snav_uuid, $positions, TRUE);
+  array_splice($positions, $snav_pos + 1, 0, array($tabs_uuid));
+  $layout->positions['top'] = $positions;
 }
 
 /**
@@ -348,5 +400,39 @@ function drop_base_update_1203() {
     $config->set('narrow_page_width', 1000);
     $config->save();
   }
+}
+
+/**
+ * Reorder the TOP region so Local Tasks renders below Drop Section Nav.
+ *
+ * Previously the page_components:tabs block sat at position 0 of the TOP
+ * region, causing the View/Edit tabs bar to render above the main Drop Nav.
+ * Per the Drop Suite style guide's Navigation section, tabs belong below
+ * both navs and above the page title. Runs across every layout that uses
+ * the Drop Suite template and has both tabs and drop_section_nav blocks.
+ * Idempotent — re-running is a no-op.
+ */
+function drop_base_update_1204() {
+  $layouts = layout_load_all();
+  $updated = array();
+  foreach ($layouts as $name => $layout) {
+    if ($layout->layout_template !== 'drop_suite') {
+      continue;
+    }
+    $before = isset($layout->positions['top']) ? $layout->positions['top'] : array();
+    _drop_base_reorder_tabs_below_section_nav($layout);
+    $after = isset($layout->positions['top']) ? $layout->positions['top'] : array();
+    if ($before !== $after) {
+      $layout->save();
+      $updated[] = $name;
+    }
+  }
+  if ($updated) {
+    return t('Reordered the Local Tasks block in @count Drop Suite layout(s): @list.', array(
+      '@count' => count($updated),
+      '@list'  => implode(', ', $updated),
+    ));
+  }
+  return t('No Drop Suite layouts needed reordering.');
 }
 
