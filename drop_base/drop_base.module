@@ -237,6 +237,32 @@ function _drop_base_home_nav_redirect() {
 }
 
 /**
+ * Implements hook_layout_load_by_router_item_alter().
+ *
+ * Injects the drop_pages layout for any non-admin router path under /drop,
+ * so Drop Suite pages use the drop_suite template while the rest of the
+ * site falls through to the regular default layout. Enumerating 300+
+ * concrete router paths in a layout's additional_paths is impractical;
+ * this hook is the cleaner alternative.
+ */
+function drop_base_layout_load_by_router_item_alter(&$layouts, $router_item) {
+  $path = isset($router_item['path']) ? $router_item['path'] : '';
+  if ($path !== 'drop' && strpos($path, 'drop/') !== 0) {
+    return;
+  }
+  // /admin/* paths use admin_default; leave them alone.
+  if (path_is_admin($path)) {
+    return;
+  }
+  $drop_pages = layout_load('drop_pages');
+  if (!$drop_pages || !empty($drop_pages->disabled)) {
+    return;
+  }
+  // Prepend so drop_pages wins over the default layout.
+  $layouts = array('drop_pages' => $drop_pages) + $layouts;
+}
+
+/**
  * Returns a renderable local-action entry for the pin/unpin button, or NULL.
  *
  * Used by hook_menu_local_tasks_alter() to inject the pin action into the

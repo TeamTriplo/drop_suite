@@ -174,13 +174,43 @@ function drop_base_install() {
  * - Adds: Page title, Drop Navigation, Drop Pin Action, Drop Section Navigation
  */
 function _drop_base_setup_default_layout() {
-  $layout = layout_load('default');
+  _drop_base_setup_drop_pages_layout();
+  _drop_base_revert_default_layout_template();
+}
+
+/**
+ * Creates or updates the drop_pages layout — the dedicated layout for
+ * /drop/* paths. Switches to drop_suite template, installs the standard
+ * Drop blocks in TOP, reorders tabs, dedupes positions. Idempotent.
+ *
+ * Layout matching for this layout is handled by
+ * drop_base_layout_load_by_router_item_alter() rather than a path field,
+ * because drop/* covers 300+ concrete router paths that can't be enumerated
+ * up front.
+ */
+function _drop_base_setup_drop_pages_layout() {
+  $layout = layout_load('drop_pages');
   if (!$layout) {
-    backdrop_set_message(t('Could not load the default layout to add Drop Suite blocks.'), 'warning');
-    return;
+    // Seed a fresh layout. path is NULL because the alter hook picks it.
+    $layout = new Layout(array(
+      'name'            => 'drop_pages',
+      'title'           => 'Drop Suite pages',
+      'description'     => 'Layout used for all /drop/* paths. Selected via drop_base_layout_load_by_router_item_alter().',
+      'module'          => 'drop_base',
+      'layout_template' => 'drop_suite',
+      'path'            => NULL,
+      'weight'          => -10,
+      'settings'        => array(
+        'title'         => '',
+        'title_display' => 'default',
+        'title_block'   => NULL,
+      ),
+      'positions'       => array(),
+      'content'         => array(),
+    ));
   }
 
-  // Switch to the Drop Suite layout template.
+  // Switch to the Drop Suite template (safe on re-save too).
   $layout->layout_template = 'drop_suite';
 
   // Ensure the positions array has all Drop Suite regions.
@@ -193,13 +223,10 @@ function _drop_base_setup_default_layout() {
   // Remove blocks we don't want in the Drop Suite layout.
   _drop_base_remove_blocks_by_plugin($layout, array(
     'system:page_components:title_combo',
-    // drop_pin_action block is deprecated in favor of injecting the pin
-    // link into Page Local Actions via hook_menu_local_tasks_alter().
     'drop_base:drop_pin_action',
   ));
 
-  // Ensure the required blocks are present in the TOP region. Idempotent:
-  // running this helper twice will not create duplicates.
+  // Ensure the required blocks are present in the TOP region.
   $wanted = array(
     'system:page_components:tabs',
     'system:page_components:messages',
@@ -212,21 +239,51 @@ function _drop_base_setup_default_layout() {
     _drop_base_ensure_block_in_region($layout, $plugin, 'top');
   }
 
-  // Reorder the TOP region so Local Tasks (page_components:tabs) renders
-  // below Drop Section Navigation, not above the main nav. Core's default
-  // layout places tabs first; Drop Suite's two-tier nav (drop_nav +
-  // drop_section_nav) renders inside the same region, so left alone the
-  // tabs bar visually precedes the nav. Per the Drop Suite style guide's
-  // Navigation section, Local Tasks should sit between the section nav
-  // and the page title/content.
-  _drop_base_reorder_tabs_below_section_nav($layout);
+  // Ensure the CONTENT region has the main content block, otherwise the
+  // page body won't render. New drop_pages layouts need this explicitly;
+  // existing ones already have it.
+  if (empty($layout->positions['content'])) {
+    $layout->addBlock('system', 'main', 'content');
+  }
 
-  // Defensive dedup: drops any accidental duplicate UUID references that
-  // may have crept into positions from template switches or earlier bugs.
+  _drop_base_reorder_tabs_below_section_nav($layout);
   _drop_base_dedupe_layout_positions($layout);
 
   $layout->save();
-  backdrop_set_message(t('Drop Suite layout and blocks configured.'));
+  backdrop_set_message(t('Drop Suite drop_pages layout configured.'));
+}
+
+/**
+ * Reverts the default Backdrop layout: switches template back to
+ * moscone_flipped (the stock default) and strips Drop-specific blocks.
+ * Keeps all non-Drop blocks in place so existing custom placements survive.
+ */
+function _drop_base_revert_default_layout_template() {
+  $layout = layout_load('default');
+  if (!$layout) {
+    return;
+  }
+
+  // Only revert if we had switched it — avoid clobbering sites that picked
+  // a different template on purpose.
+  if ($layout->layout_template === 'drop_suite') {
+    $layout->layout_template = 'moscone_flipped';
+  }
+
+  // Strip Drop-specific blocks from default so they only render on drop/*.
+  $stripped = _drop_base_remove_blocks_by_plugin($layout, array(
+    'drop_base:drop_nav',
+    'drop_base:drop_section_nav',
+    'drop_base:drop_pin_action',
+    'drop_start:wizard_progress',
+  ));
+
+  _drop_base_dedupe_layout_positions($layout);
+  $layout->save();
+
+  if ($stripped) {
+    backdrop_set_message(t('Reverted default layout and removed @count Drop-specific block(s).', array('@count' => $stripped)));
+  }
 }
 
 /**
@@ -550,3 +607,23 @@ function drop_base_update_1205() {
   return t('No layouts contained the deprecated drop_pin_action block.');
 }
 
+
+/**
+ * Split Drop Suite layout out of the default layout.
+ *
+ * Previously _drop_base_setup_default_layout() switched the site's default
+ * layout to the drop_suite template, which meant every page on the site
+ * (contact pages, nodes, user profiles, etc.) rendered inside the Drop
+ * Suite chrome. Now we create a dedicated drop_pages layout that only
+ * applies to /drop/* paths via hook_layout_load_by_router_item_alter(),
+ * and revert the default layout to a stock template so non-Drop pages
+ * render normally.
+ *
+ * This update creates drop_pages if missing, then reverts default. Both
+ * helpers are idempotent.
+ */
+function drop_base_update_1207() {
+  _drop_base_setup_drop_pages_layout();
+  _drop_base_revert_default_layout_template();
+  return t('Migrated Drop Suite blocks from default layout to a dedicated drop_pages layout.');
+}
