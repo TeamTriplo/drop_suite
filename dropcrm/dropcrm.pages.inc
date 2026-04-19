@@ -723,7 +723,12 @@ function _dropcrm_contact_hero(CrmContact $contact) {
       $org_links = array();
       foreach ($w->field_crm_employer->getIterator() as $item) {
         $org = $item->value();
-        if ($org) {
+        // On some sites the entityreference wrapper yields a target_id
+        // instead of a loaded entity. Normalize by loading.
+        if (is_numeric($org)) {
+          $org = entity_load('crm_contact', (int) $org);
+        }
+        if (is_object($org) && isset($org->cid)) {
           $org_links[] = l(entity_label('crm_contact', $org), 'drop/crm/contact/' . $org->cid);
         }
       }
@@ -818,7 +823,10 @@ function _dropcrm_person_details(CrmContact $contact) {
     $org_links = array();
     foreach ($w->field_crm_employer->getIterator() as $item) {
       $org = $item->value();
-      if ($org) {
+      if (is_numeric($org)) {
+        $org = entity_load('crm_contact', (int) $org);
+      }
+      if (is_object($org) && isset($org->cid)) {
         $org_links[] = l(entity_label('crm_contact', $org), 'drop/crm/contact/' . $org->cid);
       }
     }

@@ -1341,3 +1341,18 @@ function _dropcrm_membership_recompute_status($mid) {
     _dropcrm_membership_set_status($mid, $new_status);
   }
 }
+
+/**
+ * Returns the auto-generated Member ID for a given membership primary key.
+ *
+ * Format: "M-NNNN" with the mid zero-padded to 4 digits. For mid >= 10000
+ * the padding falls through and the ID just gets longer ("M-12345").
+ *
+ * @param int $mid
+ *   The membership entity's primary key.
+ *
+ * @return string
+ */
+function _dropcrm_membership_generate_member_id($mid) {
+  return 'M-' . str_pad((int) $mid, 4, '0', STR_PAD_LEFT);
+}
