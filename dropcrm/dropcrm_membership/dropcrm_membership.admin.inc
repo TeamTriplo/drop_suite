@@ -151,18 +151,34 @@ function dropcrm_membership_view_page($membership) {
   // Term history.
   $term_rows = array();
   $term_query = db_query('SELECT tid, start_date, end_date, status, notes FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC', array(':mid' => $membership->mid));
+  $term_count = 0;
+  $term_records = array();
   foreach ($term_query as $t) {
+    $term_records[] = $t;
+    $term_count++;
+  }
+  foreach ($term_records as $t) {
+    $ops = array();
+    if (user_access('manage dropcrm_membership')) {
+      $ops[] = l(t('Edit'), 'drop/crm/memberships/' . $membership->mid . '/term/' . $t->tid . '/edit');
+    }
+    // Only offer delete if at least one term will remain — the membership
+    // must always have at least one term to have meaningful state.
+    if (user_access('administer dropcrm_membership') && $term_count > 1) {
+      $ops[] = l(t('Delete'), 'drop/crm/memberships/' . $membership->mid . '/term/' . $t->tid . '/delete');
+    }
     $term_rows[] = array(
       $t->start_date,
       !empty($t->end_date) ? $t->end_date : t('lifetime'),
       array('data' => _dropcrm_membership_status_badge($t->status)),
       check_plain($t->notes),
+      implode(' | ', $ops),
     );
   }
   $build['terms_header'] = array('#markup' => '<h3>' . t('Term history') . '</h3>');
   $build['terms'] = array(
     '#theme'  => 'table',
-    '#header' => array(t('Start'), t('End'), t('Status'), t('Notes')),
+    '#header' => array(t('Start'), t('End'), t('Status'), t('Notes'), t('Operations')),
     '#rows'   => $term_rows,
     '#empty'  => t('No terms recorded.'),
   );
@@ -413,6 +429,7 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
   $type_conf = isset($types[$membership->type]) ? $types[$membership->type] : array();
   $term_length = isset($type_conf['term_length']) ? $type_conf['term_length'] : '1 year';
   $default_dues = isset($type_conf['default_dues']) ? $type_conf['default_dues'] : '';
+  $type_label = isset($type_conf['label']) ? $type_conf['label'] : $membership->type;
 
   $prior_end = $membership->currentEndDate();
   $default_start = ($prior_end && $prior_end > format_date(REQUEST_TIME, 'custom', 'Y-m-d'))
@@ -420,8 +437,34 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
     : format_date(REQUEST_TIME, 'custom', 'Y-m-d');
   $default_end = _dropcrm_membership_add_term_length($default_start, $term_length);
 
+  // Confirmation block: show which member we are renewing so the user can
+  // verify they are on the right page before committing. Guards against
+  // URL-tampering / misrouting bugs adding a term to the wrong contact.
+  $contact = entity_load('crm_contact', $membership->cid);
+  $contact_name = $contact ? check_plain($contact->label()) : t('(unknown contact)');
+  $contact_link = $contact
+    ? l($contact->label(), 'drop/crm/contact/' . $contact->cid, array('attributes' => array('target' => '_blank')))
+    : $contact_name;
+  $rows = array(
+    array(array('header' => TRUE, 'data' => t('Member')), $contact_link),
+    array(array('header' => TRUE, 'data' => t('Membership type')), check_plain($type_label)),
+    array(array('header' => TRUE, 'data' => t('Current term ends')), $prior_end ?: t('—')),
+  );
+  if (!empty($membership->member_id)) {
+    array_splice($rows, 1, 0, array(array(array('header' => TRUE, 'data' => t('Member ID')), check_plain($membership->member_id))));
+  }
+  $form['confirm_member'] = array(
+    '#theme'      => 'table',
+    '#rows'       => $rows,
+    '#attributes' => array('class' => array('crm-membership-renew-confirm')),
+    '#prefix'     => '<div class="crm-membership-renew-confirm-wrap"><h3>' . t('Renewing this membership:') . '</h3>',
+    '#suffix'     => '</div>',
+    '#weight'     => -10,
+  );
+
   $form['help'] = array(
     '#markup' => '<p>' . t('Records a new term for this membership. The prior term is preserved in the history.') . '</p>',
+    '#weight' => -5,
   );
 
   $form['start_date'] = array(
@@ -797,4 +840,147 @@ function _dropcrm_membership_log_activity($membership, $activity_type, $start_da
   // Attach the contact via field_crm_contacts.
   $activity->field_crm_contacts[LANGUAGE_NONE][0]['target_id'] = $membership->cid;
   $activity->save();
+}
+
+// ---------------------------------------------------------------------------
+// Term edit + delete
+// ---------------------------------------------------------------------------
+
+/**
+ * Form builder: edit an existing membership term.
+ *
+ * Admin can correct start/end dates, status, and notes after the fact —
+ * useful for fixing a miskeyed renewal or back-dating a manually-recorded
+ * term. Creation of new terms still goes through the Renew form.
+ */
+function dropcrm_membership_term_form($form, &$form_state, $membership, $term) {
+  $form_state['crm_membership']      = $membership;
+  $form_state['crm_membership_term'] = $term;
+
+  backdrop_set_title(t('Edit term for %label', array('%label' => $membership->label())));
+
+  $form['help'] = array(
+    '#markup' => '<p>' . t('Editing a term after the fact. Save will also recompute the membership\'s overall status from all current terms.') . '</p>',
+  );
+
+  $form['start_date'] = array(
+    '#type'          => 'date',
+    '#title'         => t('Term start'),
+    '#default_value' => _dropcrm_membership_date_to_element($term->start_date),
+    '#required'      => TRUE,
+  );
+  $form['end_date'] = array(
+    '#type'          => 'date',
+    '#title'         => t('Term end'),
+    '#default_value' => !empty($term->end_date) ? _dropcrm_membership_date_to_element($term->end_date) : NULL,
+    '#description'   => t('Leave blank for a lifetime term.'),
+  );
+  $form['status'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Term status'),
+    '#options'       => _dropcrm_membership_status_options(),
+    '#default_value' => $term->status,
+  );
+  $form['notes'] = array(
+    '#type'          => 'textarea',
+    '#title'         => t('Notes'),
+    '#default_value' => $term->notes,
+    '#rows'          => 3,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Save term'),
+  );
+  $form['actions']['cancel'] = array(
+    '#type'  => 'link',
+    '#title' => t('Cancel'),
+    '#href'  => 'drop/crm/memberships/' . $membership->mid,
+  );
+
+  return $form;
+}
+
+/**
+ * Validate: end date can't be before start date (unless blank = lifetime).
+ */
+function dropcrm_membership_term_form_validate($form, &$form_state) {
+  $start = _dropcrm_membership_date_from_element($form_state['values']['start_date']);
+  if (empty($start)) {
+    form_set_error('start_date', t('Start date is required.'));
+    return;
+  }
+  if (!empty($form_state['values']['end_date'])) {
+    $end = _dropcrm_membership_date_from_element($form_state['values']['end_date']);
+    if ($end && $end < $start) {
+      form_set_error('end_date', t('End date must be on or after the start date.'));
+    }
+  }
+}
+
+/**
+ * Submit: save the term and recompute the membership's current status.
+ */
+function dropcrm_membership_term_form_submit($form, &$form_state) {
+  $membership = $form_state['crm_membership'];
+  $term       = $form_state['crm_membership_term'];
+
+  $term->start_date = _dropcrm_membership_date_from_element($form_state['values']['start_date']);
+  $term->end_date   = !empty($form_state['values']['end_date'])
+    ? _dropcrm_membership_date_from_element($form_state['values']['end_date'])
+    : NULL;
+  $term->status = (int) $form_state['values']['status'];
+  $term->notes  = (string) $form_state['values']['notes'];
+  $term->save();
+
+  _dropcrm_membership_recompute_status($membership->mid);
+
+  backdrop_set_message(t('Term updated.'));
+  $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
+}
+
+/**
+ * Confirm-delete form for a membership term.
+ */
+function dropcrm_membership_term_delete_form($form, &$form_state, $membership, $term) {
+  $form_state['crm_membership']      = $membership;
+  $form_state['crm_membership_term'] = $term;
+
+  $range = !empty($term->end_date)
+    ? t('from @start to @end', array('@start' => $term->start_date, '@end' => $term->end_date))
+    : t('starting @start (lifetime)', array('@start' => $term->start_date));
+
+  return confirm_form(
+    $form,
+    t('Delete this term (@range)?', array('@range' => $range)),
+    'drop/crm/memberships/' . $membership->mid,
+    t('Term history is an audit of each renewal. Delete only to correct a mistaken entry. The membership\'s overall status will be recomputed from the remaining terms. This cannot be undone.'),
+    t('Delete term'),
+    t('Cancel')
+  );
+}
+
+/**
+ * Submit: delete the term and recompute the membership's status.
+ */
+function dropcrm_membership_term_delete_form_submit($form, &$form_state) {
+  $membership = $form_state['crm_membership'];
+  $term       = $form_state['crm_membership_term'];
+
+  // Safety: never delete the last remaining term — the membership would
+  // have no temporal data. UI already hides the link in this case, but
+  // guard in case of a direct URL visit.
+  $count = (int) db_query('SELECT COUNT(*) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $membership->mid))->fetchField();
+  if ($count <= 1) {
+    backdrop_set_message(t('Cannot delete the only remaining term for this membership.'), 'warning');
+    $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
+    return;
+  }
+
+  entity_delete('crm_membership_term', $term->tid);
+  _dropcrm_membership_recompute_status($membership->mid);
+
+  backdrop_set_message(t('Term deleted.'));
+  $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
 }
