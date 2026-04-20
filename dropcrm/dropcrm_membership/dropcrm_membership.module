@@ -907,6 +907,37 @@ function dropcrm_membership_drop_section_links($section) {
 }
 
 // ---------------------------------------------------------------------------
+// Contact view integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_dropcrm_contact_view_alter().
+ *
+ * Embeds the crm_memberships_for_contact View's block display on every
+ * contact view page with the contact's cid as the contextual filter.
+ * The contact view is a custom render callback (dropcrm_contact_view),
+ * not routed through Layouts, so a hook-based embed is simpler and more
+ * reliable than configuring a layout for drop/crm/contact/%.
+ *
+ * The View itself owns all of the rendering (columns, filters, empty
+ * text, access). This hook is a thin integration bridge.
+ */
+function dropcrm_membership_dropcrm_contact_view_alter(&$output, $contact) {
+  if (!user_access('access dropcrm_membership')) {
+    return;
+  }
+  $rendered = views_embed_view('crm_memberships_for_contact', 'block', $contact->cid);
+  if (!empty($rendered)) {
+    $output['memberships'] = array(
+      '#prefix' => '<div class="crm-contact-memberships"><h3>' . t('Memberships') . '</h3>',
+      '#suffix' => '</div>',
+      '#weight' => 18,
+      '#markup' => $rendered,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Views integration
 // ---------------------------------------------------------------------------
 
