@@ -1617,3 +1617,31 @@ function dropcrm_update_1026() {
     '@count' => $migrated,
   ));
 }
+
+/**
+ * Grandfather Outreach Goal: on sites already using it, keep it visible.
+ *
+ * Outreach Goal is now a Labs-gated experimental feature, off by default
+ * on fresh installs. For existing sites where the feature is in active
+ * use — either a goal amount has been configured OR at least one
+ * completed activity is flagged is_outreach=1 — flip the enable flag ON
+ * so nothing disappears at update time. Fresh installs get FALSE via
+ * config/dropcrm.settings.json.
+ */
+function dropcrm_update_1027() {
+  $config = config('dropcrm.settings');
+  if ($config->get('outreach_goal_enabled') !== NULL) {
+    return t('outreach_goal_enabled already set; no change.');
+  }
+
+  $goal_amount = (int) $config->get('outreach_goal_amount');
+  $has_flagged = (bool) db_query('SELECT 1 FROM {crm_activity} WHERE is_outreach = 1 LIMIT 1')->fetchField();
+
+  $enabled = ($goal_amount > 0) || $has_flagged;
+  $config->set('outreach_goal_enabled', $enabled);
+  $config->save();
+
+  return $enabled
+    ? t('Grandfathered Outreach Goal as enabled (existing goal or outreach-flagged activities detected).')
+    : t('Outreach Goal left disabled (no prior use detected). Install drop_labs to toggle.');
+}

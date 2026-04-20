@@ -277,7 +277,7 @@ function dropcrm_contact_view(CrmContact $contact) {
   $rows = array();
   foreach ($activities as $activity) {
     $subject_cell = l(check_plain($activity->subject), 'drop/crm/activity/' . $activity->aid);
-    if (!empty($activity->is_outreach)) {
+    if (!empty($activity->is_outreach) && _dropcrm_outreach_enabled()) {
       $subject_cell .= ' <span class="crm-outreach-badge">' . t('outreach') . '</span>';
     }
     if (!empty($aids_with_notes[$activity->aid])) {
@@ -355,7 +355,7 @@ function dropcrm_activity_view(CrmActivity $activity) {
   if (!empty($activity->activity_date)) {
     $rows[] = array(t('Activity Date'), format_date($activity->activity_date, 'custom', 'M j, Y'));
   }
-  if (!empty($activity->is_outreach)) {
+  if (!empty($activity->is_outreach) && _dropcrm_outreach_enabled()) {
     $rows[] = array(t('Outreach'), t('Yes — counted toward outreach goal'));
   }
   if (!empty($activity->created)) {
