@@ -79,17 +79,15 @@ function dropcrm_membership_schema() {
       // Exposed to Views as native base-table fields so admin lists + the
       // expiring-soon block and per-contact block stay one row per membership.
       'current_end_date' => array(
-        'description' => "Latest term's end_date (YYYY-MM-DD). NULL for lifetime terms or memberships with no terms.",
+        'description' => "Latest term's end_date. NULL for lifetime terms or memberships with no terms.",
         'mysql_type'  => 'date',
-        'type'        => 'varchar',
-        'length'      => 10,
+        'type'        => 'datetime',
         'not null'    => FALSE,
       ),
       'last_payment_date' => array(
-        'description' => "Most recent payment's paid_date (YYYY-MM-DD). NULL if no payments recorded.",
+        'description' => "Most recent payment's paid_date. NULL if no payments recorded.",
         'mysql_type'  => 'date',
-        'type'        => 'varchar',
-        'length'      => 10,
+        'type'        => 'datetime',
         'not null'    => FALSE,
       ),
       'total_paid' => array(
@@ -131,16 +129,13 @@ function dropcrm_membership_schema() {
       'start_date' => array(
         'description' => 'Date the term starts.',
         'mysql_type'  => 'date',
-        'type'        => 'varchar',
-        'length'      => 10,
+        'type'        => 'datetime',
         'not null'    => TRUE,
-        'default'     => '0000-00-00',
       ),
       'end_date' => array(
         'description' => 'Date the term ends. NULL = lifetime term.',
         'mysql_type'  => 'date',
-        'type'        => 'varchar',
-        'length'      => 10,
+        'type'        => 'datetime',
         'not null'    => FALSE,
       ),
       'status' => array(
@@ -209,10 +204,8 @@ function dropcrm_membership_schema() {
       'paid_date' => array(
         'description' => 'Date the payment was received.',
         'mysql_type'  => 'date',
-        'type'        => 'varchar',
-        'length'      => 10,
+        'type'        => 'datetime',
         'not null'    => TRUE,
-        'default'     => '0000-00-00',
       ),
       'method' => array(
         'description' => 'Payment method label (Check, Cash, Credit Card, Other).',
@@ -451,4 +444,39 @@ function dropcrm_membership_update_1001() {
 
   $count = (int) db_query('SELECT COUNT(*) FROM {crm_membership}')->fetchField();
   return t('Added current_end_date, last_payment_date, total_paid columns and backfilled @count membership(s).', array('@count' => $count));
+}
+
+/**
+ * Convert all date columns from VARCHAR(10) to real DATE type.
+ *
+ * The original schema declared type=varchar length=10 with
+ * mysql_type=date, but Backdrop's db_add_field ignores mysql_type and
+ * produces VARCHAR(10). Views date filters then generate SQL that
+ * compares Unix timestamps against VARCHAR — MySQL string-to-int casts
+ * "2026-04-24" as 2026, which never satisfies >= 1745000000, so
+ * filtered views return nothing. Real DATE columns fix it.
+ *
+ * Affected columns:
+ *   crm_membership.current_end_date
+ *   crm_membership.last_payment_date
+ *   crm_membership_term.start_date
+ *   crm_membership_term.end_date
+ *   crm_membership_payment.paid_date
+ */
+function dropcrm_membership_update_1002() {
+  // Clean up any '0000-00-00' sentinels that won't convert cleanly under
+  // MySQL strict mode. start_date is NOT NULL so drop such rows to today.
+  db_query("UPDATE {crm_membership_term} SET start_date = CURDATE() WHERE start_date = '0000-00-00'");
+  db_query("UPDATE {crm_membership_payment} SET paid_date = CURDATE() WHERE paid_date = '0000-00-00'");
+
+  // ALTER each column. Preserve NOT NULL where it was; allow NULL where it
+  // was nullable (end_date for lifetime terms, current_end_date and
+  // last_payment_date for memberships with no term / no payments).
+  db_query("ALTER TABLE {crm_membership} MODIFY current_end_date DATE NULL DEFAULT NULL");
+  db_query("ALTER TABLE {crm_membership} MODIFY last_payment_date DATE NULL DEFAULT NULL");
+  db_query("ALTER TABLE {crm_membership_term} MODIFY start_date DATE NOT NULL");
+  db_query("ALTER TABLE {crm_membership_term} MODIFY end_date DATE NULL DEFAULT NULL");
+  db_query("ALTER TABLE {crm_membership_payment} MODIFY paid_date DATE NOT NULL");
+
+  return t('Converted 5 date columns from VARCHAR(10) to DATE. Views date filters on current_end_date, end_date, paid_date now work correctly.');
 }
