@@ -48,9 +48,10 @@ function dropcrm_membership_view_page($membership) {
   $rows[] = array(t('Current term ends'), $membership->currentEndDate() ?: t('—'));
   $rows[] = array(t('Total paid'), '$' . number_format(_dropcrm_membership_total_paid($membership->mid), 2));
   $build['summary'] = array(
-    '#theme'  => 'table',
-    '#rows'   => $rows,
+    '#theme'      => 'table',
+    '#rows'       => $rows,
     '#attributes' => array('class' => array('crm-membership-summary')),
+    '#weight'     => 0,
   );
 
   // Term history.
@@ -80,12 +81,15 @@ function dropcrm_membership_view_page($membership) {
       implode(' | ', $ops),
     );
   }
-  $build['terms_header'] = array('#markup' => '<h3>' . t('Term history') . '</h3>');
   $build['terms'] = array(
-    '#theme'  => 'table',
-    '#header' => array(t('Start'), t('End'), t('Status'), t('Notes'), t('Operations')),
-    '#rows'   => $term_rows,
-    '#empty'  => t('No terms recorded.'),
+    '#weight' => 10,
+    'header'  => array('#markup' => '<h3>' . t('Term history') . '</h3>'),
+    'table'   => array(
+      '#theme'  => 'table',
+      '#header' => array(t('Start'), t('End'), t('Status'), t('Notes'), t('Operations')),
+      '#rows'   => $term_rows,
+      '#empty'  => t('No terms recorded.'),
+    ),
   );
 
   // Payment history.
@@ -108,12 +112,15 @@ function dropcrm_membership_view_page($membership) {
       implode(' | ', $ops),
     );
   }
-  $build['payments_header'] = array('#markup' => '<h3>' . t('Payment history') . '</h3>');
   $build['payments'] = array(
-    '#theme'  => 'table',
-    '#header' => array(t('Date'), t('Amount'), t('Method'), t('Reference'), t('Notes'), t('Operations')),
-    '#rows'   => $pay_rows,
-    '#empty'  => t('No payments recorded.'),
+    '#weight' => 20,
+    'header'  => array('#markup' => '<h3>' . t('Payment history') . '</h3>'),
+    'table'   => array(
+      '#theme'  => 'table',
+      '#header' => array(t('Date'), t('Amount'), t('Method'), t('Reference'), t('Notes'), t('Operations')),
+      '#rows'   => $pay_rows,
+      '#empty'  => t('No payments recorded.'),
+    ),
   );
 
   return $build;
