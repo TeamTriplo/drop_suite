@@ -20,6 +20,23 @@ if (!defined('DROPCRM_MEMBERSHIP_STATUS_LAPSED')) {
 }
 
 // ---------------------------------------------------------------------------
+// Shared CSS
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_init().
+ *
+ * Loads the module's CSS on every page so the status badges, summary
+ * tables, filter pills, and contact-view Memberships section always get
+ * their styling — even when the class hooks appear on a page owned by
+ * a different module (e.g. contact view page rendered by dropcrm).
+ * Matches drop_base's pattern.
+ */
+function dropcrm_membership_init() {
+  backdrop_add_css(backdrop_get_path('module', 'dropcrm_membership') . '/dropcrm_membership.css');
+}
+
+// ---------------------------------------------------------------------------
 // Autoload
 // ---------------------------------------------------------------------------
 
@@ -28,12 +45,13 @@ if (!defined('DROPCRM_MEMBERSHIP_STATUS_LAPSED')) {
  */
 function dropcrm_membership_autoload_info() {
   return array(
-    'CrmMembership'                    => 'dropcrm_membership.entity.inc',
-    'CrmMembershipController'          => 'dropcrm_membership.entity.inc',
-    'CrmMembershipTerm'                => 'dropcrm_membership.entity.inc',
-    'CrmMembershipTermController'      => 'dropcrm_membership.entity.inc',
-    'CrmMembershipPayment'             => 'dropcrm_membership.entity.inc',
-    'CrmMembershipPaymentController'   => 'dropcrm_membership.entity.inc',
+    'CrmMembership'                         => 'dropcrm_membership.entity.inc',
+    'CrmMembershipController'               => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTerm'                     => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTermController'           => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPayment'                  => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPaymentController'        => 'dropcrm_membership.entity.inc',
+    'DropcrmMembershipHandlerFieldDateSafe' => 'views/dropcrm_membership_handler_field_date_safe.inc',
   );
 }
 
@@ -124,6 +142,7 @@ function dropcrm_membership_entity_property_info() {
   $m['mid'] = array(
     'label'          => t('Membership ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this membership record.'),
     'schema field'   => 'mid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
@@ -164,36 +183,61 @@ function dropcrm_membership_entity_property_info() {
   $m['created'] = array(
     'label'          => t('Date Created'),
     'type'           => 'date',
+    'description'    => t('Date when the membership record was first created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $m['changed'] = array(
     'label'          => t('Date Modified'),
     'type'           => 'date',
+    'description'    => t('Date when the membership record was last modified.'),
     'schema field'   => 'changed',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $m['uid'] = array(
     'label'          => t('Created by'),
     'type'           => 'user',
+    'description'    => t('User account that created or last edited this membership record.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
   );
-  // Computed property: earliest term start_date = effective joined date.
-  $m['joined_date'] = array(
-    'label'           => t('Joined Date'),
+  // Denormalized cache columns — kept fresh by hook_crm_membership_term_*
+  // and hook_crm_membership_payment_*. Declared as schema-backed properties
+  // so EntityPlusDefaultViewsController exposes them as native fields on
+  // the crm_membership base table (filterable, sortable, no relationship
+  // join required).
+  $m['current_end_date'] = array(
+    'label'           => t('Current term ends'),
     'type'            => 'date',
-    'description'     => t('Earliest term start date for this membership.'),
-    'getter callback' => '_dropcrm_membership_joined_date_get',
-    'computed'        => TRUE,
+    'description'     => t('End date of the latest term. NULL for lifetime memberships or memberships with no terms.'),
+    'schema field'    => 'current_end_date',
+    'getter callback' => '_dropcrm_membership_date_get',
   );
+  $m['last_payment_date'] = array(
+    'label'           => t('Last payment date'),
+    'type'            => 'date',
+    'description'     => t("Most recent payment's paid date. NULL if no payments recorded."),
+    'schema field'    => 'last_payment_date',
+    'getter callback' => '_dropcrm_membership_date_get',
+  );
+  $m['total_paid'] = array(
+    'label'           => t('Total paid'),
+    'type'            => 'decimal',
+    'description'     => t('Sum of all payments recorded against this membership.'),
+    'schema field'    => 'total_paid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  // Keep joined_date as a method on the entity class (not a property) — it's
+  // only used in PHP code paths and never changes after initial creation, so
+  // there's no reason to maintain it as a denormalized column.
 
   // --- crm_membership_term properties ---
   $t = &$info['crm_membership_term']['properties'];
   $t['tid'] = array(
     'label'          => t('Term ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this term record.'),
     'schema field'   => 'tid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
@@ -208,6 +252,7 @@ function dropcrm_membership_entity_property_info() {
   $t['start_date'] = array(
     'label'          => t('Term Start'),
     'type'           => 'date',
+    'description'    => t('Date when this term begins.'),
     'schema field'   => 'start_date',
     'getter callback' => '_dropcrm_membership_date_get',
     'setter callback' => '_dropcrm_membership_date_set',
@@ -223,6 +268,7 @@ function dropcrm_membership_entity_property_info() {
   $t['status'] = array(
     'label'          => t('Term Status'),
     'type'           => 'integer',
+    'description'    => t('Status of this specific term (active, grace, lapsed, pending, cancelled).'),
     'schema field'   => 'status',
     'options list'   => '_dropcrm_membership_status_options',
     'getter callback' => 'entity_plus_property_verbatim_get',
@@ -231,6 +277,7 @@ function dropcrm_membership_entity_property_info() {
   $t['notes'] = array(
     'label'          => t('Notes'),
     'type'           => 'text',
+    'description'    => t('Free-form notes on this term (e.g. payment reference, special circumstances).'),
     'schema field'   => 'notes',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -238,12 +285,14 @@ function dropcrm_membership_entity_property_info() {
   $t['created'] = array(
     'label'          => t('Recorded'),
     'type'           => 'date',
+    'description'    => t('Date when this term record was created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $t['uid'] = array(
     'label'          => t('Recorded by'),
     'type'           => 'user',
+    'description'    => t('User account that recorded this term.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -254,12 +303,14 @@ function dropcrm_membership_entity_property_info() {
   $p['pid'] = array(
     'label'          => t('Payment ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this payment record.'),
     'schema field'   => 'pid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $p['mid'] = array(
     'label'          => t('Membership'),
     'type'           => 'crm_membership',
+    'description'    => t('The membership this payment was recorded against.'),
     'schema field'   => 'mid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -275,6 +326,7 @@ function dropcrm_membership_entity_property_info() {
   $p['amount'] = array(
     'label'          => t('Amount'),
     'type'           => 'decimal',
+    'description'    => t('Dollar amount of the payment.'),
     'schema field'   => 'amount',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -282,6 +334,7 @@ function dropcrm_membership_entity_property_info() {
   $p['paid_date'] = array(
     'label'          => t('Paid Date'),
     'type'           => 'date',
+    'description'    => t('Date the payment was received.'),
     'schema field'   => 'paid_date',
     'getter callback' => '_dropcrm_membership_date_get',
     'setter callback' => '_dropcrm_membership_date_set',
@@ -289,6 +342,7 @@ function dropcrm_membership_entity_property_info() {
   $p['method'] = array(
     'label'          => t('Method'),
     'type'           => 'text',
+    'description'    => t('How the payment was made (Check, Cash, Credit Card, Other).'),
     'schema field'   => 'method',
     'options list'   => '_dropcrm_membership_payment_method_options',
     'getter callback' => 'entity_plus_property_verbatim_get',
@@ -297,6 +351,7 @@ function dropcrm_membership_entity_property_info() {
   $p['reference'] = array(
     'label'          => t('Reference'),
     'type'           => 'text',
+    'description'    => t('Optional reference — check number, transaction ID, etc.'),
     'schema field'   => 'reference',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -304,6 +359,7 @@ function dropcrm_membership_entity_property_info() {
   $p['notes'] = array(
     'label'          => t('Notes'),
     'type'           => 'text',
+    'description'    => t('Free-form notes on this payment.'),
     'schema field'   => 'notes',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -311,12 +367,14 @@ function dropcrm_membership_entity_property_info() {
   $p['created'] = array(
     'label'          => t('Recorded'),
     'type'           => 'date',
+    'description'    => t('Date when this payment record was created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $p['uid'] = array(
     'label'          => t('Recorded by'),
     'type'           => 'user',
+    'description'    => t('User account that recorded this payment.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -488,6 +546,24 @@ function dropcrm_membership_menu() {
     'file'             => 'dropcrm_membership.admin.inc',
   );
 
+  // Term edit + delete — edit is 'manage', delete gated on 'administer'
+  // like payment delete.
+  $items['drop/crm/memberships/%crm_membership/term/%crm_membership_term/edit'] = array(
+    'title'            => 'Edit term',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_term_form', 3, 5),
+    'access callback'  => 'dropcrm_membership_access',
+    'access arguments' => array('update', 3),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+  $items['drop/crm/memberships/%crm_membership/term/%crm_membership_term/delete'] = array(
+    'title'            => 'Delete term',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_term_delete_form', 3, 5),
+    'access arguments' => array('administer dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
   // Cancel — action-bar verb, not a local task.
   $items['drop/crm/memberships/%crm_membership/cancel'] = array(
     'title'            => 'Cancel',
@@ -497,7 +573,33 @@ function dropcrm_membership_menu() {
     'file'             => 'dropcrm_membership.admin.inc',
   );
 
+  // Reports — surfaced via hook_drop_reports() for the CRM Reports nav.
+  $items['drop/crm/reports/memberships'] = array(
+    'title'            => 'Memberships Report',
+    'page callback'    => 'dropcrm_membership_report_page',
+    'access arguments' => array('access dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
   return $items;
+}
+
+/**
+ * Implements hook_drop_reports().
+ *
+ * Registers the Memberships report with the shared Drop Suite reports
+ * nav system so it appears in the CRM section's reports group.
+ */
+function dropcrm_membership_drop_reports() {
+  return array(
+    'dropcrm_memberships' => array(
+      'title'       => t('Memberships'),
+      'path'        => 'drop/crm/reports/memberships',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm_membership',
+      'default_pin' => FALSE,
+    ),
+  );
 }
 
 /**
@@ -524,6 +626,14 @@ function crm_membership_load($mid) {
  */
 function crm_membership_payment_load($pid) {
   $entities = entity_load('crm_membership_payment', array($pid));
+  return $entities ? reset($entities) : FALSE;
+}
+
+/**
+ * Menu loader for %crm_membership_term.
+ */
+function crm_membership_term_load($tid) {
+  $entities = entity_load('crm_membership_term', array($tid));
   return $entities ? reset($entities) : FALSE;
 }
 
@@ -637,15 +747,85 @@ function _dropcrm_membership_payment_method_options() {
 }
 
 /**
- * Getter: computed joined_date property on crm_membership (earliest term's
- * start_date). Returns a Unix timestamp for Views date handler compatibility.
+ * Recomputes the three denormalized cache columns on a membership row from
+ * the current crm_membership_term and crm_membership_payment data.
+ *
+ * Called from the entity CRUD hooks on term and payment so the membership
+ * row always reflects the current latest-term and payment totals. Uses
+ * db_update (not $membership->save()) to avoid recursion with entity save
+ * hooks and to skip triggering entity-level cache invalidation when only
+ * the derived columns change.
  */
-function _dropcrm_membership_joined_date_get($membership, array $options, $name, $type, $info) {
-  $earliest = db_query('SELECT MIN(start_date) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $membership->mid))->fetchField();
-  if (empty($earliest) || $earliest === '0000-00-00') {
-    return NULL;
+function _dropcrm_membership_recompute_derived($mid) {
+  $mid = (int) $mid;
+  if (!$mid) {
+    return;
   }
-  return strtotime($earliest);
+
+  $end_date = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
+  if (empty($end_date) || $end_date === '0000-00-00') {
+    $end_date = NULL;
+  }
+
+  $paid_date = db_query('SELECT paid_date FROM {crm_membership_payment} WHERE mid = :mid ORDER BY paid_date DESC, pid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
+  if (empty($paid_date) || $paid_date === '0000-00-00') {
+    $paid_date = NULL;
+  }
+
+  $total_paid = (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
+
+  db_update('crm_membership')
+    ->fields(array(
+      'current_end_date'  => $end_date,
+      'last_payment_date' => $paid_date,
+      'total_paid'        => $total_paid,
+    ))
+    ->condition('mid', $mid)
+    ->execute();
+
+  entity_get_controller('crm_membership')->resetCache(array($mid));
+}
+
+/**
+ * Implements hook_crm_membership_term_insert().
+ */
+function dropcrm_membership_crm_membership_term_insert($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_term_update().
+ */
+function dropcrm_membership_crm_membership_term_update($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_term_delete().
+ */
+function dropcrm_membership_crm_membership_term_delete($term) {
+  _dropcrm_membership_recompute_derived($term->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_insert().
+ */
+function dropcrm_membership_crm_membership_payment_insert($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_update().
+ */
+function dropcrm_membership_crm_membership_payment_update($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
+}
+
+/**
+ * Implements hook_crm_membership_payment_delete().
+ */
+function dropcrm_membership_crm_membership_payment_delete($payment) {
+  _dropcrm_membership_recompute_derived($payment->mid);
 }
 
 /**

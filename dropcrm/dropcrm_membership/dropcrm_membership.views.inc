@@ -31,4 +31,19 @@ function dropcrm_membership_views_data_alter(&$data) {
       ),
     );
   }
+
+  // Swap the Views date-field handler on columns that are intentionally
+  // nullable. The stock handler calls strtotime($value) without a NULL
+  // guard, emitting a PHP 8.1+ deprecation when these rows have no date.
+  $nullable_dates = array(
+    'crm_membership_term'    => array('end_date'),
+    'crm_membership'         => array('last_payment_date'),
+  );
+  foreach ($nullable_dates as $table => $columns) {
+    foreach ($columns as $col) {
+      if (isset($data[$table][$col]['field']['handler'])) {
+        $data[$table][$col]['field']['handler'] = 'DropcrmMembershipHandlerFieldDateSafe';
+      }
+    }
+  }
 }
