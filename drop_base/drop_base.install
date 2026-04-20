@@ -239,6 +239,34 @@ function _drop_base_setup_drop_pages_layout() {
     _drop_base_ensure_block_in_region($layout, $plugin, 'top');
   }
 
+  // Header region: site header (logo + site name + user menu) and main-menu
+  // dropdown. Added idempotently so existing user customizations survive.
+  $header_uuid = _drop_base_ensure_block_in_region($layout, 'system:header', 'header');
+  if ($header_uuid && isset($layout->content[$header_uuid])) {
+    $layout->content[$header_uuid]->settings['block_settings'] = array(
+      'menu'        => 'user-menu',
+      'logo'        => 1,
+      'site_name'   => 1,
+      'site_slogan' => 0,
+    );
+  }
+  $main_menu_uuid = _drop_base_ensure_block_in_region($layout, 'system:main-menu', 'header');
+  if ($main_menu_uuid && isset($layout->content[$main_menu_uuid])) {
+    $layout->content[$main_menu_uuid]->settings['title_display'] = 'none';
+    $layout->content[$main_menu_uuid]->settings['block_settings'] = array(
+      'menu_name'   => 'main-menu',
+      'style'       => 'dropdown',
+      'level'       => '1',
+      'depth'       => '0',
+      'expand_all'  => 0,
+      'clickdown'   => '0',
+      'toggle'      => 1,
+      'toggle_text' => 'Menu',
+      'collapse'    => 'default',
+      'accordion'   => 0,
+    );
+  }
+
   // Ensure the CONTENT region has the main content block, otherwise the
   // page body won't render. New drop_pages layouts need this explicitly;
   // existing ones already have it.
@@ -247,10 +275,46 @@ function _drop_base_setup_drop_pages_layout() {
   }
 
   _drop_base_reorder_tabs_below_section_nav($layout);
+  _drop_base_move_title_to_end_of_top($layout);
   _drop_base_dedupe_layout_positions($layout);
 
   $layout->save();
   backdrop_set_message(t('Drop Suite drop_pages layout configured.'));
+}
+
+/**
+ * Moves the page_components:title block in the TOP region to the last
+ * position in that region. Idempotent.
+ *
+ * Title after tabs matches how Drop Suite pages visually lay out (page
+ * title floats below the nav chrome, right above the content area).
+ */
+function _drop_base_move_title_to_end_of_top($layout) {
+  if (empty($layout->positions['top'])) {
+    return;
+  }
+  $title_uuid = NULL;
+  foreach ($layout->content as $uuid => $block) {
+    if (isset($block->plugin) && $block->plugin === 'system:page_components:title') {
+      $title_uuid = $uuid;
+      break;
+    }
+  }
+  if (!$title_uuid) {
+    return;
+  }
+  $positions = $layout->positions['top'];
+  $idx = array_search($title_uuid, $positions, TRUE);
+  if ($idx === FALSE) {
+    return;
+  }
+  // Already last?
+  if ($idx === count($positions) - 1) {
+    return;
+  }
+  array_splice($positions, $idx, 1);
+  $positions[] = $title_uuid;
+  $layout->positions['top'] = $positions;
 }
 
 /**
@@ -626,4 +690,19 @@ function drop_base_update_1207() {
   _drop_base_setup_drop_pages_layout();
   _drop_base_revert_default_layout_template();
   return t('Migrated Drop Suite blocks from default layout to a dedicated drop_pages layout.');
+}
+
+/**
+ * Add site header + main-menu blocks to the drop_pages layout header
+ * region and move the page title to the end of the top region.
+ *
+ * These were manually placed on the dev site during the drop_pages
+ * layout polish pass; capturing them in code so fresh installs and
+ * existing sites catch up. _drop_base_setup_drop_pages_layout() is
+ * idempotent and preserves any customizations the site admin has
+ * made to the header blocks' settings.
+ */
+function drop_base_update_1208() {
+  _drop_base_setup_drop_pages_layout();
+  return t('Added system:header and system:main-menu to drop_pages header region; moved title to end of top region.');
 }

@@ -431,6 +431,9 @@ function drop_start_available_modules() {
   if (module_exists('dropcrm')) {
     $modules['dropcrm'] = t('Contacts');
   }
+  if (module_exists('dropcrm_membership')) {
+    $modules['dropcrm_membership'] = t('Memberships');
+  }
   if (module_exists('droptasks')) {
     $modules['droptasks'] = t('Tasks');
   }

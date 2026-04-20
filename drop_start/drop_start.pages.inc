@@ -159,14 +159,17 @@ function _drop_start_overview_step_list() {
  */
 function _drop_start_entity_type_labels() {
   return array(
-    'user'            => t('People'),
-    'drop_project'    => t('Projects'),
-    'drop_ticket'     => t('Tickets'),
-    'crm_contact'     => t('Contacts'),
-    'drop_task'       => t('Tasks'),
-    'drop_goal'       => t('Goals'),
-    'drop_time_entry' => t('Time entries'),
-    'node'            => t('Docs'),
+    'user'                   => t('People'),
+    'drop_project'           => t('Projects'),
+    'drop_ticket'            => t('Tickets'),
+    'crm_contact'            => t('Contacts'),
+    'crm_membership'         => t('Memberships'),
+    'crm_membership_term'    => t('Membership terms'),
+    'crm_membership_payment' => t('Membership payments'),
+    'drop_task'              => t('Tasks'),
+    'drop_goal'              => t('Goals'),
+    'drop_time_entry'        => t('Time entries'),
+    'node'                   => t('Docs'),
   );
 }
 
@@ -245,6 +248,11 @@ function drop_start_generate_form_submit($form, &$form_state) {
   $contact_ids = array();
   if (!empty($selected['dropcrm'])) {
     $contact_ids = _drop_start_generate_contacts($uid);
+  }
+
+  // Memberships — need contact_ids to attach to.
+  if (!empty($selected['dropcrm_membership']) && !empty($contact_ids)) {
+    _drop_start_generate_memberships($uid, $contact_ids);
   }
 
   if (!empty($selected['droptickets']) && !empty($project_ids)) {
@@ -502,15 +510,25 @@ function _drop_start_generate_projects($uid) {
  *   Array of created contact IDs.
  */
 function _drop_start_generate_contacts($uid) {
+  // Ensure the tag taxonomy terms we reference below exist. Returns a map
+  // of tag name => tid so we can attach them to contacts.
+  $tag_tids = _drop_start_ensure_tags(array(
+    'Client',
+    'Prospect',
+    'Partner',
+    'Vendor',
+  ));
+
   $orgs = array(
-    array('name' => 'International Olympic Committee'),
-    array('name' => 'Global Sports Broadcasting Inc.'),
-    array('name' => 'Atlas Venue Construction'),
-    array('name' => 'SecurePoint Solutions'),
+    array('name' => 'International Olympic Committee', 'tags' => array('Client')),
+    array('name' => 'Global Sports Broadcasting Inc.', 'tags' => array('Partner')),
+    array('name' => 'Atlas Venue Construction',        'tags' => array('Vendor')),
+    array('name' => 'SecurePoint Solutions',           'tags' => array('Client', 'Vendor')),
   );
 
   $ids = array();
   $org_ids = array();
+  $has_tag_field = field_info_field('field_drop_tags') !== NULL;
 
   // Create organizations first so people can reference them.
   $bundles = field_info_bundles('crm_contact');
@@ -521,6 +539,9 @@ function _drop_start_generate_contacts($uid) {
         'name'   => $org['name'],
         'status' => 1,
       ));
+      if ($has_tag_field && !empty($org['tags'])) {
+        _drop_start_attach_tags($contact, $org['tags'], $tag_tids);
+      }
       $contact->save();
       drop_start_track('crm_contact', $contact->cid);
       $org_ids[] = $contact->cid;
@@ -528,19 +549,20 @@ function _drop_start_generate_contacts($uid) {
     }
   }
 
-  // People — each linked to an organization via field_crm_employer.
+  // People — each linked to an organization via field_crm_employer, plus
+  // a varied mix of tags.
   $ioc_id    = isset($org_ids[0]) ? $org_ids[0] : NULL;
   $gsb_id    = isset($org_ids[1]) ? $org_ids[1] : NULL;
   $atlas_id  = isset($org_ids[2]) ? $org_ids[2] : NULL;
   $secure_id = isset($org_ids[3]) ? $org_ids[3] : NULL;
 
   $people = array(
-    array('first' => 'Helena', 'last' => 'Kowalski', 'org' => $ioc_id),
-    array('first' => 'Marcus', 'last' => 'Chen', 'org' => $atlas_id),
-    array('first' => 'Fatima', 'last' => 'Al-Rashid', 'org' => $gsb_id),
-    array('first' => 'James', 'last' => 'Okafor', 'org' => $secure_id),
-    array('first' => 'Sofia', 'last' => 'Petrov', 'org' => $ioc_id),
-    array('first' => 'Kenji', 'last' => 'Tanaka', 'org' => $gsb_id),
+    array('first' => 'Helena',  'last' => 'Kowalski',  'org' => $ioc_id,    'tags' => array('Client')),
+    array('first' => 'Marcus',  'last' => 'Chen',      'org' => $atlas_id,  'tags' => array('Vendor')),
+    array('first' => 'Fatima',  'last' => 'Al-Rashid', 'org' => $gsb_id,    'tags' => array('Partner')),
+    array('first' => 'James',   'last' => 'Okafor',    'org' => $secure_id, 'tags' => array('Prospect')),
+    array('first' => 'Sofia',   'last' => 'Petrov',    'org' => $ioc_id,    'tags' => array('Client')),
+    array('first' => 'Kenji',   'last' => 'Tanaka',    'org' => $gsb_id,    'tags' => array()),
   );
 
   foreach ($people as $person) {
@@ -553,12 +575,194 @@ function _drop_start_generate_contacts($uid) {
     if (!empty($person['org']) && field_info_field('field_crm_employer')) {
       $contact->field_crm_employer[LANGUAGE_NONE][0]['target_id'] = $person['org'];
     }
+    if ($has_tag_field && !empty($person['tags'])) {
+      _drop_start_attach_tags($contact, $person['tags'], $tag_tids);
+    }
     $contact->save();
     drop_start_track('crm_contact', $contact->cid);
     $ids[] = $contact->cid;
   }
 
   return $ids;
+}
+
+/**
+ * Ensure each given tag name exists in the drop_tags vocabulary. Creates
+ * missing terms. Returns name => tid map for every tag.
+ */
+function _drop_start_ensure_tags(array $names) {
+  $vocab = taxonomy_vocabulary_machine_name_load('drop_tags');
+  if (!$vocab) {
+    return array();
+  }
+  $map = array();
+  foreach ($names as $name) {
+    $existing = taxonomy_get_term_by_name($name, 'drop_tags');
+    if (!empty($existing)) {
+      $term = reset($existing);
+      $map[$name] = (int) $term->tid;
+      continue;
+    }
+    $term = new TaxonomyTerm(array(
+      'name'         => $name,
+      'vocabulary'   => 'drop_tags',
+      'parent'       => array(0),
+    ));
+    taxonomy_term_save($term);
+    $map[$name] = (int) $term->tid;
+  }
+  return $map;
+}
+
+/**
+ * Sets field_drop_tags on a contact to the given tag names (resolved via
+ * the name => tid map from _drop_start_ensure_tags).
+ */
+function _drop_start_attach_tags($contact, array $tag_names, array $tag_tids) {
+  $items = array();
+  foreach ($tag_names as $name) {
+    if (!empty($tag_tids[$name])) {
+      $items[] = array('tid' => $tag_tids[$name]);
+    }
+  }
+  if ($items) {
+    $contact->field_drop_tags[LANGUAGE_NONE] = $items;
+  }
+}
+
+/**
+ * Generate sample memberships across a subset of contacts. Covers the
+ * full state-machine surface: active / expiring-soon / grace / lapsed
+ * / cancelled / lifetime, plus one multi-term history with payments.
+ *
+ * Relies on the default "individual" and (when configured) "lifetime"
+ * membership types being present — both come with the module's shipped
+ * settings.
+ */
+function _drop_start_generate_memberships($uid, $contact_ids) {
+  // Need at least a handful of contacts to attach memberships to.
+  if (count($contact_ids) < 6) {
+    return;
+  }
+
+  // Pick a membership type key that actually exists in settings.
+  $types = config_get('dropcrm_membership.settings', 'types');
+  if (empty($types) || !is_array($types)) {
+    return;
+  }
+  $default_type = isset($types['individual']) ? 'individual' : key($types);
+  $lifetime_type = isset($types['lifetime']) ? 'lifetime' : $default_type;
+
+  // Scenarios: [cid_index, type, end_offset_days, status_override, note]
+  $scenarios = array(
+    array(2, $default_type,   5,    NULL,                                     'expiring in 5 days'),
+    array(3, $default_type,   15,   NULL,                                     'expiring in 15 days'),
+    array(4, $default_type,   25,   NULL,                                     'expiring in 25 days'),
+    array(5, $default_type,   180,  NULL,                                     'active, mid-term'),
+    array(6, $default_type,   -10,  DROPCRM_MEMBERSHIP_STATUS_GRACE,          'in grace'),
+    array(7, $default_type,   -45,  DROPCRM_MEMBERSHIP_STATUS_LAPSED,         'lapsed'),
+    array(8, $default_type,   365,  DROPCRM_MEMBERSHIP_STATUS_CANCELLED,      'cancelled'),
+  );
+
+  $today_ts = strtotime('today');
+  foreach ($scenarios as $s) {
+    list($i, $type, $offset_days, $status_override, $note) = $s;
+    if (!isset($contact_ids[$i])) {
+      continue;
+    }
+    $cid        = $contact_ids[$i];
+    $start_ts   = strtotime(($offset_days - 365) . ' days', $today_ts);
+    $end_ts     = strtotime($offset_days . ' days', $today_ts);
+    $status     = isset($status_override) ? $status_override : DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
+
+    $m = entity_create('crm_membership', array(
+      'cid'    => $cid,
+      'type'   => $type,
+      'status' => $status,
+    ));
+    $m->save();
+    // Auto-assign member_id now that mid is known.
+    if (empty($m->member_id) && function_exists('_dropcrm_membership_generate_member_id')) {
+      $m->member_id = _dropcrm_membership_generate_member_id($m->mid);
+      $m->save();
+    }
+    drop_start_track('crm_membership', $m->mid);
+
+    $term = entity_create('crm_membership_term', array(
+      'mid'        => $m->mid,
+      'start_date' => $start_ts,
+      'end_date'   => $end_ts,
+      'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+      'notes'      => $note,
+    ));
+    $term->save();
+    drop_start_track('crm_membership_term', $term->tid);
+
+    // Payment on the active/expiring-soon scenarios to demo total_paid.
+    if (in_array($offset_days, array(5, 15, 25, 180), TRUE)) {
+      $dues = isset($types[$type]['default_dues']) ? (float) $types[$type]['default_dues'] : 50.00;
+      $p = entity_create('crm_membership_payment', array(
+        'mid'       => $m->mid,
+        'tid'       => $term->tid,
+        'amount'    => $dues,
+        'paid_date' => $start_ts,
+        'method'    => 'Check',
+        'reference' => 'chk sample',
+      ));
+      $p->save();
+      drop_start_track('crm_membership_payment', $p->pid);
+    }
+  }
+
+  // One lifetime membership with 2-term renewal history + 2 payments, on
+  // the first org. Demos the term-history + payment-history panels on
+  // the membership view.
+  if (isset($contact_ids[0]) && isset($types['lifetime'])) {
+    $cid = $contact_ids[0];
+    $m = entity_create('crm_membership', array(
+      'cid'    => $cid,
+      'type'   => $lifetime_type,
+      'status' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+    ));
+    $m->save();
+    if (empty($m->member_id) && function_exists('_dropcrm_membership_generate_member_id')) {
+      $m->member_id = _dropcrm_membership_generate_member_id($m->mid);
+      $m->save();
+    }
+    drop_start_track('crm_membership', $m->mid);
+
+    $t1_start = strtotime('-700 days', $today_ts);
+    $t1_end   = strtotime('-335 days', $today_ts);
+    $t2_start = strtotime('-334 days', $today_ts);
+    $t2_end   = strtotime('+31 days',  $today_ts);
+
+    foreach (array(
+      array($t1_start, $t1_end, 'initial term'),
+      array($t2_start, $t2_end, 'renewal'),
+    ) as $term_info) {
+      $term = entity_create('crm_membership_term', array(
+        'mid'        => $m->mid,
+        'start_date' => $term_info[0],
+        'end_date'   => $term_info[1],
+        'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+        'notes'      => $term_info[2],
+      ));
+      $term->save();
+      drop_start_track('crm_membership_term', $term->tid);
+
+      $dues = isset($types[$lifetime_type]['default_dues']) ? (float) $types[$lifetime_type]['default_dues'] : 100.00;
+      $p = entity_create('crm_membership_payment', array(
+        'mid'       => $m->mid,
+        'tid'       => $term->tid,
+        'amount'    => $dues,
+        'paid_date' => $term_info[0],
+        'method'    => ($term_info[2] === 'initial term') ? 'Credit Card' : 'Check',
+        'reference' => 'sample',
+      ));
+      $p->save();
+      drop_start_track('crm_membership_payment', $p->pid);
+    }
+  }
 }
 
 /**
