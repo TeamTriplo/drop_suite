@@ -3,108 +3,13 @@
  * @file
  * Admin pages and forms for DropCRM Membership.
  *
- * NOTE: The admin list at drop/crm/memberships is temporarily a hand-coded
- * table. It will be replaced by the default Views config
- * (views.view.crm_memberships_admin.json) in the Views step of the build.
+ * The admin list at drop/crm/memberships is rendered by the default View
+ * config (views.view.crm_memberships_admin.json). The expiring block and
+ * contact-page Memberships section are also Views — block displays
+ * placed via the Layouts system. This file provides only: the view page,
+ * add / edit / renew / cancel / payment / term CRUD forms, and the
+ * reports page at drop/crm/reports/memberships.
  */
-
-/**
- * Hand-coded list page at drop/crm/memberships. Will be replaced by a View.
- */
-function dropcrm_membership_list_page() {
-  $header = array(
-    array('data' => t('Member ID'),    'field' => 'm.member_id'),
-    array('data' => t('Contact'),      'field' => 'c.name'),
-    array('data' => t('Type'),         'field' => 'm.type'),
-    array('data' => t('Status'),       'field' => 'm.status'),
-    array('data' => t('Term ends')),
-    array('data' => t('Operations')),
-  );
-
-  $query = db_select('crm_membership', 'm')->extend('TableSort')->extend('PagerDefault');
-  $query->leftJoin('crm_contact', 'c', 'c.cid = m.cid');
-  $query->fields('m', array('mid', 'member_id', 'cid', 'type', 'status'));
-  $query->fields('c', array('name'));
-  $query->orderByHeader($header);
-  $query->limit(50);
-
-  // Filter: status (GET param).
-  if (!empty($_GET['status']) && $_GET['status'] !== 'all') {
-    $status_map = array(
-      'active'    => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
-      'grace'     => DROPCRM_MEMBERSHIP_STATUS_GRACE,
-      'lapsed'    => DROPCRM_MEMBERSHIP_STATUS_LAPSED,
-      'pending'   => DROPCRM_MEMBERSHIP_STATUS_PENDING,
-      'cancelled' => DROPCRM_MEMBERSHIP_STATUS_CANCELLED,
-    );
-    if (isset($status_map[$_GET['status']])) {
-      $query->condition('m.status', $status_map[$_GET['status']]);
-    }
-  }
-
-  $rows = array();
-  $types = _dropcrm_membership_types();
-  foreach ($query->execute() as $row) {
-    $type_label = isset($types[$row->type]['label']) ? $types[$row->type]['label'] : $row->type;
-    $end_date = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $row->mid))->fetchField();
-
-    $ops = array();
-    $ops[] = l(t('View'), 'drop/crm/memberships/' . $row->mid);
-    if (user_access('manage dropcrm_membership')) {
-      $ops[] = l(t('Renew'), 'drop/crm/memberships/' . $row->mid . '/renew');
-    }
-
-    $rows[] = array(
-      'data' => array(
-        check_plain($row->member_id),
-        l($row->name, 'drop/crm/contact/' . $row->cid),
-        check_plain($type_label),
-        array('data' => _dropcrm_membership_status_badge($row->status)),
-        $end_date ? check_plain($end_date) : t('—'),
-        implode(' | ', $ops),
-      ),
-    );
-  }
-
-  $build = array();
-
-  // Status filter pills.
-  $build['filters'] = array(
-    '#markup' => dropcrm_membership_status_filter_pills(),
-  );
-
-  $build['table'] = array(
-    '#theme'  => 'table',
-    '#header' => $header,
-    '#rows'   => $rows,
-    '#empty'  => t('No memberships yet. <a href="@url">Add one</a>.', array('@url' => url('drop/crm/memberships/add'))),
-  );
-  $build['pager'] = array('#theme' => 'pager');
-
-  return $build;
-}
-
-/**
- * Renders the status filter pill navigation for the list page.
- */
-function dropcrm_membership_status_filter_pills() {
-  $current = isset($_GET['status']) ? $_GET['status'] : 'all';
-  $pills = array(
-    'all'       => t('All'),
-    'active'    => t('Active'),
-    'grace'     => t('Grace'),
-    'lapsed'    => t('Lapsed'),
-    'pending'   => t('Pending'),
-    'cancelled' => t('Cancelled'),
-  );
-  $links = array();
-  foreach ($pills as $key => $label) {
-    $class = $current === $key ? ' class="active"' : '';
-    $query = $key === 'all' ? array() : array('status' => $key);
-    $links[] = '<li' . $class . '>' . l($label, 'drop/crm/memberships', array('query' => $query)) . '</li>';
-  }
-  return '<ul class="crm-membership-filter-pills">' . implode('', $links) . '</ul>';
-}
 
 /**
  * Membership view page.
