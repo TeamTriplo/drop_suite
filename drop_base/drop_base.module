@@ -1040,11 +1040,8 @@ function drop_base_field_extra_fields() {
     'description' => t('Ticket list for this project (when DropTickets is enabled).'),
     'weight' => 20,
   );
-  $extra['drop_project']['drop_project']['display']['platform'] = array(
-    'label' => t('Platform'),
-    'description' => t('CMS platform (Backdrop, Drupal, WordPress, etc).'),
-    'weight' => 6,
-  );
+  // 'platform' display entry added by dropmonitor via
+  // hook_field_extra_fields_alter when that module is enabled.
   $extra['drop_project']['drop_project']['display']['site_health'] = array(
     'label' => t('Site health'),
     'description' => t('Server monitoring health card (when Drop Monitor is linked).'),
@@ -1120,14 +1117,9 @@ function drop_base_entity_property_info() {
     'schema field'    => 'ticket_counter',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
-  $project['platform'] = array(
-    'label'           => t('Platform'),
-    'type'            => 'text',
-    'description'     => t('CMS platform: backdrop, drupal, wordpress, or other.'),
-    'schema field'    => 'platform',
-    'getter callback' => 'entity_plus_property_verbatim_get',
-    'setter callback' => 'entity_plus_property_verbatim_set',
-  );
+  // platform property declared by dropmonitor via
+  // hook_entity_property_info_alter — only appears when that module is
+  // enabled, which matches where the column actually exists.
   $project['site_url'] = array(
     'label'           => t('Website URL'),
     'type'            => 'uri',

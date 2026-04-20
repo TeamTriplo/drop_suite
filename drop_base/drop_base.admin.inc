@@ -187,8 +187,9 @@ function drop_base_project_view($project) {
     );
   }
 
-  // Platform.
-  if (!empty($project->platform) && (!isset($display['platform']) || $display['platform']['visible'])) {
+  // Platform — only rendered when dropmonitor is enabled. The column is
+  // owned by dropmonitor; showing it without dropmonitor makes no sense.
+  if (module_exists('dropmonitor') && !empty($project->platform) && (!isset($display['platform']) || $display['platform']['visible'])) {
     $platform_labels = drop_base_platform_options();
     $platform_text = isset($platform_labels[$project->platform]) ? $platform_labels[$project->platform] : check_plain($project->platform);
     $fields_output['platform'] = array(
@@ -414,51 +415,9 @@ function drop_base_project_form($form, &$form_state, $project = NULL) {
     '#weight'        => -16,
   );
 
-  $form['platform'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Platform'),
-    '#options'       => array(
-      ''          => t('— Select —'),
-      'backdrop'  => t('Backdrop CMS'),
-      'drupal'    => t('Drupal'),
-      'wordpress' => t('WordPress'),
-      'other'     => t('Other'),
-    ),
-    '#default_value' => $is_edit && !empty($project->platform) ? $project->platform : '',
-    '#description'   => t('Determines which health check URL is used for uptime monitoring.'),
-    '#weight'        => -14,
-  );
-
-  $form['health_url'] = array(
-    '#type'          => 'textfield',
-    '#title'         => t('Health check URL'),
-    '#default_value' => $is_edit && !empty($project->health_url) ? $project->health_url : '',
-    '#maxlength'     => 255,
-    '#description'   => t('Optional. A URL that requires a live backend (not cached). Leave empty to auto-detect based on platform.'),
-    '#placeholder'   => t('e.g. https://example.com/user/login'),
-    '#weight'        => -12,
-  );
-
-  $form['gentle_monitor'] = array(
-    '#type'          => 'checkbox',
-    '#title'         => t('Gentle monitoring'),
-    '#default_value' => $is_edit && !empty($project->gentle_monitor) ? $project->gentle_monitor : 0,
-    '#description'   => t('Use a lighter check for sites with strict bot protection. Checks the homepage with a browser-like request instead of the health URL.'),
-    '#weight'        => -10,
-  );
-
-  $form['check_interval'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Check interval'),
-    '#options'       => array(
-      5  => t('Every 5 minutes'),
-      10 => t('Every 10 minutes'),
-      15 => t('Every 15 minutes'),
-    ),
-    '#default_value' => $is_edit && !empty($project->check_interval) ? $project->check_interval : 5,
-    '#description'   => t('How often to check uptime. Gentle-monitored sites may benefit from longer intervals.'),
-    '#weight'        => -8,
-  );
+  // Platform / Health URL / Gentle monitoring / Check interval fields
+  // are now owned by dropmonitor — see dropmonitor_form_drop_base_project_form_alter().
+  // They only render when dropmonitor is enabled.
 
   // Server monitoring link — only when Drop Monitor is enabled.
   if (module_exists('dropmonitor')) {
@@ -582,14 +541,23 @@ function drop_base_project_form_submit($form, &$form_state) {
 
   $project->name            = trim($values['name']);
   $project->site_url        = trim($values['site_url']);
-  $project->platform        = $values['platform'];
-  $project->health_url      = trim($values['health_url']);
-  $project->gentle_monitor  = (int) $values['gentle_monitor'];
-  $project->check_interval  = (int) $values['check_interval'];
   $project->active          = (int) $values['active'];
 
-  // Server monitoring link.
-  if (module_exists('dropmonitor') && isset($values['monitoring'])) {
+  // Dropmonitor-owned fields: only present when dropmonitor is enabled
+  // and added them to the form via hook_form_alter.
+  if (isset($values['platform'])) {
+    $project->platform = $values['platform'];
+  }
+  if (isset($values['health_url'])) {
+    $project->health_url = trim($values['health_url']);
+  }
+  if (isset($values['gentle_monitor'])) {
+    $project->gentle_monitor = (int) $values['gentle_monitor'];
+  }
+  if (isset($values['check_interval'])) {
+    $project->check_interval = (int) $values['check_interval'];
+  }
+  if (isset($values['monitoring'])) {
     $project->server_sid = !empty($values['monitoring']['server_sid']) ? (int) $values['monitoring']['server_sid'] : NULL;
     $project->agent_site_key = !empty($values['monitoring']['agent_site_key']) ? $values['monitoring']['agent_site_key'] : '';
   }

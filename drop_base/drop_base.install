@@ -67,48 +67,11 @@ function drop_base_schema() {
         'not null'    => TRUE,
         'default'     => '',
       ),
-      'platform' => array(
-        'description' => 'CMS platform: backdrop, drupal, wordpress, or other.',
-        'type'        => 'varchar',
-        'length'      => 20,
-        'not null'    => TRUE,
-        'default'     => '',
-      ),
-      'health_url' => array(
-        'description' => 'Custom health check URL. If empty, auto-calculated from site_url + platform.',
-        'type'        => 'varchar',
-        'length'      => 255,
-        'not null'    => TRUE,
-        'default'     => '',
-      ),
-      'gentle_monitor' => array(
-        'description' => 'Use gentle monitoring: homepage check, browser-like User-Agent, HEAD request.',
-        'type'        => 'int',
-        'size'        => 'tiny',
-        'not null'    => TRUE,
-        'default'     => 0,
-      ),
-      'check_interval' => array(
-        'description' => 'Uptime check interval in minutes. Default 5.',
-        'type'        => 'int',
-        'size'        => 'small',
-        'not null'    => TRUE,
-        'default'     => 5,
-      ),
-      'server_sid' => array(
-        'description' => 'Linked Drop Monitor server ID.',
-        'type'        => 'int',
-        'unsigned'    => TRUE,
-        'not null'    => FALSE,
-        'default'     => NULL,
-      ),
-      'agent_site_key' => array(
-        'description' => 'Site key from the monitoring agent (matches the label in the agent JSON).',
-        'type'        => 'varchar',
-        'length'      => 255,
-        'not null'    => TRUE,
-        'default'     => '',
-      ),
+      // Platform/health_url/gentle_monitor/check_interval/server_sid/
+      // agent_site_key columns are now owned by dropmonitor. See
+      // dropmonitor_install(); on sites where dropmonitor is enabled the
+      // columns are added idempotently. drop_base no longer declares them
+      // because they're useless without dropmonitor.
       'uid' => array(
         'type'     => 'int',
         'unsigned' => TRUE,
@@ -122,7 +85,6 @@ function drop_base_schema() {
     'indexes' => array(
       'uid'    => array('uid'),
       'active' => array('active'),
-      'server_sid' => array('server_sid'),
       'cid'    => array('cid'),
     ),
   );
