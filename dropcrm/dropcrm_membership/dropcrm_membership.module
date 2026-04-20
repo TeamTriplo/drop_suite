@@ -20,6 +20,23 @@ if (!defined('DROPCRM_MEMBERSHIP_STATUS_LAPSED')) {
 }
 
 // ---------------------------------------------------------------------------
+// Shared CSS
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_init().
+ *
+ * Loads the module's CSS on every page so the status badges, summary
+ * tables, filter pills, and contact-view Memberships section always get
+ * their styling — even when the class hooks appear on a page owned by
+ * a different module (e.g. contact view page rendered by dropcrm).
+ * Matches drop_base's pattern.
+ */
+function dropcrm_membership_init() {
+  backdrop_add_css(backdrop_get_path('module', 'dropcrm_membership') . '/dropcrm_membership.css');
+}
+
+// ---------------------------------------------------------------------------
 // Autoload
 // ---------------------------------------------------------------------------
 
