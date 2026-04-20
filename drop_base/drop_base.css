@@ -347,11 +347,12 @@ a.drop-section-add {
   line-height: 1.2;
 }
 
-/* Section Navigation and Page Tabs: cap at narrow-page width on all pages,
-   centered on the viewport. Keeps these header elements in a stable
-   horizontal position regardless of the content width below. */
-.l-top .block-drop-base-drop-section-nav,
-.l-top nav.tabs {
+/* Section Navigation and Page Tabs: cap at narrow-page width on Drop Suite
+   pages, centered on the viewport. Scoped to .layout--drop-suite so this
+   styling does not leak onto admin pages using harris_flexible (which also
+   has a .l-top region). */
+.layout--drop-suite .l-top .block-drop-base-drop-section-nav,
+.layout--drop-suite .l-top nav.tabs {
   max-width: var(--drop-narrow-page-width, 1000px);
   margin-left: auto;
   margin-right: auto;
@@ -362,15 +363,15 @@ a.drop-section-add {
    read as a connected segmented control rather than individual pills.
    Neutralises Basis theme's dark banner (nav.tabs:before in basis/skin.css
    line 881). */
-.l-top .tabs {
+.layout--drop-suite .l-top .tabs {
   margin-bottom: 0.4rem;
 }
 
-.l-top nav.tabs:before {
+.layout--drop-suite .l-top nav.tabs:before {
   background-color: transparent;
 }
 
-.l-top ul.tabs.primary {
+.layout--drop-suite .l-top ul.tabs.primary {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
@@ -383,17 +384,17 @@ a.drop-section-add {
   list-style: none;
 }
 
-.l-top ul.tabs.primary li {
+.layout--drop-suite .l-top ul.tabs.primary li {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.l-top ul.tabs.primary li + li {
+.layout--drop-suite .l-top ul.tabs.primary li + li {
   border-left: 1px solid #c8c8c8;
 }
 
-.l-top ul.tabs.primary li a {
+.layout--drop-suite .l-top ul.tabs.primary li a {
   display: block;
   background: #fff;
   border: none;
@@ -407,14 +408,14 @@ a.drop-section-add {
   text-transform: none;
 }
 
-.l-top ul.tabs.primary li a:hover {
+.layout--drop-suite .l-top ul.tabs.primary li a:hover {
   background: #f2f2f2;
   color: #222;
   text-decoration: none;
 }
 
-.l-top ul.tabs.primary li.active a,
-.l-top ul.tabs.primary li.active a:hover {
+.layout--drop-suite .l-top ul.tabs.primary li.active a,
+.layout--drop-suite .l-top ul.tabs.primary li.active a:hover {
   background: var(--drop-primary, #1565c0);
   color: #fff;
 }
