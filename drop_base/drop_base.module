@@ -187,9 +187,10 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/projects/\d+$#',
     '#^drop/projects/add$#',
     '#^drop/projects/\d+/edit$#',
-    // CRM contact add/edit (entity_ui paths).
+    // CRM contact add/edit (entity_ui paths + alias path).
     '#^drop/crm/contacts/manage/crm_\w+/add$#',
     '#^drop/crm/contacts/manage/\d+/edit$#',
+    '#^drop/crm/contacts/\d+/edit$#',
     // CRM activity add/edit (entity_ui paths).
     '#^drop/crm/activities/manage/add$#',
     '#^drop/crm/activities/manage/\d+/edit$#',
@@ -203,7 +204,8 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/crm/memberships/\d+/payment/\d+/delete$#',
     '#^drop/crm/memberships/\d+/term/\d+/edit$#',
     '#^drop/crm/memberships/\d+/term/\d+/delete$#',
-    // File library: upload, view, replace.
+    // File library: list, upload, view, replace.
+    '#^drop/files$#',
     '#^drop/files/upload$#',
     '#^drop/files/\d+/view$#',
     '#^drop/files/\d+/edit$#',

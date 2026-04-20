@@ -26,7 +26,7 @@ against intended behavior.
 | Area | Paths |
 |---|---|
 | Tickets | `drop/tickets/{tid}` · `drop/tickets/add` · `drop/tickets/{tid}/edit` |
-| CRM contact | `drop/crm/contact/{cid}` · `drop/crm/contacts/manage/crm_*/add` · `drop/crm/contacts/manage/{cid}/edit` |
+| CRM contact | `drop/crm/contact/{cid}` · `drop/crm/contacts/manage/crm_*/add` · `drop/crm/contacts/manage/{cid}/edit` · `drop/crm/contacts/{cid}/edit` |
 | CRM activity | `drop/crm/activity/{aid}` · `drop/crm/activities/manage/add` · `drop/crm/activities/manage/{aid}/edit` |
 | CRM contact method | `drop/crm/contact-methods/{cmid}` |
 | Tasks | `drop/tasks/{tid}` · `drop/tasks/add` · `drop/tasks/{tid}/edit` |
@@ -34,7 +34,7 @@ against intended behavior.
 | Time | `drop/time/entry/{tid}/edit` |
 | Docs | `drop/docs` (list) · `drop/doc/{did}` |
 | Projects | `drop/projects/{pid}` · `drop/projects/add` · `drop/projects/{pid}/edit` |
-| Files | `drop/files/upload` · `drop/files/{fid}/view` · `drop/files/{fid}/edit` · `drop/files/{fid}/replace` · `drop/files/{fid}/delete` |
+| Files | `drop/files` (library index) · `drop/files/upload` · `drop/files/{fid}/view` · `drop/files/{fid}/edit` · `drop/files/{fid}/replace` · `drop/files/{fid}/delete` |
 | Updates | `drop/updates` (feed) · `drop/updates/add` · `drop/updates/{uid}/edit` · `drop/updates/{uid}/delete` |
 | Meeting | `drop/meeting` |
 | Settings (all) | `drop/settings*` · `drop/tickets/settings*` · `drop/crm/settings*` · `drop/monitor/settings*` · `drop/docs/settings*` · `drop/time/settings*` · `drop/files/settings*` |
@@ -50,7 +50,6 @@ examples:
 - `drop/crm` · `drop/crm/contacts` · `drop/crm/activities` · `drop/crm/reports/*`
 - `drop/tasks` (list) · `drop/tasks/kanban` · `drop/tasks/reports/*`
 - `drop/time` (list, reports)
-- `drop/files` (library index — note: individual file views are narrow)
 - `drop/projects` (list)
 - `drop/monitor/*` (dashboards)
 - `drop/finance/*`
