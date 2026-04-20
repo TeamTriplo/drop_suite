@@ -883,3 +883,65 @@ span.drop-pin-link.drop-pin-disabled {
   position: relative;
   top: -0.1em;
 }
+
+/* ---------------------------------------------------------------------------
+   Exposed filters on Views pages
+   Core Views ships inline-block widgets which can end up stacking vertically
+   inside a constrained container. Flex-with-wrap keeps filters + Apply/Reset
+   on one horizontal row when there's space, and wraps gracefully on narrow
+   viewports. Applies to every Drop Suite page that exposes filters on a View.
+   --------------------------------------------------------------------------- */
+
+.views-exposed-form .views-exposed-widgets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.views-exposed-form .views-exposed-widget {
+  display: block; /* override core's inline-block */
+  flex: 0 0 auto;
+  padding: 0;
+  margin: 0;
+}
+
+.views-exposed-form .views-exposed-widget label {
+  display: block;
+  margin: 0 0 0.15rem 0;
+  font-size: 0.85em;
+}
+
+.views-exposed-form .views-widget {
+  margin: 0;
+}
+
+.views-exposed-form .views-widget .form-item {
+  margin: 0;
+}
+
+.views-exposed-form .views-submit-button .form-submit,
+.views-exposed-form .views-reset-button .form-submit {
+  margin: 0;
+}
+
+/* Align submit and reset with the bottom of the text inputs */
+.views-exposed-form .views-submit-button,
+.views-exposed-form .views-reset-button {
+  padding-bottom: 0;
+}
+
+/* On narrow viewports give each widget a full row so form controls aren't
+   squeezed against one another. */
+@media (max-width: 560px) {
+  .views-exposed-form .views-exposed-widget {
+    flex: 1 1 100%;
+  }
+  .views-exposed-form .views-exposed-widget input[type="text"],
+  .views-exposed-form .views-exposed-widget input[type="search"],
+  .views-exposed-form .views-exposed-widget select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
