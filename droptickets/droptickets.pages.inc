@@ -3232,6 +3232,13 @@ function droptickets_flagged_page() {
     }
   }
 
+  // Sort by priority DESC (Critical → None). PHP's usort is stable, so
+  // within each priority group tickets retain their original
+  // flag-creation order.
+  usort($ordered, function ($a, $b) {
+    return (int) $b->priority - (int) $a->priority;
+  });
+
   $pids          = array_unique(array_map(function($t) { return $t->pid; }, $ordered));
   $projects      = entity_load('drop_project', $pids);
   $assignee_uids = array_filter(array_unique(array_map(function($t) { return $t->assignee_uid; }, $ordered)));
@@ -3261,8 +3268,9 @@ function droptickets_flagged_page() {
     }
   }
 
-  $type_options   = droptickets_type_options();
-  $status_options = droptickets_all_status_options();
+  $type_options    = droptickets_type_options();
+  $status_options  = droptickets_all_status_options();
+  $priority_labels = drop_base_priority_labels();
 
   $rows = array();
   $i    = 1;
@@ -3271,8 +3279,10 @@ function droptickets_flagged_page() {
     $label     = droptickets_ticket_label($ticket, $project);
     $proj_name = $project ? l($project->name, 'drop/projects/' . $project->pid) : '—';
     $assignee  = droptickets_assignee_label($ticket, $accounts);
-    $type_label   = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
-    $status_label = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
+    $type_label     = isset($type_options[$ticket->type]) ? $type_options[$ticket->type] : $ticket->type;
+    $status_label   = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
+    $priority_class = 'drop-priority-' . drop_base_priority_class($ticket->priority);
+    $priority_dot   = '<span class="droptickets-priority-dot ' . $priority_class . '" title="' . check_plain(isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '') . '"></span>';
 
     // Render all flag chips for this ticket (not just the filter type) so
     // multi-flag tickets show their full state even on a filtered view.
@@ -3294,19 +3304,21 @@ function droptickets_flagged_page() {
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
         array('data' => $proj_name),
         array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid), 'class' => array('droptickets-col-title')),
+        array('data' => $priority_dot, 'class' => array('droptickets-col-priority')),
         array('data' => $flags_cell, 'class' => array('droptickets-col-flag')),
         array('data' => '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>'),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
         array('data' => $board_cell, 'class' => array('droptickets-col-boards')),
         array('data' => $assignee),
       ),
+      'class' => array($priority_class),
     );
     $i++;
   }
 
   $output['table'] = array(
     '#theme'      => 'table',
-    '#header'     => array(t('#'), t('ID'), t('Project'), t('Title'), t('Flags'), t('Type'), t('Status'), t('Boards'), t('Assignee')),
+    '#header'     => array(t('#'), t('ID'), t('Project'), t('Title'), t('P'), t('Flags'), t('Type'), t('Status'), t('Boards'), t('Assignee')),
     '#rows'       => $rows,
     '#attributes' => array('class' => array('droptickets-list', 'droptickets-flagged-list')),
   );
