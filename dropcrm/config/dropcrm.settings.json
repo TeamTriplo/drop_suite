@@ -1,5 +1,6 @@
 {
   "_config_name": "dropcrm.settings",
+  "outreach_goal_enabled": false,
   "activity_types": {
     "call": {
       "label": "Call",

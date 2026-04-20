@@ -711,13 +711,14 @@ function dropcrm_admin_overview() {
     ),
   );
 
-  // Outreach goal widget — only shown when a goal is configured.
+  // Outreach goal widget — only shown when the Labs-managed flag is on
+  // AND a goal is configured.
   $config        = config('dropcrm.settings');
   $goal_amount   = (int) $config->get('outreach_goal_amount');
   $goal_period   = $config->get('outreach_goal_period') ?: 'day';
   $window_weeks  = (int) ($config->get('outreach_goal_window_weeks') ?: 4);
 
-  if ($goal_amount > 0) {
+  if (_dropcrm_outreach_enabled() && $goal_amount > 0) {
     $window_start  = strtotime('-' . $window_weeks . ' weeks', REQUEST_TIME);
     $start_over_ts = (int) state_get('dropcrm.outreach_goal_start', 0);
     $measure_start = max($window_start, $start_over_ts);
@@ -1047,13 +1048,15 @@ function crm_activity_form($form, &$form_state, $entity, $op = 'edit') {
     '#weight'        => -20,
   );
 
-  $form['is_outreach'] = array(
-    '#type'          => 'checkbox',
-    '#title'         => t('Count as outreach'),
-    '#description'   => t('Check if this activity counts toward your outreach goal.'),
-    '#default_value' => isset($entity->is_outreach) ? (int) $entity->is_outreach : 0,
-    '#weight'        => -19,
-  );
+  if (_dropcrm_outreach_enabled()) {
+    $form['is_outreach'] = array(
+      '#type'          => 'checkbox',
+      '#title'         => t('Count as outreach'),
+      '#description'   => t('Check if this activity counts toward your outreach goal.'),
+      '#default_value' => isset($entity->is_outreach) ? (int) $entity->is_outreach : 0,
+      '#weight'        => -19,
+    );
+  }
 
   $form['priority'] = array(
     '#type'          => 'select',
@@ -1589,45 +1592,47 @@ function dropcrm_settings_form($form, &$form_state) {
     '#default_value' => $config->get('enable_households') ? 1 : 0,
   );
 
-  // Outreach goal settings.
-  $form['outreach_goal'] = array(
-    '#type'        => 'fieldset',
-    '#title'       => t('Outreach Goal'),
-    '#description' => t('Track your outreach pace. Any completed activity with the "Count as outreach" checkbox ticked contributes to this goal. View progress at <a href="@url">Reports → Outreach Goal</a>.', array('@url' => url('drop/crm/reports/outreach-goal'))),
-    '#collapsible' => TRUE,
-    '#collapsed'   => TRUE,
-    '#weight'      => -5,
-  );
-  $form['outreach_goal']['outreach_goal_amount'] = array(
-    '#type'          => 'number',
-    '#title'         => t('Goal'),
-    '#field_suffix'  => t('outreach activities'),
-    '#default_value' => $config->get('outreach_goal_amount') ?: 0,
-    '#min'           => 0,
-    '#step'          => 1,
-    '#size'          => 5,
-    '#description'   => t('Set to 0 to disable goal tracking.'),
-  );
-  $form['outreach_goal']['outreach_goal_period'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Per'),
-    '#options'       => array('day' => t('Day'), 'week' => t('Week')),
-    '#default_value' => $config->get('outreach_goal_period') ?: 'day',
-  );
-  $window_options = array(
-    1  => t('1 week'),
-    2  => t('2 weeks'),
-    4  => t('4 weeks'),
-    8  => t('8 weeks'),
-    12 => t('12 weeks'),
-  );
-  $form['outreach_goal']['outreach_goal_window_weeks'] = array(
-    '#type'          => 'select',
-    '#title'         => t('Measurement window'),
-    '#options'       => $window_options,
-    '#default_value' => $config->get('outreach_goal_window_weeks') ?: 4,
-    '#description'   => t('How far back to measure your progress. The "Start over" button on the Outreach Goal report page resets this window.'),
-  );
+  // Outreach goal settings — gated on Labs-managed flag.
+  if (_dropcrm_outreach_enabled()) {
+    $form['outreach_goal'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Outreach Goal'),
+      '#description' => t('Track your outreach pace. Any completed activity with the "Count as outreach" checkbox ticked contributes to this goal. View progress at <a href="@url">Reports → Outreach Goal</a>.', array('@url' => url('drop/crm/reports/outreach-goal'))),
+      '#collapsible' => TRUE,
+      '#collapsed'   => TRUE,
+      '#weight'      => -5,
+    );
+    $form['outreach_goal']['outreach_goal_amount'] = array(
+      '#type'          => 'number',
+      '#title'         => t('Goal'),
+      '#field_suffix'  => t('outreach activities'),
+      '#default_value' => $config->get('outreach_goal_amount') ?: 0,
+      '#min'           => 0,
+      '#step'          => 1,
+      '#size'          => 5,
+      '#description'   => t('Set to 0 to disable goal tracking.'),
+    );
+    $form['outreach_goal']['outreach_goal_period'] = array(
+      '#type'          => 'select',
+      '#title'         => t('Per'),
+      '#options'       => array('day' => t('Day'), 'week' => t('Week')),
+      '#default_value' => $config->get('outreach_goal_period') ?: 'day',
+    );
+    $window_options = array(
+      1  => t('1 week'),
+      2  => t('2 weeks'),
+      4  => t('4 weeks'),
+      8  => t('8 weeks'),
+      12 => t('12 weeks'),
+    );
+    $form['outreach_goal']['outreach_goal_window_weeks'] = array(
+      '#type'          => 'select',
+      '#title'         => t('Measurement window'),
+      '#options'       => $window_options,
+      '#default_value' => $config->get('outreach_goal_window_weeks') ?: 4,
+      '#description'   => t('How far back to measure your progress. The "Start over" button on the Outreach Goal report page resets this window.'),
+    );
+  }
 
   // Activity Types fieldset.
   $form['activity_types'] = array(

@@ -467,6 +467,42 @@ function dropcrm_entity_property_info() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns whether the Outreach Goal feature's UI should be exposed.
+ *
+ * Gated on the dropcrm.settings:outreach_goal_enabled config flag, which
+ * defaults to FALSE. Flipped via Drop Labs (drop_labs module) or, on
+ * grandfathered sites, by dropcrm_update_1204().
+ *
+ * Only guards user-visible surfaces. The underlying schema column
+ * (crm_activity.is_outreach), config keys, and state key stay in place
+ * regardless so disabling the flag doesn't lose data.
+ */
+function _dropcrm_outreach_enabled() {
+  return (bool) config_get('dropcrm.settings', 'outreach_goal_enabled');
+}
+
+/**
+ * Implements hook_drop_labs_info().
+ *
+ * Declares Outreach Goal as an experimental feature that Drop Labs can
+ * toggle. Has no effect unless drop_labs is installed — the hook is
+ * dormant data then.
+ */
+function dropcrm_drop_labs_info() {
+  return array(
+    'outreach_goal' => array(
+      'title'       => t('Outreach Goal'),
+      'description' => t('Track an outreach pace (e.g. "@n calls per day") and see progress on the CRM settings dashboard and a dedicated report. Adds a "Count as outreach" checkbox to the activity edit form.', array('@n' => 3)),
+      'caveats'     => t('Niche, Triplo-specific workflow that may not suit other users. Off by default on new sites.'),
+      'module'      => 'dropcrm',
+      'config_name' => 'dropcrm.settings',
+      'config_key'  => 'outreach_goal_enabled',
+      'default'     => FALSE,
+    ),
+  );
+}
+
+/**
  * Implements hook_permission().
  */
 function dropcrm_permission() {
@@ -1013,13 +1049,16 @@ function dropcrm_menu() {
     'file'             => 'dropcrm.admin.inc',
     'type'             => MENU_CALLBACK,
   );
-  $items['drop/crm/reports/outreach-goal'] = array(
-    'title'            => 'Outreach Goal',
-    'page callback'    => 'dropcrm_report_outreach_goal',
-    'access arguments' => array('access crm'),
-    'file'             => 'dropcrm.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
+  // Outreach Goal report — gated on Labs-managed flag.
+  if (_dropcrm_outreach_enabled()) {
+    $items['drop/crm/reports/outreach-goal'] = array(
+      'title'            => 'Outreach Goal',
+      'page callback'    => 'dropcrm_report_outreach_goal',
+      'access arguments' => array('access crm'),
+      'file'             => 'dropcrm.admin.inc',
+      'type'             => MENU_CALLBACK,
+    );
+  }
   $items['drop/crm/reports/clients'] = array(
     'title'            => 'Clients',
     'page callback'    => 'dropcrm_report_clients',
@@ -1666,7 +1705,7 @@ function dropcrm_menu_local_tasks_alter(&$data, $router_item, $root_path) {
  * Implements hook_drop_reports().
  */
 function dropcrm_drop_reports() {
-  return array(
+  $reports = array(
     'dropcrm_last_contact' => array(
       'title'              => t('Last Contact'),
       'path'               => 'drop/crm/reports/last-contact',
@@ -1674,13 +1713,6 @@ function dropcrm_drop_reports() {
       'module'             => 'dropcrm',
       'default_pin'        => TRUE,
       'is_default_subtask' => TRUE,
-    ),
-    'dropcrm_outreach_goal' => array(
-      'title'       => t('Outreach Goal'),
-      'path'        => 'drop/crm/reports/outreach-goal',
-      'root_path'   => 'drop/crm',
-      'module'      => 'dropcrm',
-      'default_pin' => FALSE,
     ),
     'dropcrm_clients' => array(
       'title'       => t('Clients'),
@@ -1697,6 +1729,16 @@ function dropcrm_drop_reports() {
       'default_pin' => FALSE,
     ),
   );
+  if (_dropcrm_outreach_enabled()) {
+    $reports['dropcrm_outreach_goal'] = array(
+      'title'       => t('Outreach Goal'),
+      'path'        => 'drop/crm/reports/outreach-goal',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm',
+      'default_pin' => FALSE,
+    );
+  }
+  return $reports;
 }
 
 /**
@@ -1787,11 +1829,13 @@ function dropcrm_drop_section_links($section) {
     'weight' => 20,
   );
 
-  $links['outreach_goal'] = array(
-    'title'  => t('Outreach Goal'),
-    'href'   => 'drop/crm/reports/outreach-goal',
-    'weight' => 25,
-  );
+  if (_dropcrm_outreach_enabled()) {
+    $links['outreach_goal'] = array(
+      'title'  => t('Outreach Goal'),
+      'href'   => 'drop/crm/reports/outreach-goal',
+      'weight' => 25,
+    );
+  }
 
   $links['clients'] = array(
     'title'  => t('Clients'),
