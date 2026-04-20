@@ -710,6 +710,16 @@ function _drop_base_section_nav_block() {
  */
 function _drop_base_get_section() {
   $path = current_path();
+  // Settings sub-pages (drop/settings, drop/*/settings*) aren't working
+  // views — they're admin surfaces. Suppress the section nav there so the
+  // ticket/CRM/etc. working tabs don't spill into a settings context. See
+  // tid 570.
+  if ($path === 'drop/settings' || strpos($path, 'drop/settings/') === 0) {
+    return NULL;
+  }
+  if (preg_match('#^drop/[^/]+/settings(/|$)#', $path)) {
+    return NULL;
+  }
   if (preg_match('#^drop/([^/]+)#', $path, $m)) {
     return $m[1];
   }
