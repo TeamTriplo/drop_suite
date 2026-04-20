@@ -931,14 +931,25 @@ function dropcrm_membership_dropcrm_contact_view_alter(&$output, $contact) {
     return;
   }
   $rendered = views_embed_view('crm_memberships_for_contact', 'block', $contact->cid);
-  if (!empty($rendered)) {
-    $output['memberships'] = array(
-      '#prefix' => '<div class="crm-contact-memberships"><h3>' . t('Memberships') . '</h3>',
-      '#suffix' => '</div>',
-      '#weight' => 18,
-      '#markup' => $rendered,
-    );
+  if (empty($rendered)) {
+    return;
   }
+  // Optional "Add membership" quick action in the accordion summary header.
+  $extra = '';
+  if (user_access('manage dropcrm_membership')) {
+    $extra = ' ' . l(t('+ Add membership'), 'drop/crm/memberships/add', array(
+      'query'      => array('cid' => $contact->cid),
+      'attributes' => array('class' => array('drop-section-add')),
+    ));
+  }
+  // Collapsed by default like every other section (Contact Details,
+  // Relationships, Activities, Projects, Newsletter Subscriptions).
+  $output['memberships'] = array(
+    '#prefix' => dropcrm_accordion_prefix(t('Memberships'), $extra, FALSE),
+    '#suffix' => dropcrm_accordion_suffix(),
+    '#weight' => 18,
+    '#markup' => $rendered,
+  );
 }
 
 // ---------------------------------------------------------------------------
