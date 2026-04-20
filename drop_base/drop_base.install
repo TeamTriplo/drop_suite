@@ -147,10 +147,9 @@ function drop_base_install() {
   );
   $mlid = menu_link_save($item);
 
-  if ($mlid) {
-    backdrop_set_message(t('Drop Suite menu link created in primary navigation (mlid: @mlid).', array('@mlid' => $mlid)));
-  }
-  else {
+  // Silent on success — the install just finished, admin knows.
+  // Only report if the menu link couldn't be created.
+  if (!$mlid) {
     backdrop_set_message(t('Failed to create Drop Suite menu link. The path drop/settings may not be registered yet.'), 'warning');
   }
 
@@ -279,7 +278,9 @@ function _drop_base_setup_drop_pages_layout() {
   _drop_base_dedupe_layout_positions($layout);
 
   $layout->save();
-  backdrop_set_message(t('Drop Suite drop_pages layout configured.'));
+  // Intentionally no message — layout setup is a mechanical implementation
+  // detail admins don't need to acknowledge. The wizard prompt from
+  // drop_start_install() is the useful post-install pointer.
 }
 
 /**
@@ -344,10 +345,8 @@ function _drop_base_revert_default_layout_template() {
 
   _drop_base_dedupe_layout_positions($layout);
   $layout->save();
-
-  if ($stripped) {
-    backdrop_set_message(t('Reverted default layout and removed @count Drop-specific block(s).', array('@count' => $stripped)));
-  }
+  // No message on success — this helper runs during install + update
+  // migrations where admins don't need a "we changed a layout" notice.
 }
 
 /**
