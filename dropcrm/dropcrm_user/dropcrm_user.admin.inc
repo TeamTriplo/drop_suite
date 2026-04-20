@@ -80,10 +80,10 @@ function dropcrm_user_create_contact_form_submit($form, &$form_state) {
   $contact = _dropcrm_user_create_contact_for_user($account, $first_name, $last_name, $email);
 
   if ($contact) {
-    backdrop_set_message(t('CRM contact %name has been created and linked to %user.',
+    backdrop_set_message(t('CRM contact !contact_link has been created and linked to !user_link.',
       array(
-        '%name' => entity_label('crm_contact', $contact),
-        '%user' => $account->name,
+        '!contact_link' => l(entity_label('crm_contact', $contact), 'drop/crm/contact/' . $contact->cid),
+        '!user_link'    => l($account->name, 'user/' . $account->uid),
       )
     ));
   }
@@ -210,10 +210,10 @@ function dropcrm_user_link_contact_form_submit($form, &$form_state) {
   dropcrm_user_link($account->uid, $cid);
 
   $contact = crm_contact_load($cid);
-  backdrop_set_message(t('CRM contact %name has been linked to %user.',
+  backdrop_set_message(t('CRM contact !contact_link has been linked to !user_link.',
     array(
-      '%name' => entity_label('crm_contact', $contact),
-      '%user' => $account->name,
+      '!contact_link' => l(entity_label('crm_contact', $contact), 'drop/crm/contact/' . $contact->cid),
+      '!user_link'    => l($account->name, 'user/' . $account->uid),
     )
   ));
 

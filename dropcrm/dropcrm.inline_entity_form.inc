@@ -93,7 +93,7 @@ class CrmContactInlineEntityFormController extends EntityInlineEntityFormControl
     $is_new = empty($entity->cid);
     $entity->save();
     if ($is_new) {
-      backdrop_set_message(t('Organization %name has been created.', array('%name' => $entity->name)));
+      backdrop_set_message(t('Organization !link has been created.', array('!link' => l($entity->name, 'drop/crm/contact/' . $entity->cid))));
     }
   }
 

@@ -491,7 +491,7 @@ function droptickets_ticket_form_submit($form, &$form_state) {
     }
   }
 
-  backdrop_set_message(t('Ticket %label saved.', array('%label' => droptickets_ticket_label($ticket))));
+  backdrop_set_message(t('Ticket !link saved.', array('!link' => l(droptickets_ticket_label($ticket), 'drop/tickets/' . $ticket->tid))));
   $form_state['redirect'] = 'drop/tickets/' . $ticket->tid;
 }
 

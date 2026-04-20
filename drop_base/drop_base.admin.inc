@@ -610,7 +610,7 @@ function drop_base_project_form_submit($form, &$form_state) {
 
   $project->save();
 
-  backdrop_set_message(t('Project %name saved.', array('%name' => $project->name)));
+  backdrop_set_message(t('Project !link saved.', array('!link' => l($project->name, 'drop/projects/' . $project->pid))));
   $form_state['redirect'] = 'drop/projects';
 }
 

@@ -1571,12 +1571,12 @@ function drop_base_pin_report_toggle($report_id) {
 
   if ($is_pinned) {
     drop_base_set_pinned_report($user->uid, $report_id, FALSE);
-    backdrop_set_message(t('%title unpinned from your tab bar.', array('%title' => $report['title'])));
+    backdrop_set_message(t('!link unpinned from your tab bar.', array('!link' => l($report['title'], $report['path']))));
   }
   else {
     $result = drop_base_set_pinned_report($user->uid, $report_id, TRUE);
     if ($result) {
-      backdrop_set_message(t('%title pinned to your tab bar.', array('%title' => $report['title'])));
+      backdrop_set_message(t('!link pinned to your tab bar.', array('!link' => l($report['title'], $report['path']))));
     }
     else {
       backdrop_set_message(t('You already have 3 pinned reports. Unpin one before adding another.'), 'warning');
