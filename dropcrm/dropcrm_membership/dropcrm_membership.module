@@ -459,19 +459,8 @@ function dropcrm_membership_payment_access($op, $entity = NULL, $account = NULL)
 function dropcrm_membership_menu() {
   $items = array();
 
-  $items['drop/crm/memberships'] = array(
-    'title'            => 'Memberships',
-    'page callback'    => 'dropcrm_membership_list_page',
-    'access arguments' => array('access dropcrm_membership'),
-    'file'             => 'dropcrm_membership.admin.inc',
-    'type'             => MENU_NORMAL_ITEM,
-  );
-
-  $items['drop/crm/memberships/list'] = array(
-    'title'  => 'List',
-    'type'   => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
-  );
+  // drop/crm/memberships (the page) is owned by the View
+  // crm_memberships_admin shipped in config/. No hook_menu entry here.
 
   $items['drop/crm/memberships/add'] = array(
     'title'            => 'Add membership',
@@ -763,14 +752,12 @@ function _dropcrm_membership_recompute_derived($mid) {
   }
 
   $end_date = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
-  if (empty($end_date) || $end_date === '0000-00-00') {
-    $end_date = NULL;
-  }
+  // fetchField returns FALSE when the row has end_date NULL; treat both
+  // FALSE and 0 as "no end date" (lifetime or unset).
+  $end_date = ($end_date === FALSE || $end_date === NULL || $end_date === '0') ? NULL : (int) $end_date;
 
   $paid_date = db_query('SELECT paid_date FROM {crm_membership_payment} WHERE mid = :mid ORDER BY paid_date DESC, pid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
-  if (empty($paid_date) || $paid_date === '0000-00-00') {
-    $paid_date = NULL;
-  }
+  $paid_date = ($paid_date === FALSE || $paid_date === NULL || $paid_date === '0') ? NULL : (int) $paid_date;
 
   $total_paid = (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
 
@@ -829,29 +816,33 @@ function dropcrm_membership_crm_membership_payment_delete($payment) {
 }
 
 /**
- * Getter for schema date columns (stored as YYYY-MM-DD strings, exposed to
- * Views as Unix timestamps).
+ * Getter for schema date columns stored as Unix timestamps. Returns the
+ * timestamp verbatim (Views' default date handlers expect int timestamps).
+ * Returns NULL for unset / zero values.
  */
 function _dropcrm_membership_date_get($entity, array $options, $name, $type, $info) {
-  if (empty($entity->{$name}) || $entity->{$name} === '0000-00-00') {
+  $val = isset($entity->{$name}) ? $entity->{$name} : NULL;
+  if ($val === NULL || $val === '' || $val === 0 || $val === '0') {
     return NULL;
   }
-  return strtotime($entity->{$name});
+  return (int) $val;
 }
 
 /**
- * Setter that accepts either Unix timestamp or YYYY-MM-DD string.
+ * Setter that accepts either a Unix timestamp (int/string-numeric) or a
+ * YYYY-MM-DD string. Stores as int Unix timestamp.
  */
 function _dropcrm_membership_date_set($entity, $name, $value) {
-  if (empty($value)) {
+  if ($value === NULL || $value === '' || $value === FALSE) {
     $entity->{$name} = NULL;
     return;
   }
   if (is_numeric($value)) {
-    $entity->{$name} = format_date($value, 'custom', 'Y-m-d');
+    $entity->{$name} = (int) $value;
   }
   else {
-    $entity->{$name} = $value;
+    $ts = strtotime($value);
+    $entity->{$name} = $ts !== FALSE ? $ts : NULL;
   }
 }
 
@@ -868,17 +859,19 @@ function _dropcrm_membership_latest_term($mid) {
 }
 
 /**
- * Adds a term_length string (strtotime-compatible) to a YYYY-MM-DD date.
+ * Adds a term_length string (strtotime-compatible) to a Unix timestamp and
+ * returns the resulting timestamp.
  */
-function _dropcrm_membership_add_term_length($start_date, $term_length) {
+function _dropcrm_membership_add_term_length($start_ts, $term_length) {
   if (empty($term_length)) {
     return NULL;
   }
-  $ts = strtotime('+' . $term_length, strtotime($start_date));
-  if (!$ts) {
+  $start_ts = is_numeric($start_ts) ? (int) $start_ts : strtotime($start_ts);
+  if (!$start_ts) {
     return NULL;
   }
-  return format_date($ts, 'custom', 'Y-m-d');
+  $ts = strtotime('+' . $term_length, $start_ts);
+  return $ts !== FALSE ? $ts : NULL;
 }
 
 /**
@@ -918,162 +911,44 @@ function dropcrm_membership_drop_section_links($section) {
 }
 
 // ---------------------------------------------------------------------------
-// Blocks (dashboard widget)
-// ---------------------------------------------------------------------------
-
-/**
- * Implements hook_block_info().
- */
-function dropcrm_membership_block_info() {
-  return array(
-    'expiring' => array(
-      'info'        => t('Memberships expiring soon'),
-      'description' => t('Lists memberships whose current term ends within the configured window. Tune the window on the CRM settings page.'),
-    ),
-  );
-}
-
-/**
- * Implements hook_block_view().
- */
-function dropcrm_membership_block_view($delta = '', $settings = array(), $contexts = array()) {
-  if ($delta !== 'expiring') {
-    return;
-  }
-  if (!user_access('access dropcrm_membership')) {
-    return;
-  }
-  $window = (int) config_get('dropcrm_membership.settings', 'expiring_widget_window');
-  if ($window < 1) {
-    $window = 30;
-  }
-  $today    = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
-  $deadline = format_date(strtotime('+' . $window . ' days'), 'custom', 'Y-m-d');
-
-  // Find memberships whose latest term end_date falls in the window. Using
-  // the same latest-term subquery shape as the cron sweep for consistency.
-  $result = db_query("
-    SELECT m.mid, m.cid, m.member_id, m.type, m.status, t.end_date
-    FROM {crm_membership} m
-    INNER JOIN (
-      SELECT mid, MAX(tid) AS tid
-      FROM (
-        SELECT mid, tid,
-               ROW_NUMBER() OVER (PARTITION BY mid ORDER BY start_date DESC, tid DESC) AS rn
-        FROM {crm_membership_term}
-      ) ranked
-      WHERE rn = 1
-      GROUP BY mid
-    ) latest ON latest.mid = m.mid
-    INNER JOIN {crm_membership_term} t ON t.tid = latest.tid
-    WHERE m.status IN (:active, :grace)
-      AND t.end_date IS NOT NULL
-      AND t.end_date >= :today
-      AND t.end_date <= :deadline
-    ORDER BY t.end_date ASC
-    LIMIT 10
-  ", array(
-    ':active'   => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
-    ':grace'    => DROPCRM_MEMBERSHIP_STATUS_GRACE,
-    ':today'    => $today,
-    ':deadline' => $deadline,
-  ));
-
-  $rows = array();
-  $types = _dropcrm_membership_types();
-  foreach ($result as $row) {
-    $contact = entity_load('crm_contact', $row->cid);
-    $name = $contact ? $contact->label() : t('(unknown)');
-    $type_label = isset($types[$row->type]['label']) ? $types[$row->type]['label'] : $row->type;
-    $ops = user_access('manage dropcrm_membership')
-      ? ' ' . l(t('Renew'), 'drop/crm/memberships/' . $row->mid . '/renew', array('attributes' => array('class' => array('button', 'button-small'))))
-      : '';
-    $rows[] = array(
-      l($name, 'drop/crm/memberships/' . $row->mid),
-      check_plain($type_label),
-      check_plain($row->end_date) . $ops,
-    );
-  }
-
-  return array(
-    'subject' => t('Memberships expiring in @n days', array('@n' => $window)),
-    'content' => array(
-      'table' => array(
-        '#theme'  => 'table',
-        '#header' => array(t('Member'), t('Type'), t('Ends')),
-        '#rows'   => $rows,
-        '#empty'  => t('No memberships expiring in this window.'),
-      ),
-      'link' => array(
-        '#markup' => '<p>' . l(t('All memberships →'), 'drop/crm/memberships') . '</p>',
-      ),
-    ),
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Contact view integration
 // ---------------------------------------------------------------------------
 
 /**
  * Implements hook_dropcrm_contact_view_alter().
  *
- * Adds a "Memberships" section to the contact view page. DropCRM's contact
- * view callback (dropcrm_contact_view) is a custom render pipeline that does
- * not call entity_view() for person bundles, so hook_entity_view never fires
- * on them. The dropcrm_contact_view alter hook runs for every bundle and is
- * the correct extension point.
+ * Embeds the crm_memberships_for_contact View's block display on every
+ * contact view page with the contact's cid as the contextual filter.
+ * The contact view is a custom render callback (dropcrm_contact_view),
+ * not routed through Layouts, so a hook-based embed is simpler and more
+ * reliable than configuring a layout for drop/crm/contact/%.
+ *
+ * The View itself owns all of the rendering (columns, filters, empty
+ * text, access). This hook is a thin integration bridge.
  */
 function dropcrm_membership_dropcrm_contact_view_alter(&$output, $contact) {
   if (!user_access('access dropcrm_membership')) {
     return;
   }
-
-  $rows = db_query('SELECT mid, member_id, type, status FROM {crm_membership} WHERE cid = :cid ORDER BY mid DESC', array(':cid' => $contact->cid))->fetchAll();
-
-  // Hide the section entirely when there are no memberships and the viewer
-  // cannot add one — nothing actionable to show.
-  if (empty($rows) && !user_access('manage dropcrm_membership')) {
+  $rendered = views_embed_view('crm_memberships_for_contact', 'block', $contact->cid);
+  if (empty($rendered)) {
     return;
   }
-
-  $types = _dropcrm_membership_types();
-  $table_rows = array();
-  foreach ($rows as $row) {
-    $type_label = isset($types[$row->type]['label']) ? $types[$row->type]['label'] : $row->type;
-    $end = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $row->mid))->fetchField();
-    $ops = array(l(t('View'), 'drop/crm/memberships/' . $row->mid));
-    if (user_access('manage dropcrm_membership')) {
-      $ops[] = l(t('Renew'), 'drop/crm/memberships/' . $row->mid . '/renew');
-    }
-    $table_rows[] = array(
-      check_plain($row->member_id),
-      check_plain($type_label),
-      array('data' => _dropcrm_membership_status_badge($row->status)),
-      $end ?: t('—'),
-      implode(' · ', $ops),
-    );
-  }
-
-  $content = array(
-    'table' => array(
-      '#theme'  => 'table',
-      '#header' => array(t('Member ID'), t('Type'), t('Status'), t('Ends'), t('Operations')),
-      '#rows'   => $table_rows,
-      '#empty'  => t('No memberships yet.'),
-    ),
-  );
+  // Optional "Add membership" quick action in the accordion summary header.
+  $extra = '';
   if (user_access('manage dropcrm_membership')) {
-    $content['add_link'] = array(
-      '#markup' => '<p>' . l(t('Add membership'), 'drop/crm/memberships/add', array('query' => array('cid' => $contact->cid))) . '</p>',
-    );
+    $extra = ' ' . l(t('+ Add membership'), 'drop/crm/memberships/add', array(
+      'query'      => array('cid' => $contact->cid),
+      'attributes' => array('class' => array('drop-section-add')),
+    ));
   }
-
+  // Collapsed by default like every other section (Contact Details,
+  // Relationships, Activities, Projects, Newsletter Subscriptions).
   $output['memberships'] = array(
-    '#prefix' => '<div class="crm-contact-memberships"><h3>' . t('Memberships') . '</h3>',
-    '#suffix' => '</div>',
+    '#prefix' => dropcrm_accordion_prefix(t('Memberships'), $extra, FALSE),
+    '#suffix' => dropcrm_accordion_suffix(),
     '#weight' => 18,
-    'inner'   => $content,
+    '#markup' => $rendered,
   );
 }
 
@@ -1397,7 +1272,9 @@ function dropcrm_membership_settings_submit($form, &$form_state) {
  * (end_date IS NULL) stay ACTIVE indefinitely.
  */
 function dropcrm_membership_cron() {
-  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+  // Use midnight today as the comparison point — end_dates that fall within
+  // today should not be considered "past" until midnight.
+  $today_ts = strtotime('today');
   $types = _dropcrm_membership_types();
   $auto_lapse = (bool) config_get('dropcrm_membership.settings', 'auto_lapse_after_grace');
 
@@ -1421,7 +1298,7 @@ function dropcrm_membership_cron() {
       AND t.end_date < :today
   ", array(
     ':active' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
-    ':today'  => $today,
+    ':today'  => $today_ts,
   ))->fetchCol();
 
   foreach ($to_grace as $mid) {
@@ -1454,8 +1331,8 @@ function dropcrm_membership_cron() {
     $lapsed_count = 0;
     foreach ($grace_memberships as $row) {
       $grace_days = isset($types[$row->type]['grace_days']) ? (int) $types[$row->type]['grace_days'] : 30;
-      $deadline = format_date(strtotime($row->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
-      if ($deadline < $today) {
+      $deadline_ts = (int) $row->end_date + ($grace_days * 86400);
+      if ($deadline_ts < $today_ts) {
         _dropcrm_membership_set_status($row->mid, DROPCRM_MEMBERSHIP_STATUS_LAPSED);
         $lapsed_count++;
       }
@@ -1496,20 +1373,21 @@ function _dropcrm_membership_recompute_status($mid) {
   if (!$term) {
     return;
   }
-  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+  $today_ts = strtotime('today');
+  $end_ts = !empty($term->end_date) ? (int) $term->end_date : NULL;
 
-  // Lifetime term → always active.
-  if (empty($term->end_date)) {
+  // Lifetime term (no end_date) → always active.
+  if ($end_ts === NULL) {
     $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
   }
-  elseif ($term->end_date >= $today) {
+  elseif ($end_ts >= $today_ts) {
     $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
   }
   else {
     $types = _dropcrm_membership_types();
     $grace_days = isset($types[$membership->type]['grace_days']) ? (int) $types[$membership->type]['grace_days'] : 30;
-    $deadline = format_date(strtotime($term->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
-    if ($deadline >= $today) {
+    $deadline_ts = $end_ts + ($grace_days * 86400);
+    if ($deadline_ts >= $today_ts) {
       $new_status = DROPCRM_MEMBERSHIP_STATUS_GRACE;
     }
     else {
