@@ -45,12 +45,13 @@ function dropcrm_membership_init() {
  */
 function dropcrm_membership_autoload_info() {
   return array(
-    'CrmMembership'                    => 'dropcrm_membership.entity.inc',
-    'CrmMembershipController'          => 'dropcrm_membership.entity.inc',
-    'CrmMembershipTerm'                => 'dropcrm_membership.entity.inc',
-    'CrmMembershipTermController'      => 'dropcrm_membership.entity.inc',
-    'CrmMembershipPayment'             => 'dropcrm_membership.entity.inc',
-    'CrmMembershipPaymentController'   => 'dropcrm_membership.entity.inc',
+    'CrmMembership'                         => 'dropcrm_membership.entity.inc',
+    'CrmMembershipController'               => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTerm'                     => 'dropcrm_membership.entity.inc',
+    'CrmMembershipTermController'           => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPayment'                  => 'dropcrm_membership.entity.inc',
+    'CrmMembershipPaymentController'        => 'dropcrm_membership.entity.inc',
+    'DropcrmMembershipHandlerFieldDateSafe' => 'views/dropcrm_membership_handler_field_date_safe.inc',
   );
 }
 

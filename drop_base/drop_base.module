@@ -193,6 +193,16 @@ function _drop_base_is_narrow_page($path) {
     // CRM activity add/edit (entity_ui paths).
     '#^drop/crm/activities/manage/add$#',
     '#^drop/crm/activities/manage/\d+/edit$#',
+    // Membership add/edit/renew/cancel and payment + term CRUD forms.
+    '#^drop/crm/memberships/add$#',
+    '#^drop/crm/memberships/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/renew$#',
+    '#^drop/crm/memberships/\d+/cancel$#',
+    '#^drop/crm/memberships/\d+/payment/add$#',
+    '#^drop/crm/memberships/\d+/payment/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/payment/\d+/delete$#',
+    '#^drop/crm/memberships/\d+/term/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/term/\d+/delete$#',
     // File library: upload, view, replace.
     '#^drop/files/upload$#',
     '#^drop/files/\d+/view$#',
