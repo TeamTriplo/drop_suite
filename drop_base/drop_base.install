@@ -238,6 +238,7 @@ function _drop_base_setup_drop_pages_layout() {
   _drop_base_reorder_tabs_below_section_nav($layout);
   _drop_base_move_title_to_end_of_top($layout);
   _drop_base_dedupe_layout_positions($layout);
+  _drop_base_strip_orphan_regions($layout);
 
   $layout->save();
   // Intentionally no message — layout setup is a mechanical implementation
@@ -405,6 +406,36 @@ function _drop_base_reorder_tabs_below_section_nav($layout) {
   }
   array_splice($positions, $snav_pos + 1, 0, array($tabs_uuid));
   $layout->positions['top'] = $positions;
+}
+
+/**
+ * Removes positions keys that don't correspond to any region in the layout's
+ * template. Any blocks placed in those orphan regions are also removed.
+ *
+ * Orphan regions otherwise render as empty stubs in the layout editor (an
+ * unlabeled "MANAGE BLOCKS" row above the first real region), because the
+ * editor iterates $layout->positions rather than the template's regions.
+ *
+ * @return int
+ *   Number of orphan regions removed.
+ */
+function _drop_base_strip_orphan_regions($layout) {
+  $template = layout_get_layout_template_info($layout->layout_template);
+  if (empty($template['regions'])) {
+    return 0;
+  }
+  $valid = $template['regions'];
+  $removed = 0;
+  foreach (array_keys($layout->positions) as $region) {
+    if (!isset($valid[$region])) {
+      foreach ($layout->positions[$region] as $uuid) {
+        unset($layout->content[$uuid]);
+      }
+      unset($layout->positions[$region]);
+      $removed++;
+    }
+  }
+  return $removed;
 }
 
 /**
@@ -666,4 +697,42 @@ function drop_base_update_1207() {
 function drop_base_update_1208() {
   _drop_base_setup_drop_pages_layout();
   return t('Added system:header and system:main-menu to drop_pages header region; moved title to end of top region.');
+}
+
+/**
+ * Strip Drop Suite nav blocks from admin_default, strip orphan regions from
+ * drop_pages.
+ *
+ * Earlier layout-shuffling work left two stale artifacts on some sites:
+ *   - admin_default acquired drop_base:drop_nav and drop_base:drop_section_nav
+ *     in its top region, which made the Drop Suite primary nav render on
+ *     /admin/* pages where it doesn't belong.
+ *   - drop_pages carried a positions entry for a "title" region inherited
+ *     from a previous template; the drop_suite template has no "title"
+ *     region, so it rendered as an empty stub ("MANAGE BLOCKS" label with
+ *     no content) at the top of the layout editor.
+ *
+ * Both fixes are idempotent — safe on sites that never had the artifacts.
+ */
+function drop_base_update_1209() {
+  $admin = layout_load('admin_default');
+  if ($admin) {
+    $removed = _drop_base_remove_blocks_by_plugin($admin, array(
+      'drop_base:drop_nav',
+      'drop_base:drop_section_nav',
+    ));
+    $orphans = _drop_base_strip_orphan_regions($admin);
+    if ($removed || $orphans) {
+      _drop_base_dedupe_layout_positions($admin);
+      $admin->save();
+    }
+  }
+  $drop_pages = layout_load('drop_pages');
+  if ($drop_pages) {
+    $orphans = _drop_base_strip_orphan_regions($drop_pages);
+    if ($orphans) {
+      $drop_pages->save();
+    }
+  }
+  return t('Stripped Drop Suite nav blocks and orphan regions from admin_default and drop_pages layouts.');
 }
