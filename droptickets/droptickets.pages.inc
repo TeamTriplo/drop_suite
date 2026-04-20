@@ -2549,7 +2549,7 @@ function droptickets_react_ajax($entity_type, $entity_id) {
 function droptickets_ticket_mark_done(DropTicket $ticket) {
   $ticket->status = ($ticket->type === 'discussion') ? 'disc_concluded' : 'done';
   $ticket->save();
-  backdrop_set_message(t('Ticket %label marked as done.', array('%label' => droptickets_ticket_label($ticket))));
+  backdrop_set_message(t('Ticket !link marked as done.', array('!link' => l(droptickets_ticket_label($ticket), 'drop/tickets/' . $ticket->tid))));
   backdrop_goto('drop');
 }
 
@@ -2559,7 +2559,7 @@ function droptickets_ticket_mark_done(DropTicket $ticket) {
 function droptickets_ticket_close(DropTicket $ticket) {
   $ticket->status = ($ticket->type === 'discussion') ? 'disc_concluded' : 'closed';
   $ticket->save();
-  backdrop_set_message(t('Ticket %label has been closed.', array('%label' => droptickets_ticket_label($ticket))));
+  backdrop_set_message(t('Ticket !link has been closed.', array('!link' => l(droptickets_ticket_label($ticket), 'drop/tickets/' . $ticket->tid))));
   backdrop_goto('drop/tickets/' . $ticket->tid);
 }
 
@@ -3363,8 +3363,8 @@ function droptickets_ticket_activate(DropTicket $ticket) {
   $ticket->import_id = NULL;
   $ticket->save();
 
-  backdrop_set_message(t('Ticket %label is now active and will appear in the normal ticket list.', array(
-    '%label' => droptickets_ticket_label($ticket),
+  backdrop_set_message(t('Ticket !link is now active and will appear in the normal ticket list.', array(
+    '!link' => l(droptickets_ticket_label($ticket), 'drop/tickets/' . $ticket->tid),
   )));
   backdrop_goto('drop/tickets/' . $ticket->tid);
 }

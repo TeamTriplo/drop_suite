@@ -251,7 +251,10 @@ function dropstrategic_goal_form_submit($form, &$form_state) {
   }
   dropstrategic_key_results_save($goal->gid, $key_results);
 
-  backdrop_set_message($is_edit ? t('Goal updated.') : t('Goal added.'));
+  $goal_link = l($goal->title, 'drop/strategic/' . $goal->gid);
+  backdrop_set_message($is_edit
+    ? t('Goal !link updated.', array('!link' => $goal_link))
+    : t('Goal !link added.', array('!link' => $goal_link)));
   $form_state['redirect'] = 'drop/strategic/' . $goal->gid;
 }
 

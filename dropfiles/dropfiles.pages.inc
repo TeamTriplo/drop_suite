@@ -308,7 +308,7 @@ function dropfiles_upload_form_submit($form, &$form_state) {
     dropfiles_save_file_tags($file->fid, $tag_names);
   }
 
-  backdrop_set_message(t('File %name uploaded.', array('%name' => $file->filename)));
+  backdrop_set_message(t('File !link uploaded.', array('!link' => l($file->filename, 'drop/files/' . $file->fid . '/view'))));
   $form_state['redirect'] = 'drop/files';
 }
 
@@ -393,7 +393,7 @@ function dropfiles_edit_form_submit($form, &$form_state) {
   }
   dropfiles_save_file_tags($file->fid, $tag_names);
 
-  backdrop_set_message(t('File %name updated.', array('%name' => $file->filename)));
+  backdrop_set_message(t('File !link updated.', array('!link' => l($file->filename, 'drop/files/' . $file->fid . '/view'))));
   $form_state['redirect'] = 'drop/files/' . $file->fid . '/view';
 }
 
@@ -592,7 +592,7 @@ function dropfiles_replace_form_submit($form, &$form_state) {
   }
   dropfiles_generate_pdf_thumbnail($old_file);
 
-  backdrop_set_message(t('File %name has been replaced.', array('%name' => $old_file->filename)));
+  backdrop_set_message(t('File !link has been replaced.', array('!link' => l($old_file->filename, 'drop/files/' . $old_file->fid . '/view'))));
   $form_state['redirect'] = 'drop/files';
 }
 

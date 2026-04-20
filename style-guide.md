@@ -622,3 +622,37 @@ hook_update_NNNN()          → import the view config for existing sites
 | Ticket          | droptickets | Yes       | No           | Partial    | No            |
 | Task            | droptasks   | Yes       | No           | Partial    | No            |
 | Time Entry      | droptime    | Yes       | No           | Partial    | No            |
+
+## Status Messages
+
+**Any status message that references a piece of content must link to that
+content.** The message is usually the admin's only confirmation that an
+action succeeded — a plain name in italics is a dead end. The link lets
+them jump straight to what they just touched.
+
+```php
+// Wrong:
+backdrop_set_message(t('Project %name saved.', array(
+  '%name' => $project->name,
+)));
+
+// Right:
+backdrop_set_message(t('Project !link saved.', array(
+  '!link' => l($project->name, 'drop/projects/' . $project->pid),
+)));
+```
+
+Use the `!placeholder` form (not `%` or `@`) when the replacement value
+is already-safe HTML from `l()`. `l()` handles URL and label escaping
+internally; the `!` prefix tells `t()` to trust it.
+
+**Exceptions — do NOT force a link when:**
+
+- The entity has been **deleted** by the action ("File deleted" —
+  nothing to link to). Use plain `%name` or omit the name entirely.
+- The message references a **setting or configuration value** rather
+  than an entity ("Navigation saved", "Statuses saved", "Settings saved").
+- The message is **generic** about a batch operation ("@count items
+  deleted") where no single item is meaningful.
+
+For create/update/link operations — always link.
