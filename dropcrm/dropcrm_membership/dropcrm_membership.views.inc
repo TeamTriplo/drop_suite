@@ -46,4 +46,5 @@ function dropcrm_membership_views_data_alter(&$data) {
       }
     }
   }
+
 }

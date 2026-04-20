@@ -752,14 +752,12 @@ function _dropcrm_membership_recompute_derived($mid) {
   }
 
   $end_date = db_query('SELECT end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
-  if (empty($end_date) || $end_date === '0000-00-00') {
-    $end_date = NULL;
-  }
+  // fetchField returns FALSE when the row has end_date NULL; treat both
+  // FALSE and 0 as "no end date" (lifetime or unset).
+  $end_date = ($end_date === FALSE || $end_date === NULL || $end_date === '0') ? NULL : (int) $end_date;
 
   $paid_date = db_query('SELECT paid_date FROM {crm_membership_payment} WHERE mid = :mid ORDER BY paid_date DESC, pid DESC LIMIT 1', array(':mid' => $mid))->fetchField();
-  if (empty($paid_date) || $paid_date === '0000-00-00') {
-    $paid_date = NULL;
-  }
+  $paid_date = ($paid_date === FALSE || $paid_date === NULL || $paid_date === '0') ? NULL : (int) $paid_date;
 
   $total_paid = (float) db_query('SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment} WHERE mid = :mid', array(':mid' => $mid))->fetchField();
 
@@ -818,29 +816,33 @@ function dropcrm_membership_crm_membership_payment_delete($payment) {
 }
 
 /**
- * Getter for schema date columns (stored as YYYY-MM-DD strings, exposed to
- * Views as Unix timestamps).
+ * Getter for schema date columns stored as Unix timestamps. Returns the
+ * timestamp verbatim (Views' default date handlers expect int timestamps).
+ * Returns NULL for unset / zero values.
  */
 function _dropcrm_membership_date_get($entity, array $options, $name, $type, $info) {
-  if (empty($entity->{$name}) || $entity->{$name} === '0000-00-00') {
+  $val = isset($entity->{$name}) ? $entity->{$name} : NULL;
+  if ($val === NULL || $val === '' || $val === 0 || $val === '0') {
     return NULL;
   }
-  return strtotime($entity->{$name});
+  return (int) $val;
 }
 
 /**
- * Setter that accepts either Unix timestamp or YYYY-MM-DD string.
+ * Setter that accepts either a Unix timestamp (int/string-numeric) or a
+ * YYYY-MM-DD string. Stores as int Unix timestamp.
  */
 function _dropcrm_membership_date_set($entity, $name, $value) {
-  if (empty($value)) {
+  if ($value === NULL || $value === '' || $value === FALSE) {
     $entity->{$name} = NULL;
     return;
   }
   if (is_numeric($value)) {
-    $entity->{$name} = format_date($value, 'custom', 'Y-m-d');
+    $entity->{$name} = (int) $value;
   }
   else {
-    $entity->{$name} = $value;
+    $ts = strtotime($value);
+    $entity->{$name} = $ts !== FALSE ? $ts : NULL;
   }
 }
 
@@ -857,17 +859,19 @@ function _dropcrm_membership_latest_term($mid) {
 }
 
 /**
- * Adds a term_length string (strtotime-compatible) to a YYYY-MM-DD date.
+ * Adds a term_length string (strtotime-compatible) to a Unix timestamp and
+ * returns the resulting timestamp.
  */
-function _dropcrm_membership_add_term_length($start_date, $term_length) {
+function _dropcrm_membership_add_term_length($start_ts, $term_length) {
   if (empty($term_length)) {
     return NULL;
   }
-  $ts = strtotime('+' . $term_length, strtotime($start_date));
-  if (!$ts) {
+  $start_ts = is_numeric($start_ts) ? (int) $start_ts : strtotime($start_ts);
+  if (!$start_ts) {
     return NULL;
   }
-  return format_date($ts, 'custom', 'Y-m-d');
+  $ts = strtotime('+' . $term_length, $start_ts);
+  return $ts !== FALSE ? $ts : NULL;
 }
 
 /**
@@ -1257,7 +1261,9 @@ function dropcrm_membership_settings_submit($form, &$form_state) {
  * (end_date IS NULL) stay ACTIVE indefinitely.
  */
 function dropcrm_membership_cron() {
-  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+  // Use midnight today as the comparison point — end_dates that fall within
+  // today should not be considered "past" until midnight.
+  $today_ts = strtotime('today');
   $types = _dropcrm_membership_types();
   $auto_lapse = (bool) config_get('dropcrm_membership.settings', 'auto_lapse_after_grace');
 
@@ -1281,7 +1287,7 @@ function dropcrm_membership_cron() {
       AND t.end_date < :today
   ", array(
     ':active' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
-    ':today'  => $today,
+    ':today'  => $today_ts,
   ))->fetchCol();
 
   foreach ($to_grace as $mid) {
@@ -1314,8 +1320,8 @@ function dropcrm_membership_cron() {
     $lapsed_count = 0;
     foreach ($grace_memberships as $row) {
       $grace_days = isset($types[$row->type]['grace_days']) ? (int) $types[$row->type]['grace_days'] : 30;
-      $deadline = format_date(strtotime($row->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
-      if ($deadline < $today) {
+      $deadline_ts = (int) $row->end_date + ($grace_days * 86400);
+      if ($deadline_ts < $today_ts) {
         _dropcrm_membership_set_status($row->mid, DROPCRM_MEMBERSHIP_STATUS_LAPSED);
         $lapsed_count++;
       }
@@ -1356,20 +1362,21 @@ function _dropcrm_membership_recompute_status($mid) {
   if (!$term) {
     return;
   }
-  $today = format_date(REQUEST_TIME, 'custom', 'Y-m-d');
+  $today_ts = strtotime('today');
+  $end_ts = !empty($term->end_date) ? (int) $term->end_date : NULL;
 
-  // Lifetime term → always active.
-  if (empty($term->end_date)) {
+  // Lifetime term (no end_date) → always active.
+  if ($end_ts === NULL) {
     $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
   }
-  elseif ($term->end_date >= $today) {
+  elseif ($end_ts >= $today_ts) {
     $new_status = DROPCRM_MEMBERSHIP_STATUS_ACTIVE;
   }
   else {
     $types = _dropcrm_membership_types();
     $grace_days = isset($types[$membership->type]['grace_days']) ? (int) $types[$membership->type]['grace_days'] : 30;
-    $deadline = format_date(strtotime($term->end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
-    if ($deadline >= $today) {
+    $deadline_ts = $end_ts + ($grace_days * 86400);
+    if ($deadline_ts >= $today_ts) {
       $new_status = DROPCRM_MEMBERSHIP_STATUS_GRACE;
     }
     else {

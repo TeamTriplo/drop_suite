@@ -55,22 +55,27 @@ class CrmMembership extends Entity {
   }
 
   /**
-   * Returns the earliest term's start_date as YYYY-MM-DD, or NULL.
+   * Returns the earliest term's start_date formatted as YYYY-MM-DD, or NULL.
+   * Backed by the crm_membership_term.start_date int Unix timestamp column.
    */
   public function joinedDate() {
-    $date = db_query('SELECT MIN(start_date) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $this->mid))->fetchField();
-    if (empty($date) || $date === '0000-00-00') {
+    $ts = db_query('SELECT MIN(start_date) FROM {crm_membership_term} WHERE mid = :mid', array(':mid' => $this->mid))->fetchField();
+    if ($ts === FALSE || $ts === NULL || (int) $ts <= 0) {
       return NULL;
     }
-    return $date;
+    return format_date((int) $ts, 'custom', 'Y-m-d');
   }
 
   /**
-   * Returns the latest term's end_date as YYYY-MM-DD, or NULL for lifetime.
+   * Returns the latest term's end_date formatted as YYYY-MM-DD, or NULL for
+   * lifetime / no terms.
    */
   public function currentEndDate() {
     $term = _dropcrm_membership_latest_term($this->mid);
-    return $term && !empty($term->end_date) ? $term->end_date : NULL;
+    if (!$term || empty($term->end_date)) {
+      return NULL;
+    }
+    return format_date((int) $term->end_date, 'custom', 'Y-m-d');
   }
 
 }
@@ -103,8 +108,8 @@ class CrmMembershipTerm extends Entity {
   }
 
   public function label() {
-    $start = !empty($this->start_date) ? $this->start_date : '';
-    $end   = !empty($this->end_date) ? $this->end_date : t('lifetime');
+    $start = !empty($this->start_date) ? format_date((int) $this->start_date, 'custom', 'Y-m-d') : '';
+    $end   = !empty($this->end_date) ? format_date((int) $this->end_date, 'custom', 'Y-m-d') : t('lifetime');
     return t('Term !start – !end', array('!start' => $start, '!end' => $end));
   }
 
@@ -145,7 +150,7 @@ class CrmMembershipPayment extends Entity {
 
   public function label() {
     $amount = number_format((float) (isset($this->amount) ? $this->amount : 0), 2);
-    $date = !empty($this->paid_date) ? $this->paid_date : '';
+    $date = !empty($this->paid_date) ? format_date((int) $this->paid_date, 'custom', 'Y-m-d') : '';
     return t('$!amount on !date', array('!amount' => $amount, '!date' => $date));
   }
 

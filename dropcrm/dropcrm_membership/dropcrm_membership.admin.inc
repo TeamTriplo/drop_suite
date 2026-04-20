@@ -73,8 +73,8 @@ function dropcrm_membership_view_page($membership) {
       $ops[] = l(t('Delete'), 'drop/crm/memberships/' . $membership->mid . '/term/' . $t->tid . '/delete');
     }
     $term_rows[] = array(
-      $t->start_date,
-      !empty($t->end_date) ? $t->end_date : t('lifetime'),
+      !empty($t->start_date) ? format_date((int) $t->start_date, 'custom', 'Y-m-d') : '',
+      !empty($t->end_date) ? format_date((int) $t->end_date, 'custom', 'Y-m-d') : t('lifetime'),
       array('data' => _dropcrm_membership_status_badge($t->status)),
       check_plain($t->notes),
       implode(' | ', $ops),
@@ -100,7 +100,7 @@ function dropcrm_membership_view_page($membership) {
       $ops[] = l(t('Delete'), 'drop/crm/memberships/' . $membership->mid . '/payment/' . $p->pid . '/delete');
     }
     $pay_rows[] = array(
-      $p->paid_date,
+      !empty($p->paid_date) ? format_date((int) $p->paid_date, 'custom', 'Y-m-d') : '',
       '$' . number_format((float) $p->amount, 2),
       check_plain($p->method),
       check_plain($p->reference),
@@ -336,11 +336,14 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
   $default_dues = isset($type_conf['default_dues']) ? $type_conf['default_dues'] : '';
   $type_label = isset($type_conf['label']) ? $type_conf['label'] : $membership->type;
 
-  $prior_end = $membership->currentEndDate();
-  $default_start = ($prior_end && $prior_end > format_date(REQUEST_TIME, 'custom', 'Y-m-d'))
-    ? $prior_end
-    : format_date(REQUEST_TIME, 'custom', 'Y-m-d');
-  $default_end = _dropcrm_membership_add_term_length($default_start, $term_length);
+  // Work in Unix timestamps throughout; convert to YYYY-MM-DD only for
+  // display.
+  $today_ts = strtotime('today');
+  $latest_term = _dropcrm_membership_latest_term($membership->mid);
+  $prior_end_ts = ($latest_term && !empty($latest_term->end_date)) ? (int) $latest_term->end_date : NULL;
+  $default_start_ts = ($prior_end_ts && $prior_end_ts > $today_ts) ? $prior_end_ts : $today_ts;
+  $default_end_ts = _dropcrm_membership_add_term_length($default_start_ts, $term_length);
+  $prior_end_display = $prior_end_ts ? format_date($prior_end_ts, 'custom', 'Y-m-d') : NULL;
 
   // Confirmation block: show which member we are renewing so the user can
   // verify they are on the right page before committing. Guards against
@@ -353,7 +356,7 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
   $rows = array(
     array(array('header' => TRUE, 'data' => t('Member')), $contact_link),
     array(array('header' => TRUE, 'data' => t('Membership type')), check_plain($type_label)),
-    array(array('header' => TRUE, 'data' => t('Current term ends')), $prior_end ?: t('—')),
+    array(array('header' => TRUE, 'data' => t('Current term ends')), $prior_end_display ?: t('—')),
   );
   if (!empty($membership->member_id)) {
     array_splice($rows, 1, 0, array(array(array('header' => TRUE, 'data' => t('Member ID')), check_plain($membership->member_id))));
@@ -375,13 +378,13 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
   $form['start_date'] = array(
     '#type'          => 'date',
     '#title'         => t('Term start'),
-    '#default_value' => _dropcrm_membership_date_to_element($default_start),
+    '#default_value' => _dropcrm_membership_date_to_element($default_start_ts),
     '#required'      => TRUE,
   );
   $form['end_date'] = array(
     '#type'          => 'date',
     '#title'         => t('Term end'),
-    '#default_value' => _dropcrm_membership_date_to_element($default_end),
+    '#default_value' => _dropcrm_membership_date_to_element($default_end_ts),
     '#description'   => t('Leave blank for a lifetime term.'),
   );
   $form['notes'] = array(
@@ -507,7 +510,7 @@ function dropcrm_membership_payment_form($form, &$form_state, $membership, $paym
       'mid'       => $membership->mid,
       'tid'       => NULL,
       'amount'    => '',
-      'paid_date' => format_date(REQUEST_TIME, 'custom', 'Y-m-d'),
+      'paid_date' => strtotime('today'),
       'method'    => '',
       'reference' => '',
       'notes'     => '',
@@ -516,11 +519,14 @@ function dropcrm_membership_payment_form($form, &$form_state, $membership, $paym
   $form_state['crm_membership'] = $membership;
   $form_state['crm_membership_payment'] = $payment;
 
-  // Offer to link to a specific term (optional).
+  // Offer to link to a specific term (optional). Convert int timestamps to
+  // YYYY-MM-DD for the dropdown labels.
   $term_options = array('' => t('- Not linked to a specific term -'));
   $term_query = db_query('SELECT tid, start_date, end_date FROM {crm_membership_term} WHERE mid = :mid ORDER BY start_date DESC, tid DESC', array(':mid' => $membership->mid));
   foreach ($term_query as $t) {
-    $term_options[$t->tid] = $t->start_date . ' – ' . (!empty($t->end_date) ? $t->end_date : t('lifetime'));
+    $start_str = !empty($t->start_date) ? format_date((int) $t->start_date, 'custom', 'Y-m-d') : '';
+    $end_str   = !empty($t->end_date) ? format_date((int) $t->end_date, 'custom', 'Y-m-d') : t('lifetime');
+    $term_options[$t->tid] = $start_str . ' – ' . $end_str;
   }
   $form['tid'] = array(
     '#type'          => 'select',
@@ -662,27 +668,38 @@ function dropcrm_membership_cancel_form_submit($form, &$form_state) {
 // ---------------------------------------------------------------------------
 
 /**
- * Backdrop's #type date returns an array of year/month/day. Converts to
- * YYYY-MM-DD. Returns NULL if empty.
+ * Converts a #type date form-element value into a Unix timestamp. Accepts
+ * either the array format Backdrop produces (year/month/day) or a pre-
+ * resolved YYYY-MM-DD string. Returns NULL if the value is empty.
  */
 function _dropcrm_membership_date_from_element($value) {
+  if (is_numeric($value)) {
+    return (int) $value;
+  }
   if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
-    return $value;
+    $ts = strtotime($value);
+    return $ts !== FALSE ? $ts : NULL;
   }
   if (is_array($value) && !empty($value['year']) && !empty($value['month']) && !empty($value['day'])) {
-    return sprintf('%04d-%02d-%02d', (int) $value['year'], (int) $value['month'], (int) $value['day']);
+    $iso = sprintf('%04d-%02d-%02d', (int) $value['year'], (int) $value['month'], (int) $value['day']);
+    $ts = strtotime($iso);
+    return $ts !== FALSE ? $ts : NULL;
   }
   return NULL;
 }
 
 /**
- * Converts a YYYY-MM-DD string into the array format expected by #type date.
+ * Converts a Unix timestamp (or YYYY-MM-DD string for legacy callers) into
+ * the array format #type date expects.
  */
 function _dropcrm_membership_date_to_element($date) {
-  if (empty($date) || $date === '0000-00-00') {
+  if (empty($date)) {
     return NULL;
   }
-  $ts = strtotime($date);
+  $ts = is_numeric($date) ? (int) $date : strtotime($date);
+  if ($ts === FALSE || $ts <= 0) {
+    return NULL;
+  }
   return array(
     'year'  => (int) format_date($ts, 'custom', 'Y'),
     'month' => (int) format_date($ts, 'custom', 'n'),
@@ -691,7 +708,7 @@ function _dropcrm_membership_date_to_element($date) {
 }
 
 function _dropcrm_membership_date_default_today() {
-  return _dropcrm_membership_date_to_element(format_date(REQUEST_TIME, 'custom', 'Y-m-d'));
+  return _dropcrm_membership_date_to_element(strtotime('today'));
 }
 
 /**
@@ -722,7 +739,10 @@ function _dropcrm_membership_log_activity($membership, $activity_type, $start_da
     case 'membership_renewal':
       $subject = t('Renewed @type membership', array('@type' => $type_label));
       if (!empty($end_date)) {
-        $subject .= ' ' . t('through @end', array('@end' => $end_date));
+        // end_date arrives as a Unix timestamp from the renew handler;
+        // format for display. Accept string form for legacy callers.
+        $end_display = is_numeric($end_date) ? format_date((int) $end_date, 'custom', 'Y-m-d') : $end_date;
+        $subject .= ' ' . t('through @end', array('@end' => $end_display));
       }
       break;
     case 'membership_cancelled':
@@ -852,9 +872,11 @@ function dropcrm_membership_term_delete_form($form, &$form_state, $membership, $
   $form_state['crm_membership']      = $membership;
   $form_state['crm_membership_term'] = $term;
 
+  $start_display = !empty($term->start_date) ? format_date((int) $term->start_date, 'custom', 'Y-m-d') : '';
+  $end_display   = !empty($term->end_date) ? format_date((int) $term->end_date, 'custom', 'Y-m-d') : '';
   $range = !empty($term->end_date)
-    ? t('from @start to @end', array('@start' => $term->start_date, '@end' => $term->end_date))
-    : t('starting @start (lifetime)', array('@start' => $term->start_date));
+    ? t('from @start to @end', array('@start' => $start_display, '@end' => $end_display))
+    : t('starting @start (lifetime)', array('@start' => $start_display));
 
   return confirm_form(
     $form,
@@ -945,7 +967,7 @@ function dropcrm_membership_report_page() {
   ', array(':start' => $period['start'], ':end' => $period['end']))->fetchField();
 
   // ---- Lapsed in period ----
-  // Approximate: memberships whose latest term end_date + grace_days fell in
+  // Approximate: memberships whose latest term end_date + grace_days falls in
   // the period. Can't perfectly reconstruct historical status transitions
   // without an audit log, so this is the best proxy.
   $lapsed_count = 0;
@@ -957,8 +979,8 @@ function dropcrm_membership_report_page() {
   ', array(':end' => $period['end']));
   foreach ($lapsed_rows as $row) {
     $grace_days = isset($types[$row->type]['grace_days']) ? (int) $types[$row->type]['grace_days'] : 30;
-    $lapsed_date = format_date(strtotime($row->current_end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
-    if ($lapsed_date >= $period['start'] && $lapsed_date <= $period['end']) {
+    $lapsed_ts = (int) $row->current_end_date + ($grace_days * 86400);
+    if ($lapsed_ts >= $period['start'] && $lapsed_ts <= $period['end']) {
       $lapsed_count++;
     }
   }
@@ -1098,7 +1120,8 @@ function dropcrm_membership_report_period_form($form, &$form_state, $period) {
 
 /**
  * Resolves the active period from GET params into a [start, end, label]
- * array with YYYY-MM-DD string dates.
+ * array. `start` and `end` are Unix timestamps (midnight-aligned at the
+ * edges of the period). `label` is a human-readable summary.
  */
 function _dropcrm_membership_report_resolve_period() {
   $period = isset($_GET['period']) ? $_GET['period'] : 'this_month';
@@ -1106,46 +1129,58 @@ function _dropcrm_membership_report_resolve_period() {
 
   switch ($period) {
     case 'last_month':
-      $start = format_date(strtotime('first day of last month', $today), 'custom', 'Y-m-d');
-      $end   = format_date(strtotime('last day of last month', $today), 'custom', 'Y-m-d');
-      $label = t('Last month (@start to @end)', array('@start' => $start, '@end' => $end));
+      $start = strtotime('first day of last month 00:00:00', $today);
+      $end   = strtotime('last day of last month 23:59:59', $today);
+      $label = t('Last month (@start to @end)', array(
+        '@start' => format_date($start, 'custom', 'Y-m-d'),
+        '@end'   => format_date($end, 'custom', 'Y-m-d'),
+      ));
       break;
 
     case 'this_year':
-      $start = format_date(strtotime('first day of january this year', $today), 'custom', 'Y-m-d');
-      $end   = format_date($today, 'custom', 'Y-m-d');
-      $label = t('This year (@start to today)', array('@start' => $start));
+      $start = strtotime('first day of january this year 00:00:00', $today);
+      $end   = strtotime('today 23:59:59', $today);
+      $label = t('This year (@start to today)', array(
+        '@start' => format_date($start, 'custom', 'Y-m-d'),
+      ));
       break;
 
     case 'last_30':
-      $start = format_date(strtotime('-30 days', $today), 'custom', 'Y-m-d');
-      $end   = format_date($today, 'custom', 'Y-m-d');
+      $start = strtotime('-30 days 00:00:00', $today);
+      $end   = strtotime('today 23:59:59', $today);
       $label = t('Last 30 days');
       break;
 
     case 'last_90':
-      $start = format_date(strtotime('-90 days', $today), 'custom', 'Y-m-d');
-      $end   = format_date($today, 'custom', 'Y-m-d');
+      $start = strtotime('-90 days 00:00:00', $today);
+      $end   = strtotime('today 23:59:59', $today);
       $label = t('Last 90 days');
       break;
 
     case 'all_time':
-      $start = '1970-01-01';
-      $end   = format_date($today, 'custom', 'Y-m-d');
+      $start = 0;
+      $end   = strtotime('today 23:59:59', $today);
       $label = t('All time');
       break;
 
     case 'custom':
-      $start = !empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['start']) ? $_GET['start'] : format_date(strtotime('first day of this month', $today), 'custom', 'Y-m-d');
-      $end   = !empty($_GET['end'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end'])   ? $_GET['end']   : format_date($today, 'custom', 'Y-m-d');
-      $label = t('Custom (@start to @end)', array('@start' => $start, '@end' => $end));
+      $valid_start = !empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['start']) ? $_GET['start'] : NULL;
+      $valid_end   = !empty($_GET['end'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end'])   ? $_GET['end']   : NULL;
+      $start = $valid_start ? strtotime($valid_start . ' 00:00:00') : strtotime('first day of this month 00:00:00', $today);
+      $end   = $valid_end   ? strtotime($valid_end . ' 23:59:59')   : strtotime('today 23:59:59', $today);
+      $label = t('Custom (@start to @end)', array(
+        '@start' => format_date($start, 'custom', 'Y-m-d'),
+        '@end'   => format_date($end, 'custom', 'Y-m-d'),
+      ));
       break;
 
     case 'this_month':
     default:
-      $start = format_date(strtotime('first day of this month', $today), 'custom', 'Y-m-d');
-      $end   = format_date($today, 'custom', 'Y-m-d');
-      $label = t('This month (@start to today)', array('@start' => $start));
+      $start = strtotime('first day of this month 00:00:00', $today);
+      $end   = strtotime('today 23:59:59', $today);
+      $label = t('This month (@start to today)', array(
+        '@start' => format_date($start, 'custom', 'Y-m-d'),
+      ));
       break;
   }
 
