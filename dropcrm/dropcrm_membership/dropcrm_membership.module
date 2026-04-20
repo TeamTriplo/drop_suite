@@ -124,6 +124,7 @@ function dropcrm_membership_entity_property_info() {
   $m['mid'] = array(
     'label'          => t('Membership ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this membership record.'),
     'schema field'   => 'mid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
@@ -164,18 +165,21 @@ function dropcrm_membership_entity_property_info() {
   $m['created'] = array(
     'label'          => t('Date Created'),
     'type'           => 'date',
+    'description'    => t('Date when the membership record was first created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $m['changed'] = array(
     'label'          => t('Date Modified'),
     'type'           => 'date',
+    'description'    => t('Date when the membership record was last modified.'),
     'schema field'   => 'changed',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $m['uid'] = array(
     'label'          => t('Created by'),
     'type'           => 'user',
+    'description'    => t('User account that created or last edited this membership record.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -215,6 +219,7 @@ function dropcrm_membership_entity_property_info() {
   $t['tid'] = array(
     'label'          => t('Term ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this term record.'),
     'schema field'   => 'tid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
@@ -229,6 +234,7 @@ function dropcrm_membership_entity_property_info() {
   $t['start_date'] = array(
     'label'          => t('Term Start'),
     'type'           => 'date',
+    'description'    => t('Date when this term begins.'),
     'schema field'   => 'start_date',
     'getter callback' => '_dropcrm_membership_date_get',
     'setter callback' => '_dropcrm_membership_date_set',
@@ -244,6 +250,7 @@ function dropcrm_membership_entity_property_info() {
   $t['status'] = array(
     'label'          => t('Term Status'),
     'type'           => 'integer',
+    'description'    => t('Status of this specific term (active, grace, lapsed, pending, cancelled).'),
     'schema field'   => 'status',
     'options list'   => '_dropcrm_membership_status_options',
     'getter callback' => 'entity_plus_property_verbatim_get',
@@ -252,6 +259,7 @@ function dropcrm_membership_entity_property_info() {
   $t['notes'] = array(
     'label'          => t('Notes'),
     'type'           => 'text',
+    'description'    => t('Free-form notes on this term (e.g. payment reference, special circumstances).'),
     'schema field'   => 'notes',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -259,12 +267,14 @@ function dropcrm_membership_entity_property_info() {
   $t['created'] = array(
     'label'          => t('Recorded'),
     'type'           => 'date',
+    'description'    => t('Date when this term record was created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $t['uid'] = array(
     'label'          => t('Recorded by'),
     'type'           => 'user',
+    'description'    => t('User account that recorded this term.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -275,12 +285,14 @@ function dropcrm_membership_entity_property_info() {
   $p['pid'] = array(
     'label'          => t('Payment ID'),
     'type'           => 'integer',
+    'description'    => t('Internal numeric identifier for this payment record.'),
     'schema field'   => 'pid',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $p['mid'] = array(
     'label'          => t('Membership'),
     'type'           => 'crm_membership',
+    'description'    => t('The membership this payment was recorded against.'),
     'schema field'   => 'mid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -296,6 +308,7 @@ function dropcrm_membership_entity_property_info() {
   $p['amount'] = array(
     'label'          => t('Amount'),
     'type'           => 'decimal',
+    'description'    => t('Dollar amount of the payment.'),
     'schema field'   => 'amount',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -303,6 +316,7 @@ function dropcrm_membership_entity_property_info() {
   $p['paid_date'] = array(
     'label'          => t('Paid Date'),
     'type'           => 'date',
+    'description'    => t('Date the payment was received.'),
     'schema field'   => 'paid_date',
     'getter callback' => '_dropcrm_membership_date_get',
     'setter callback' => '_dropcrm_membership_date_set',
@@ -310,6 +324,7 @@ function dropcrm_membership_entity_property_info() {
   $p['method'] = array(
     'label'          => t('Method'),
     'type'           => 'text',
+    'description'    => t('How the payment was made (Check, Cash, Credit Card, Other).'),
     'schema field'   => 'method',
     'options list'   => '_dropcrm_membership_payment_method_options',
     'getter callback' => 'entity_plus_property_verbatim_get',
@@ -318,6 +333,7 @@ function dropcrm_membership_entity_property_info() {
   $p['reference'] = array(
     'label'          => t('Reference'),
     'type'           => 'text',
+    'description'    => t('Optional reference — check number, transaction ID, etc.'),
     'schema field'   => 'reference',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -325,6 +341,7 @@ function dropcrm_membership_entity_property_info() {
   $p['notes'] = array(
     'label'          => t('Notes'),
     'type'           => 'text',
+    'description'    => t('Free-form notes on this payment.'),
     'schema field'   => 'notes',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
@@ -332,12 +349,14 @@ function dropcrm_membership_entity_property_info() {
   $p['created'] = array(
     'label'          => t('Recorded'),
     'type'           => 'date',
+    'description'    => t('Date when this payment record was created.'),
     'schema field'   => 'created',
     'getter callback' => 'entity_plus_property_verbatim_get',
   );
   $p['uid'] = array(
     'label'          => t('Recorded by'),
     'type'           => 'user',
+    'description'    => t('User account that recorded this payment.'),
     'schema field'   => 'uid',
     'getter callback' => 'entity_plus_property_verbatim_get',
     'setter callback' => 'entity_plus_property_verbatim_set',
