@@ -555,7 +555,33 @@ function dropcrm_membership_menu() {
     'file'             => 'dropcrm_membership.admin.inc',
   );
 
+  // Reports — surfaced via hook_drop_reports() for the CRM Reports nav.
+  $items['drop/crm/reports/memberships'] = array(
+    'title'            => 'Memberships Report',
+    'page callback'    => 'dropcrm_membership_report_page',
+    'access arguments' => array('access dropcrm_membership'),
+    'file'             => 'dropcrm_membership.admin.inc',
+  );
+
   return $items;
+}
+
+/**
+ * Implements hook_drop_reports().
+ *
+ * Registers the Memberships report with the shared Drop Suite reports
+ * nav system so it appears in the CRM section's reports group.
+ */
+function dropcrm_membership_drop_reports() {
+  return array(
+    'dropcrm_memberships' => array(
+      'title'       => t('Memberships'),
+      'path'        => 'drop/crm/reports/memberships',
+      'root_path'   => 'drop/crm',
+      'module'      => 'dropcrm_membership',
+      'default_pin' => FALSE,
+    ),
+  );
 }
 
 /**

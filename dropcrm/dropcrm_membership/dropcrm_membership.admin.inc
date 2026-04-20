@@ -984,3 +984,269 @@ function dropcrm_membership_term_delete_form_submit($form, &$form_state) {
   backdrop_set_message(t('Term deleted.'));
   $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
 }
+
+// ---------------------------------------------------------------------------
+// Reports page
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: Memberships report at drop/crm/reports/memberships.
+ *
+ * Shows active count + per-type breakdown, new memberships in period,
+ * renewals in period, and revenue in period + per-type breakdown. Period
+ * is read from GET params so the URL is bookmarkable.
+ */
+function dropcrm_membership_report_page() {
+  $period = _dropcrm_membership_report_resolve_period();
+
+  $output = array();
+
+  // Period selector form at top.
+  $output['period_form'] = backdrop_get_form('dropcrm_membership_report_period_form', $period);
+
+  // Resolve human period label for headings.
+  $output['period_label'] = array(
+    '#markup' => '<h3>' . t('Showing: @label', array('@label' => $period['label'])) . '</h3>',
+  );
+
+  $types = _dropcrm_membership_types();
+
+  // ---- Active memberships ----
+  $active_total = (int) db_query('SELECT COUNT(*) FROM {crm_membership} WHERE status = :s', array(':s' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE))->fetchField();
+  $grace_total  = (int) db_query('SELECT COUNT(*) FROM {crm_membership} WHERE status = :s', array(':s' => DROPCRM_MEMBERSHIP_STATUS_GRACE))->fetchField();
+
+  $active_by_type = array();
+  $result = db_query('SELECT type, COUNT(*) AS c FROM {crm_membership} WHERE status = :s GROUP BY type', array(':s' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE));
+  foreach ($result as $row) {
+    $active_by_type[$row->type] = (int) $row->c;
+  }
+
+  // ---- New memberships in period ----
+  // New = first term's start_date falls in the period.
+  $new_count = (int) db_query('
+    SELECT COUNT(*) FROM {crm_membership} m
+    WHERE (
+      SELECT MIN(start_date) FROM {crm_membership_term} t WHERE t.mid = m.mid
+    ) BETWEEN :start AND :end
+  ', array(':start' => $period['start'], ':end' => $period['end']))->fetchField();
+
+  // ---- Renewals in period ----
+  // Renewal = term row whose start_date is in the period AND is not the
+  // earliest term for its membership.
+  $renewal_count = (int) db_query('
+    SELECT COUNT(*) FROM {crm_membership_term} t
+    WHERE t.start_date BETWEEN :start AND :end
+      AND t.tid != (SELECT MIN(tid) FROM {crm_membership_term} WHERE mid = t.mid)
+  ', array(':start' => $period['start'], ':end' => $period['end']))->fetchField();
+
+  // ---- Lapsed in period ----
+  // Approximate: memberships whose latest term end_date + grace_days fell in
+  // the period. Can't perfectly reconstruct historical status transitions
+  // without an audit log, so this is the best proxy.
+  $lapsed_count = 0;
+  $lapsed_rows = db_query('
+    SELECT m.type, m.current_end_date
+    FROM {crm_membership} m
+    WHERE m.current_end_date IS NOT NULL
+      AND m.current_end_date < :end
+  ', array(':end' => $period['end']));
+  foreach ($lapsed_rows as $row) {
+    $grace_days = isset($types[$row->type]['grace_days']) ? (int) $types[$row->type]['grace_days'] : 30;
+    $lapsed_date = format_date(strtotime($row->current_end_date) + ($grace_days * 86400), 'custom', 'Y-m-d');
+    if ($lapsed_date >= $period['start'] && $lapsed_date <= $period['end']) {
+      $lapsed_count++;
+    }
+  }
+
+  // ---- Revenue in period ----
+  $revenue = (float) db_query('
+    SELECT COALESCE(SUM(amount), 0) FROM {crm_membership_payment}
+    WHERE paid_date BETWEEN :start AND :end
+  ', array(':start' => $period['start'], ':end' => $period['end']))->fetchField();
+
+  $revenue_by_type = array();
+  $rev_rows = db_query('
+    SELECT m.type, COALESCE(SUM(p.amount), 0) AS rev, COUNT(p.pid) AS cnt
+    FROM {crm_membership_payment} p
+    INNER JOIN {crm_membership} m ON m.mid = p.mid
+    WHERE p.paid_date BETWEEN :start AND :end
+    GROUP BY m.type
+  ', array(':start' => $period['start'], ':end' => $period['end']));
+  foreach ($rev_rows as $row) {
+    $revenue_by_type[$row->type] = array(
+      'amount' => (float) $row->rev,
+      'count'  => (int) $row->cnt,
+    );
+  }
+
+  // ---- Render: four headline numbers ----
+  $output['headline'] = array(
+    '#theme'  => 'table',
+    '#header' => array(t('Metric'), t('Value')),
+    '#rows'   => array(
+      array(t('Active memberships'), $active_total),
+      array(t('In grace period'), $grace_total),
+      array(t('New in period'), $new_count),
+      array(t('Renewals in period'), $renewal_count),
+      array(t('Lapsed in period'), $lapsed_count),
+      array(t('Revenue in period'), '$' . number_format($revenue, 2)),
+    ),
+    '#attributes' => array('class' => array('crm-membership-report-headline')),
+  );
+
+  // ---- Render: active by type ----
+  if (!empty($active_by_type)) {
+    $rows = array();
+    foreach ($active_by_type as $type_key => $count) {
+      $label = isset($types[$type_key]['label']) ? $types[$type_key]['label'] : $type_key;
+      $rows[] = array(check_plain($label), $count);
+    }
+    $output['active_by_type_header'] = array(
+      '#markup' => '<h3>' . t('Active memberships by type') . '</h3>',
+    );
+    $output['active_by_type'] = array(
+      '#theme'  => 'table',
+      '#header' => array(t('Type'), t('Active count')),
+      '#rows'   => $rows,
+    );
+  }
+
+  // ---- Render: revenue by type ----
+  if (!empty($revenue_by_type)) {
+    $rows = array();
+    foreach ($revenue_by_type as $type_key => $row) {
+      $label = isset($types[$type_key]['label']) ? $types[$type_key]['label'] : $type_key;
+      $rows[] = array(
+        check_plain($label),
+        '$' . number_format($row['amount'], 2),
+        $row['count'],
+      );
+    }
+    $output['revenue_by_type_header'] = array(
+      '#markup' => '<h3>' . t('Revenue in period by type') . '</h3>',
+    );
+    $output['revenue_by_type'] = array(
+      '#theme'  => 'table',
+      '#header' => array(t('Type'), t('Revenue'), t('Payment count')),
+      '#rows'   => $rows,
+    );
+  }
+  else {
+    $output['revenue_empty'] = array(
+      '#markup' => '<p>' . t('No payments recorded in this period.') . '</p>',
+    );
+  }
+
+  return $output;
+}
+
+/**
+ * Period selector form for the Memberships report. Submits via GET so the
+ * resolved period is part of the URL (bookmarkable, shareable).
+ */
+function dropcrm_membership_report_period_form($form, &$form_state, $period) {
+  $form['#method'] = 'get';
+
+  $form['period'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Period'),
+    '#options'       => array(
+      'this_month'  => t('This month'),
+      'last_month'  => t('Last month'),
+      'this_year'   => t('This year'),
+      'last_30'     => t('Last 30 days'),
+      'last_90'     => t('Last 90 days'),
+      'all_time'    => t('All time'),
+      'custom'      => t('Custom range'),
+    ),
+    '#default_value' => isset($_GET['period']) ? $_GET['period'] : 'this_month',
+  );
+
+  $form['start'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('From (custom)'),
+    '#default_value' => isset($_GET['start']) ? $_GET['start'] : '',
+    '#size'          => 12,
+    '#description'   => t('YYYY-MM-DD'),
+    '#states'        => array(
+      'visible' => array(':input[name="period"]' => array('value' => 'custom')),
+    ),
+  );
+  $form['end'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('To (custom)'),
+    '#default_value' => isset($_GET['end']) ? $_GET['end'] : '',
+    '#size'          => 12,
+    '#description'   => t('YYYY-MM-DD'),
+    '#states'        => array(
+      'visible' => array(':input[name="period"]' => array('value' => 'custom')),
+    ),
+  );
+
+  $form['apply'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Apply'),
+  );
+
+  return $form;
+}
+
+/**
+ * Resolves the active period from GET params into a [start, end, label]
+ * array with YYYY-MM-DD string dates.
+ */
+function _dropcrm_membership_report_resolve_period() {
+  $period = isset($_GET['period']) ? $_GET['period'] : 'this_month';
+  $today = REQUEST_TIME;
+
+  switch ($period) {
+    case 'last_month':
+      $start = format_date(strtotime('first day of last month', $today), 'custom', 'Y-m-d');
+      $end   = format_date(strtotime('last day of last month', $today), 'custom', 'Y-m-d');
+      $label = t('Last month (@start to @end)', array('@start' => $start, '@end' => $end));
+      break;
+
+    case 'this_year':
+      $start = format_date(strtotime('first day of january this year', $today), 'custom', 'Y-m-d');
+      $end   = format_date($today, 'custom', 'Y-m-d');
+      $label = t('This year (@start to today)', array('@start' => $start));
+      break;
+
+    case 'last_30':
+      $start = format_date(strtotime('-30 days', $today), 'custom', 'Y-m-d');
+      $end   = format_date($today, 'custom', 'Y-m-d');
+      $label = t('Last 30 days');
+      break;
+
+    case 'last_90':
+      $start = format_date(strtotime('-90 days', $today), 'custom', 'Y-m-d');
+      $end   = format_date($today, 'custom', 'Y-m-d');
+      $label = t('Last 90 days');
+      break;
+
+    case 'all_time':
+      $start = '1970-01-01';
+      $end   = format_date($today, 'custom', 'Y-m-d');
+      $label = t('All time');
+      break;
+
+    case 'custom':
+      $start = !empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['start']) ? $_GET['start'] : format_date(strtotime('first day of this month', $today), 'custom', 'Y-m-d');
+      $end   = !empty($_GET['end'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['end'])   ? $_GET['end']   : format_date($today, 'custom', 'Y-m-d');
+      $label = t('Custom (@start to @end)', array('@start' => $start, '@end' => $end));
+      break;
+
+    case 'this_month':
+    default:
+      $start = format_date(strtotime('first day of this month', $today), 'custom', 'Y-m-d');
+      $end   = format_date($today, 'custom', 'Y-m-d');
+      $label = t('This month (@start to today)', array('@start' => $start));
+      break;
+  }
+
+  return array(
+    'start' => $start,
+    'end'   => $end,
+    'label' => $label,
+  );
+}
