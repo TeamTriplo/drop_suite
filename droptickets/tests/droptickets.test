@@ -2142,7 +2142,7 @@ class DropTicketsImportedExclusionTest extends DropTicketsTestBase {
       'import_id' => 'jira-batch-002',
     ));
 
-    $this->backdropGet('drop/tickets/recent');
+    $this->backdropGet('drop/tickets/reports/recent');
     $this->assertText('Normal recent ticket', 'Normal ticket appears on Recent page.');
     $this->assertNoText('Imported recent ticket', 'Imported ticket is hidden from Recent page by default.');
   }
