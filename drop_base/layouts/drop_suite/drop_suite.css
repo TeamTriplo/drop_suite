@@ -8,9 +8,18 @@
  * page that fixed header sits on top of the `l-top` region and swallows
  * clicks on whatever's behind its "transparent" areas (wizard block,
  * action bar, etc.). Drop Suite pages are app-like; the header belongs in
- * document flow. */
+ * document flow.
+ *
+ * IMPORTANT: use `position: relative`, NOT `static`. Seven admin theme
+ * places a `::before` on `.l-header` with `position: absolute` and relies
+ * on `.l-header` being positioned so the pseudo-element sizes itself to
+ * the header. If `.l-header` is static, the pseudo-element inherits its
+ * positioning ancestor from farther up the DOM and grows to cover
+ * unrelated regions — including TOP on the layout editor — blocking
+ * pointer events there. `position: relative` preserves Seven's stacking
+ * math while still removing any theme's `position: fixed` quirk. */
 .layout--drop-suite .l-header {
-  position: static;
+  position: relative;
   height: auto;
   width: auto;
   z-index: auto;
