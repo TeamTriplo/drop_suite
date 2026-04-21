@@ -3,6 +3,20 @@
  * Drop Suite layout styles.
  */
 
+/* Header — defensively reset positioning. Themes (e.g. tcog) may style
+ * `.l-header` as a fixed, full-width, z-index:999 top bar. On a Drop Suite
+ * page that fixed header sits on top of the `l-top` region and swallows
+ * clicks on whatever's behind its "transparent" areas (wizard block,
+ * action bar, etc.). Drop Suite pages are app-like; the header belongs in
+ * document flow. */
+.layout--drop-suite .l-header {
+  position: static;
+  height: auto;
+  width: auto;
+  z-index: auto;
+  box-shadow: none;
+}
+
 /* Navigation region */
 .l-navigation {
   width: 100%;

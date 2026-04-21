@@ -298,12 +298,23 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
   }
 
   // On create, show Slack silence option if a webhook is configured.
+  // Default is driven by a site setting (slack_silence_default_on_create)
+  // so admins can decide whether new tickets default-to-quiet or
+  // default-to-noisy. Most teams want quiet — the queue exists to track
+  // work, not to ping Slack for every new row.
   if (!$is_edit && config_get('droptickets.settings', 'slack_webhook_url')) {
+    $silence_default = config_get('droptickets.settings', 'slack_silence_default_on_create');
+    // Treat unset as 1 (quiet by default) — matches the desired first-run
+    // behaviour on new sites.
+    if ($silence_default === NULL) {
+      $silence_default = 1;
+    }
     $form['layout']['main']['silence_slack'] = array(
       '#type'          => 'checkbox',
       '#title'         => t('Silence Slack notification'),
-      '#default_value' => 0,
+      '#default_value' => (int) $silence_default,
       '#weight'        => 24,
+      '#description'   => t('Uncheck to post to the team Slack channel for this ticket.'),
     );
   }
 
@@ -918,6 +929,16 @@ function droptickets_settings_form($form, &$form_state) {
     '#default_value' => $config->get('slack_webhook_url'),
     '#maxlength'     => 512,
     '#placeholder'   => 'https://hooks.slack.com/services/…',
+  );
+  $silence_default = $config->get('slack_silence_default_on_create');
+  if ($silence_default === NULL) {
+    $silence_default = 1;
+  }
+  $form['notifications']['slack_silence_default_on_create'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Silence Slack notification by default on new tickets'),
+    '#description'   => t('When checked, the "Silence Slack notification" box on the ticket add form starts pre-checked. Authors can still uncheck it to broadcast a specific ticket. Most teams want this on — the queue is for tracking work, not narrating it.'),
+    '#default_value' => (int) $silence_default,
   );
   $form['notifications']['reactions_enabled'] = array(
     '#type'          => 'checkbox',
