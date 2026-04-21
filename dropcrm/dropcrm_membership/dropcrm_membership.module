@@ -1414,3 +1414,50 @@ function _dropcrm_membership_recompute_status($mid) {
 function _dropcrm_membership_generate_member_id($mid) {
   return 'M-' . str_pad((int) $mid, 4, '0', STR_PAD_LEFT);
 }
+
+/**
+ * Implements hook_droppay_payment_status().
+ *
+ * When a Drop Pay charge for a membership term completes, mirror it as a
+ * crm_membership_payment row so it appears in the membership's payment
+ * history alongside manually-logged payments. Idempotent — guarded by a
+ * "droppay:{pid}" reference marker.
+ */
+function dropcrm_membership_droppay_payment_status($payment, $previous_status) {
+  if ($payment->status !== 'completed' || $previous_status === 'completed') {
+    return;
+  }
+  if ($payment->purpose !== 'dues' || $payment->purpose_entity_type !== 'crm_membership_term') {
+    return;
+  }
+  $tid = (int) $payment->purpose_entity_id;
+  if (!$tid) {
+    return;
+  }
+
+  $marker = 'droppay:' . $payment->pid;
+  $exists = (bool) db_query('SELECT 1 FROM {crm_membership_payment} WHERE reference = :ref', array(':ref' => $marker))->fetchField();
+  if ($exists) {
+    return;
+  }
+
+  $term = entity_load('crm_membership_term', $tid);
+  if (!$term) {
+    watchdog('dropcrm_membership', 'Drop Pay completion for term @tid but term not found.', array('@tid' => $tid), WATCHDOG_WARNING);
+    return;
+  }
+
+  $local = entity_create('crm_membership_payment', array(
+    'mid'        => $term->mid,
+    'tid'        => $term->tid,
+    'amount'     => (float) $payment->amount,
+    'paid_date'  => !empty($payment->completed) ? (int) $payment->completed : REQUEST_TIME,
+    'method'     => $payment->gateway === 'stripe' ? 'Stripe' : ucfirst((string) $payment->gateway),
+    'reference'  => $marker,
+    'notes'      => '',
+  ));
+  $local->save();
+  // hook_crm_membership_payment_insert already calls
+  // _dropcrm_membership_recompute_derived() to refresh the denormalized
+  // last_payment_date / total_paid columns.
+}

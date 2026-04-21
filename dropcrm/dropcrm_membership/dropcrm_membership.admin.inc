@@ -434,10 +434,26 @@ function dropcrm_membership_renew_form($form, &$form_state, $membership) {
     '#type'  => 'submit',
     '#value' => t('Renew'),
   );
+
+  // Offer "Pay online" alongside the standard Renew submit when Drop Pay has
+  // a default gateway configured.
+  if (function_exists('droppay_default_gateway') && droppay_default_gateway() !== '') {
+    $gw = droppay_get_gateway(droppay_default_gateway());
+    if ($gw) {
+      $form['actions']['pay_online'] = array(
+        '#type'   => 'submit',
+        '#value'  => t('Renew & pay online via @gw', array('@gw' => $gw['label'])),
+        '#submit' => array('dropcrm_membership_renew_form_pay_online_submit'),
+        '#weight' => 5,
+      );
+    }
+  }
+
   $form['actions']['cancel'] = array(
     '#type'  => 'link',
     '#title' => t('Cancel'),
     '#href'  => 'drop/crm/memberships/' . $membership->mid,
+    '#weight' => 10,
   );
 
   return $form;
@@ -460,6 +476,13 @@ function dropcrm_membership_renew_form_validate($form, &$form_state) {
   }
   if (trim((string) $v['pay_amount']) !== '' && !is_numeric($v['pay_amount'])) {
     form_set_error('pay_amount', t('Payment amount must be numeric.'));
+  }
+  // The "Pay online" button requires a non-zero amount.
+  $trigger = isset($form_state['triggering_element']['#name']) ? $form_state['triggering_element']['#name'] : '';
+  if ($trigger === 'pay_online') {
+    if (trim((string) $v['pay_amount']) === '' || (float) $v['pay_amount'] <= 0) {
+      form_set_error('pay_amount', t('Enter an amount greater than zero to pay online.'));
+    }
   }
 }
 
@@ -505,6 +528,59 @@ function dropcrm_membership_renew_form_submit($form, &$form_state) {
 
   backdrop_set_message(t('Membership renewed.'));
   $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
+}
+
+/**
+ * Submit handler for the renew form's "Pay online" button.
+ *
+ * Creates the term immediately, then hands the user off to the configured
+ * Drop Pay gateway. On successful return, hook_droppay_payment_status creates
+ * the matching crm_membership_payment row.
+ */
+function dropcrm_membership_renew_form_pay_online_submit($form, &$form_state) {
+  $v = $form_state['values'];
+  $membership = $form_state['crm_membership'];
+
+  $start = _dropcrm_membership_date_from_element($v['start_date']);
+  $end = !empty($v['end_date']) ? _dropcrm_membership_date_from_element($v['end_date']) : NULL;
+
+  $term = entity_create('crm_membership_term', array(
+    'mid'        => $membership->mid,
+    'start_date' => $start,
+    'end_date'   => $end,
+    'status'     => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
+    'notes'      => isset($v['notes']) ? $v['notes'] : '',
+  ));
+  $term->save();
+
+  _dropcrm_membership_recompute_status($membership->mid);
+  _dropcrm_membership_log_activity($membership, 'membership_renewal', $start, $end);
+
+  $contact = entity_load('crm_contact', $membership->cid);
+  $description = t('Membership renewal — !name', array(
+    '!name' => $contact ? $contact->label() : ('Member #' . $membership->mid),
+  ));
+
+  $result = droppay_charge(array(
+    'amount'              => (float) $v['pay_amount'],
+    'description'         => $description,
+    'cid'                 => $membership->cid,
+    'purpose'             => 'dues',
+    'purpose_entity_type' => 'crm_membership_term',
+    'purpose_entity_id'   => $term->tid,
+    'return_path'         => 'drop/crm/memberships/' . $membership->mid,
+    'cancel_path'         => 'drop/crm/memberships/' . $membership->mid,
+  ));
+
+  if (!empty($result['error'])) {
+    backdrop_set_message($result['error'], 'error');
+    backdrop_set_message(t('The renewal term was created but online payment could not be initiated. You can record a payment manually from the membership page.'), 'warning');
+    $form_state['redirect'] = 'drop/crm/memberships/' . $membership->mid;
+    return;
+  }
+
+  // Hand off to the gateway URL — bypasses Backdrop's internal redirect.
+  backdrop_goto($result['redirect_url']);
 }
 
 /**
