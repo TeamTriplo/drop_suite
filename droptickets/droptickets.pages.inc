@@ -2881,19 +2881,19 @@ function droptickets_recent_page() {
   $recent_mode_active = $project_mode && !empty($project_mode['report']) && $project_mode['report'] === 'recent';
 
   if (isset($_GET['enter_mode'])) {
-    droptickets_project_mode_set($user->uid, 'recent', t('Recent'), 'drop/tickets/recent', array(
+    droptickets_project_mode_set($user->uid, 'recent', t('Recent'), 'drop/tickets/reports/recent', array(
       'pid'      => $pid_filter ?: NULL,
       'assignee' => $assignee_filter ?: NULL,
       'status'   => $status_filter ?: NULL,
     ));
     $rq = array_filter(array('pid' => $pid_filter ?: NULL, 'assignee' => $assignee_filter ?: NULL, 'status' => $status_filter ?: NULL));
-    backdrop_goto('drop/tickets/recent', array('query' => $rq));
+    backdrop_goto('drop/tickets/reports/recent', array('query' => $rq));
     return;
   }
   if (isset($_GET['exit_mode'])) {
     droptickets_project_mode_clear($user->uid);
     $rq = array_filter(array('pid' => $pid_filter ?: NULL, 'assignee' => $assignee_filter ?: NULL, 'status' => $status_filter ?: NULL));
-    backdrop_goto('drop/tickets/recent', array('query' => $rq));
+    backdrop_goto('drop/tickets/reports/recent', array('query' => $rq));
     return;
   }
   if ($recent_mode_active && !isset($_GET['pid']) && !isset($_GET['assignee']) && !isset($_GET['status'])) {
@@ -2903,7 +2903,7 @@ function droptickets_recent_page() {
     $status_filter   = !empty($f['status'])   ? (string) $f['status']   : '';
   }
   elseif ($recent_mode_active && (isset($_GET['pid']) || isset($_GET['assignee']) || isset($_GET['status']))) {
-    droptickets_project_mode_set($user->uid, 'recent', t('Recent'), 'drop/tickets/recent', array(
+    droptickets_project_mode_set($user->uid, 'recent', t('Recent'), 'drop/tickets/reports/recent', array(
       'pid'      => $pid_filter ?: NULL,
       'assignee' => $assignee_filter ?: NULL,
       'status'   => $status_filter ?: NULL,
@@ -2950,18 +2950,18 @@ function droptickets_recent_page() {
   // Mode button.
   $recent_mode_query = array_filter(array('pid' => $pid_filter ?: NULL, 'assignee' => $assignee_filter ?: NULL, 'status' => $status_filter ?: NULL));
   if ($recent_mode_active) {
-    $exit_url  = url('drop/tickets/recent', array('query' => array('exit_mode' => 1) + $recent_mode_query));
+    $exit_url  = url('drop/tickets/reports/recent', array('query' => array('exit_mode' => 1) + $recent_mode_query));
     $mode_btn  = '<a href="' . $exit_url . '" class="droptickets-project-mode-btn droptickets-project-mode-btn--active" title="' . t('Project Mode is active. Current filters are frozen. Click to exit.') . '">'
       . icon('x-circle', array('attributes' => array('width' => 14, 'height' => 14))) . ' ' . t('Exit Project Mode') . '</a>';
   }
   else {
-    $enter_url = url('drop/tickets/recent', array('query' => array('enter_mode' => 1) + $recent_mode_query));
+    $enter_url = url('drop/tickets/reports/recent', array('query' => array('enter_mode' => 1) + $recent_mode_query));
     $mode_btn  = '<a href="' . $enter_url . '" class="droptickets-project-mode-btn" title="' . t('Enter Project Mode to freeze the current filters. A persistent back link will appear on each ticket, making it easy to work through this list.') . '">'
       . icon('play-circle', array('attributes' => array('width' => 14, 'height' => 14))) . ' ' . t('Enter Project Mode') . '</a>';
   }
 
   // Filter form.
-  $filter_form = '<form method="get" action="' . url('drop/tickets/recent') . '" class="droptickets-filter-form">'
+  $filter_form = '<form method="get" action="' . url('drop/tickets/reports/recent') . '" class="droptickets-filter-form">'
     . '<select name="status" class="droptickets-filter-select" onchange="this.form.submit()">' . $status_opts_html . '</select>'
     . '<select name="pid" class="droptickets-filter-select" onchange="this.form.submit()">' . $proj_opts_html . '</select>'
     . '<select name="assignee" class="droptickets-filter-select" onchange="this.form.submit()">' . $assignee_opts_html . '</select>'
