@@ -108,6 +108,16 @@ Each surface sits directly below the next broader one in the layout (primary →
 - Use for user-facing "Add new X" links on listing pages (e.g. `+ Add Person`
   on the People view). These render as action links below the page title.
 
+**Admin path nesting.** When a module presents itself as a sub-section of a
+parent module in section nav, its admin paths should live under the parent's
+URL namespace (e.g. `drop/crm/events/*` for DropEvents since Events appears
+in CRM's section sub-nav; `drop/crm/memberships/*` for dropcrm_membership as
+a submodule of DropCRM). This keeps section detection aligned with the user's
+mental model — the parent submenu persists across sub-section pages
+automatically, no special-casing needed in `_drop_base_get_section()`.
+Public-facing routes for the same module are exempt and go wherever they read
+best (e.g. `/events/{title}` for public event nodes).
+
 ## Action Bar
 
 Per-entity verbs — things you *do to* the entity, not alternate views of it. Examples: Renew a membership, Record a payment, Send an email, Extend a due date, Cancel an order.
