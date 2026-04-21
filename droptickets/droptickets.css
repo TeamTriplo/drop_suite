@@ -111,6 +111,75 @@
   color: #c62828;
 }
 
+/* "Show tags" toggle in the filter row. Off state matches filter-select
+   chrome; on state picks up the primary blue to read as active. */
+.droptickets-show-tags-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--drop-border, #ccc);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--drop-text-secondary, #555);
+  font-size: 0.875em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.droptickets-show-tags-toggle:hover {
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+}
+
+.droptickets-show-tags-toggle--on {
+  background: var(--drop-highlight, #e3f2fd);
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+}
+
+/* Untagged indicator — small muted amber glyph next to the title on list
+   rows when the ticket has zero tags. Visible whether or not the Show tags
+   toggle is on, so the "missing tags" signal stays scannable. */
+.droptickets-untagged-indicator {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 0.3rem;
+  color: #e65100;
+  opacity: 0.75;
+}
+
+.droptickets-untagged-indicator:hover {
+  opacity: 1;
+}
+
+/* Tag chip strip rendered under the ticket title when Show tags is on.
+   Rows without tags keep their short height — only rows with tags grow. */
+.droptickets-tag-strip {
+  margin-top: 0.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.droptickets-tag-chip {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  background: var(--drop-bg-subtle, #f5f5f5);
+  border: 1px solid var(--drop-border, #e0e0e0);
+  border-radius: 999px;
+  font-size: 0.75em;
+  color: var(--drop-text-secondary, #555);
+  text-decoration: none;
+  line-height: 1.5;
+}
+
+.droptickets-tag-chip:hover {
+  background: var(--drop-highlight, #e3f2fd);
+  border-color: var(--drop-primary, #1565c0);
+  color: var(--drop-primary, #1565c0);
+}
+
 /* De-emphasised admin-only tabs (Stale, Manage Fields, etc.). */
 .tabs a.droptickets-tab-admin {
   color: var(--color-gray-500, #9e9e9e);
