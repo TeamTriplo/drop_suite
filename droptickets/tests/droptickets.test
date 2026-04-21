@@ -2149,6 +2149,58 @@ class DropTicketsImportedExclusionTest extends DropTicketsTestBase {
 }
 
 // ---------------------------------------------------------------------------
+// Recent report filter round-trip
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that the Recent report's filter form submits to a live URL.
+ *
+ * Regression: the report path moved to drop/tickets/reports/recent but the
+ * filter form action and Project Mode URLs still pointed at the stale
+ * drop/tickets/recent, so any filter selection 404'd. This test extracts
+ * whatever URL the form claims to submit to and verifies it resolves, so it
+ * survives future path renames.
+ */
+class DropTicketsRecentFilterRoundTripTest extends DropTicketsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropTickets Recent filter round-trip',
+      'description' => 'The Recent report filter form submits to a URL that resolves (not 404).',
+      'group'       => 'DropTickets',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('droptickets');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access droptickets',
+      'administer droptickets',
+    ));
+  }
+
+  public function testRecentFilterSubmissionResolves() {
+    $this->backdropLogin($this->adminUser);
+    $project = $this->createTestProject();
+    $this->createTestTicket($project, array('title' => 'Round-trip recent ticket'));
+
+    $this->backdropGet('drop/tickets/reports/recent');
+    $this->assertResponse(200);
+
+    $forms = $this->xpath('//form[contains(@class, "droptickets-filter-form")]');
+    $this->assertTrue(!empty($forms), 'Recent report renders a filter form.');
+    $action_url = (string) $forms[0]['action'];
+    $this->assertTrue(!empty($action_url), 'Filter form has an action attribute.');
+
+    // Simulate the form's GET submission with a project selected.
+    $path = ltrim((string) parse_url($action_url, PHP_URL_PATH), '/');
+    $this->backdropGet($path, array('query' => array('pid' => $project->pid)));
+    $this->assertResponse(200, 'Filter form action URL resolves (not 404) when a filter is submitted.');
+    $this->assertText('Round-trip recent ticket', 'Filtered Recent report displays matching ticket.');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // File download access
 //
 // Regression test for the bug where team members got 403 when trying to
