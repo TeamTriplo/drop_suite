@@ -204,6 +204,15 @@ function _drop_base_is_narrow_page($path) {
     '#^drop/crm/memberships/\d+/payment/\d+/delete$#',
     '#^drop/crm/memberships/\d+/term/\d+/edit$#',
     '#^drop/crm/memberships/\d+/term/\d+/delete$#',
+    // DropEvents: location view + forms, ticket type forms, registration form.
+    '#^drop/locations/\d+$#',
+    '#^drop/locations/add$#',
+    '#^drop/locations/\d+/edit$#',
+    '#^drop/locations/\d+/delete$#',
+    '#^drop/events/node/\d+/ticket-types/add$#',
+    '#^drop/events/ticket-types/\d+/edit$#',
+    '#^drop/events/ticket-types/\d+/delete$#',
+    '#^events/register/\d+$#',
     // File library: list, upload, view, replace.
     '#^drop/files$#',
     '#^drop/files/upload$#',
