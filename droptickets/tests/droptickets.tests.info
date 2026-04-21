@@ -75,3 +75,9 @@ name = DropTickets File Download Access
 description = Private ticket attachments are downloadable by anyone who can view the parent ticket.
 group = DropTickets
 file = droptickets.test
+
+[DropTicketsRecentFilterRoundTripTest]
+name = DropTickets Recent filter round-trip
+description = The Recent report filter form submits to a URL that resolves (not 404).
+group = DropTickets
+file = droptickets.test
