@@ -234,6 +234,9 @@ function droptickets_list_page() {
   global $user;
   backdrop_set_title(t('Tickets'));
 
+  // Persist the Show-tags toggle before rendering — call issues a redirect.
+  _droptickets_handle_show_tags_toggle('drop/tickets');
+
   $output = array(
     '#attached' => array(
       'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
@@ -403,6 +406,19 @@ function droptickets_list_page() {
     . '</label>'
     . '</form>';
 
+  // "Show tags" toggle — rendered outside the filter form so it doesn't
+  // submit alongside the GET filters. Clicking flips the persisted
+  // preference while preserving the current filter query string.
+  $tags_toggle_query = array_filter(array(
+    'status'        => $status !== 'all' ? $status : NULL,
+    'pid'           => $pid_filter ?: NULL,
+    'tag'           => $tag_filter ?: NULL,
+    'search'        => $search ?: NULL,
+    'assignee'      => $assignee_filter ?: NULL,
+    'show_children' => $show_children ? 1 : NULL,
+  ));
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets', $tags_toggle_query);
+
   // Project Mode button for All Tickets.
   $all_mode_query = array_filter(array(
     'status'   => $status !== 'all' ? $status : NULL,
@@ -438,7 +454,7 @@ function droptickets_list_page() {
   }
 
   $output['filters'] = array(
-    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $tag_badge . $all_mode_btn . $unverified_badge . '</div>',
+    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $show_tags_toggle . $tag_badge . $all_mode_btn . $unverified_badge . '</div>',
     '#weight' => -18,
   );
 
@@ -589,6 +605,11 @@ function droptickets_list_page() {
       ->execute()->fetchAllKeyed();
   }
 
+  // Bulk-load drop_tags per ticket for the untagged indicator + optional
+  // chip strip. One query regardless of how many tickets are on the page.
+  $ticket_tags_map = _droptickets_bulk_tags_map($visible_tids);
+  $show_list_tags  = droptickets_show_list_tags_get($user->uid);
+
   $rows = array();
 
   foreach ($tickets as $ticket) {
@@ -637,11 +658,23 @@ function droptickets_list_page() {
       $board_cell = implode(' ', $board_pieces);
     }
 
+    // Tag-related cell extras: untagged indicator (always on) plus optional
+    // chip strip under the title (per-user toggle).
+    $ticket_tag_terms  = isset($ticket_tags_map[$ticket->tid]) ? $ticket_tags_map[$ticket->tid] : array();
+    $untagged_icon     = _droptickets_untagged_indicator(!empty($ticket_tag_terms));
+    $tag_chip_strip    = _droptickets_tag_chip_strip($ticket_tag_terms, $show_list_tags);
+
+    $title_cell_html = l($ticket->title, 'drop/tickets/' . $ticket->tid)
+      . _droptickets_child_count_badge($child_counts, $ticket->tid)
+      . $parent_indicator
+      . $untagged_icon
+      . $tag_chip_strip;
+
     $row_data = array(
       array('data' => $flag_cell, 'class' => array('droptickets-col-flag')),
       array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>', 'class' => array('droptickets-col-id')),
       array('data' => $proj_name, 'class' => array('droptickets-col-project')),
-      array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid) . _droptickets_child_count_badge($child_counts, $ticket->tid) . $parent_indicator, 'class' => array('droptickets-col-title')),
+      array('data' => $title_cell_html, 'class' => array('droptickets-col-title')),
       array('data' => $priority_dot, 'class' => array('droptickets-col-priority')),
       array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
       array('data' => $board_cell, 'class' => array('droptickets-col-boards')),
@@ -690,7 +723,10 @@ function droptickets_list_page() {
  *   The fully-loaded user account (from %user wildcard).
  */
 function droptickets_member_page($account) {
+  global $user;
   backdrop_set_title(t('@name — tickets', array('@name' => $account->name)));
+
+  _droptickets_handle_show_tags_toggle('drop/tickets/member/' . $account->uid);
 
   $output = array(
     '#attached' => array(
@@ -698,17 +734,22 @@ function droptickets_member_page($account) {
     ),
   );
 
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets/member/' . $account->uid);
+
   $output['actions'] = array(
     '#markup' => '<p>'
       . l(t('← Back to team'), 'drop/team')
       . ' &nbsp; '
       . l(t('View Kanban'), 'drop/tickets/kanban', array('query' => array('assignee' => $account->uid)))
+      . ' &nbsp; '
+      . $show_tags_toggle
       . '</p>',
     '#weight' => -10,
   );
 
   $status_options   = droptickets_all_status_options();
   $priority_labels  = drop_base_priority_labels();
+  $show_list_tags   = droptickets_show_list_tags_get($user->uid);
 
   // Fetch assigned tickets (active statuses only).
   $active = droptickets_active_statuses();
@@ -726,10 +767,12 @@ function droptickets_member_page($account) {
   $projects = $pids ? entity_load('drop_project', $pids) : array();
 
   // Helper to build a ticket table.
-  $build_table = function($tickets, $projects) use ($status_options, $priority_labels) {
+  $build_table = function($tickets, $projects) use ($status_options, $priority_labels, $show_list_tags) {
     if (empty($tickets)) {
       return array('#markup' => '<p class="droptickets-empty">' . t('None.') . '</p>');
     }
+    $member_tids     = array_column((array) $tickets, 'tid');
+    $member_tags_map = _droptickets_bulk_tags_map($member_tids);
     $rows = array();
     foreach ($tickets as $ticket) {
       $project = isset($projects[$ticket->pid]) ? $projects[$ticket->pid] : NULL;
@@ -738,10 +781,14 @@ function droptickets_member_page($account) {
       $status_label   = isset($status_options[$ticket->status]) ? $status_options[$ticket->status] : $ticket->status;
       $priority_class = 'drop-priority-' . drop_base_priority_class($ticket->priority);
       $priority_dot   = '<span class="droptickets-priority-dot ' . $priority_class . '" title="' . check_plain(isset($priority_labels[$ticket->priority]) ? $priority_labels[$ticket->priority] : '') . '"></span>';
+      $member_tag_terms = isset($member_tags_map[$ticket->tid]) ? $member_tags_map[$ticket->tid] : array();
+      $title_cell_html  = l($ticket->title, 'drop/tickets/' . $ticket->tid)
+        . _droptickets_untagged_indicator(!empty($member_tag_terms))
+        . _droptickets_tag_chip_strip($member_tag_terms, $show_list_tags);
       $rows[] = array(
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
         array('data' => $proj_name),
-        array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid)),
+        array('data' => $title_cell_html, 'class' => array('droptickets-col-title')),
         array('data' => $priority_dot),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
       );
@@ -2864,6 +2911,8 @@ function droptickets_recent_page() {
 
   backdrop_set_title(t('Recent tickets'));
 
+  _droptickets_handle_show_tags_toggle('drop/tickets/reports/recent');
+
   $output = array(
     '#attached' => array(
       'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
@@ -2967,8 +3016,14 @@ function droptickets_recent_page() {
     . '<select name="assignee" class="droptickets-filter-select" onchange="this.form.submit()">' . $assignee_opts_html . '</select>'
     . '</form>';
 
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets/reports/recent', array_filter(array(
+    'pid'      => $pid_filter ?: NULL,
+    'assignee' => $assignee_filter ?: NULL,
+    'status'   => $status_filter ?: NULL,
+  )));
+
   $output['filters'] = array(
-    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $mode_btn . '</div>',
+    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $show_tags_toggle . $mode_btn . '</div>',
     '#weight' => -20,
   );
 
@@ -3051,6 +3106,10 @@ function droptickets_recent_page() {
     $recent_flags_map[(int) $_rfr->tid][] = (int) $_rfr->type_tid;
   }
 
+  // Bulk-load tag terms per ticket for the untagged indicator + chip strip.
+  $recent_tags_map = _droptickets_bulk_tags_map($tids);
+  $show_list_tags  = droptickets_show_list_tags_get($user->uid);
+
   $rows = array();
   foreach ($results as $row) {
     $ticket = isset($tickets[$row->tid]) ? $tickets[$row->tid] : NULL;
@@ -3083,12 +3142,17 @@ function droptickets_recent_page() {
       }
     }
 
+    $recent_tag_terms = isset($recent_tags_map[$row->tid]) ? $recent_tags_map[$row->tid] : array();
+    $title_cell_html  = l($row->title, 'drop/tickets/' . $row->tid)
+      . _droptickets_untagged_indicator(!empty($recent_tag_terms))
+      . _droptickets_tag_chip_strip($recent_tag_terms, $show_list_tags);
+
     $rows[] = array(
       'data' => array(
         array('data' => $flag_icon,       'class' => array('droptickets-col-flag')),
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>', 'class' => array('droptickets-col-id')),
         array('data' => $proj_name,       'class' => array('droptickets-col-project')),
-        array('data' => l($row->title, 'drop/tickets/' . $row->tid), 'class' => array('droptickets-col-title')),
+        array('data' => $title_cell_html, 'class' => array('droptickets-col-title')),
         array('data' => $priority_dot,    'class' => array('droptickets-col-priority')),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($row->status) . '">' . check_plain($status_label) . '</span>'),
         array('data' => $assignee),
@@ -3114,7 +3178,10 @@ function droptickets_recent_page() {
 // ---------------------------------------------------------------------------
 
 function droptickets_flagged_page() {
+  global $user;
   backdrop_set_title(t('Flagged tickets'));
+
+  _droptickets_handle_show_tags_toggle('drop/tickets/flagged');
 
   $output = array(
     '#attached' => array(
@@ -3164,8 +3231,12 @@ function droptickets_flagged_page() {
       )
     );
   }
+  $flagged_toggle_query = array_filter(array('type' => $filter_tid ?: NULL));
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets/flagged', $flagged_toggle_query);
+
   $output['pills'] = array(
-    '#markup' => '<div class="droptickets-flag-pills">' . implode(' ', $pills) . '</div>',
+    '#markup' => '<div class="droptickets-flag-pills">' . implode(' ', $pills) . '</div>'
+      . '<div class="droptickets-filter-row">' . $show_tags_toggle . '</div>',
     '#weight' => -10,
   );
 
@@ -3272,6 +3343,10 @@ function droptickets_flagged_page() {
   $status_options  = droptickets_all_status_options();
   $priority_labels = drop_base_priority_labels();
 
+  // Bulk-load drop_tags terms for the untagged indicator + chip strip.
+  $flagged_tags_map = _droptickets_bulk_tags_map($tids_in_order);
+  $show_list_tags   = droptickets_show_list_tags_get($user->uid);
+
   $rows = array();
   $i    = 1;
   foreach ($ordered as $ticket) {
@@ -3298,12 +3373,17 @@ function droptickets_flagged_page() {
       $board_cell = implode(' ', $board_pieces);
     }
 
+    $flagged_tag_terms = isset($flagged_tags_map[$ticket->tid]) ? $flagged_tags_map[$ticket->tid] : array();
+    $title_cell_html   = l($ticket->title, 'drop/tickets/' . $ticket->tid)
+      . _droptickets_untagged_indicator(!empty($flagged_tag_terms))
+      . _droptickets_tag_chip_strip($flagged_tag_terms, $show_list_tags);
+
     $rows[] = array(
       'data' => array(
         array('data' => '<strong>' . $i . '</strong>', 'class' => array('droptickets-flag-rank')),
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
         array('data' => $proj_name),
-        array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid), 'class' => array('droptickets-col-title')),
+        array('data' => $title_cell_html, 'class' => array('droptickets-col-title')),
         array('data' => $priority_dot, 'class' => array('droptickets-col-priority')),
         array('data' => $flags_cell, 'class' => array('droptickets-col-flag')),
         array('data' => '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>'),
@@ -3405,6 +3485,8 @@ function droptickets_stale_report_page() {
 
   backdrop_set_title(t('Stale tickets'));
 
+  _droptickets_handle_show_tags_toggle('drop/tickets/reports/stale');
+
   $output = array(
     '#attached' => array(
       'css' => array(backdrop_get_path('module', 'droptickets') . '/droptickets.css'),
@@ -3505,8 +3587,14 @@ function droptickets_stale_report_page() {
     . '<select name="assignee" class="droptickets-filter-select" onchange="this.form.submit()">' . $assignee_opts_html . '</select>'
     . '</form>';
 
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets/reports/stale', array_filter(array(
+    'pid'      => $pid_filter ?: NULL,
+    'assignee' => $assignee_filter ?: NULL,
+    'status'   => $status_filter ?: NULL,
+  )));
+
   $output['filters'] = array(
-    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $mode_btn . '</div>',
+    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $show_tags_toggle . $mode_btn . '</div>',
     '#weight' => -20,
   );
 
@@ -3566,6 +3654,11 @@ function droptickets_stale_report_page() {
   $status_options = droptickets_all_status_options();
   $now            = REQUEST_TIME;
 
+  // Bulk-load drop_tags for the untagged indicator + chip strip.
+  $stale_tids     = array_column((array) $tickets, 'tid');
+  $stale_tags_map = _droptickets_bulk_tags_map($stale_tids);
+  $show_list_tags = droptickets_show_list_tags_get($user->uid);
+
   $rows = array();
   foreach ($tickets as $ticket) {
     $project   = isset($projects[$ticket->pid]) ? $projects[$ticket->pid] : NULL;
@@ -3578,11 +3671,16 @@ function droptickets_stale_report_page() {
     $days_stale = (int) floor(($now - $ticket->changed) / 86400);
     $days_label = format_plural($days_stale, '1 day', '@count days');
 
+    $stale_tag_terms = isset($stale_tags_map[$ticket->tid]) ? $stale_tags_map[$ticket->tid] : array();
+    $title_cell_html = l($ticket->title, 'drop/tickets/' . $ticket->tid)
+      . _droptickets_untagged_indicator(!empty($stale_tag_terms))
+      . _droptickets_tag_chip_strip($stale_tag_terms, $show_list_tags);
+
     $rows[] = array(
       'data' => array(
         array('data' => '<span class="droptickets-ticket-id">' . check_plain($label) . '</span>'),
         array('data' => $proj_name),
-        array('data' => l($ticket->title, 'drop/tickets/' . $ticket->tid), 'class' => array('droptickets-col-title')),
+        array('data' => $title_cell_html, 'class' => array('droptickets-col-title')),
         array('data' => '<span class="droptickets-type droptickets-type--' . check_plain($ticket->type) . '">' . check_plain($type_label) . '</span>'),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($ticket->status) . '">' . check_plain($status_label) . '</span>'),
         array('data' => $assignee),
@@ -3619,6 +3717,8 @@ function droptickets_review_page() {
   global $user;
 
   backdrop_set_title(t('Review'));
+
+  _droptickets_handle_show_tags_toggle('drop/tickets/review');
 
   $output = array(
     '#attached' => array(
@@ -3736,8 +3836,14 @@ function droptickets_review_page() {
     . '<select name="tag" class="droptickets-filter-select" onchange="this.form.submit()">' . $tag_opts_html . '</select>'
     . '</form>';
 
+  $show_tags_toggle = _droptickets_show_tags_toggle_html($user->uid, 'drop/tickets/review', array_filter(array(
+    'pid'    => $pid_filter ?: NULL,
+    'tag'    => $tag_filter ?: NULL,
+    'status' => $status_filter ?: NULL,
+  )));
+
   $output['filters'] = array(
-    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $mode_btn . '</div>',
+    '#markup' => '<div class="droptickets-filter-row">' . $filter_form . $show_tags_toggle . $mode_btn . '</div>',
     '#weight' => -20,
   );
 
@@ -3830,6 +3936,10 @@ function droptickets_review_page() {
   }
   $ordered = array_merge($unreviewed, $reviewed);
 
+  // Bulk-load drop_tags for the untagged indicator + chip strip.
+  $review_tags_map = _droptickets_bulk_tags_map($tids);
+  $show_list_tags  = droptickets_show_list_tags_get($user->uid);
+
   $token = backdrop_get_token('review-toggle');
   $rows  = array();
   foreach ($ordered as $t) {
@@ -3855,10 +3965,15 @@ function droptickets_review_page() {
       . '<span class="droptickets-review-icon-on">' . $icon_on . '</span>'
       . '</button>';
 
+    $review_tag_terms = isset($review_tags_map[$t->tid]) ? $review_tags_map[$t->tid] : array();
+    $title_cell_html  = l($t->title, 'drop/tickets/' . $t->tid)
+      . _droptickets_untagged_indicator(!empty($review_tag_terms))
+      . _droptickets_tag_chip_strip($review_tag_terms, $show_list_tags);
+
     $rows[] = array(
       'data' => array(
         array('data' => $btn,   'class' => array('droptickets-review-col-btn')),
-        array('data' => l($t->title, 'drop/tickets/' . $t->tid)),
+        array('data' => $title_cell_html),
         array('data' => $proj_name),
         array('data' => $assignee),
         array('data' => '<span class="droptickets-status droptickets-status--' . check_plain($t->status) . '">' . check_plain($status_label) . '</span>'),

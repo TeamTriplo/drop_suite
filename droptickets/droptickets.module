@@ -2595,6 +2595,178 @@ function _droptickets_status_select_html($selected) {
 }
 
 /**
+ * Bulk-loads the drop_tags terms assigned to each ticket in $tids.
+ *
+ * Returns a map: tid => array of objects {tid, name}, ordered by term name.
+ *
+ * A missing key in the map means the ticket has zero tags — callers use this
+ * to render the untagged indicator on list rows.
+ *
+ * @param array $tids  Ticket IDs to look up.
+ * @return array       [ticket_tid => [(object) [tid, name], ...]]
+ */
+function _droptickets_bulk_tags_map(array $tids) {
+  $map = array();
+  if (empty($tids)) {
+    return $map;
+  }
+  $q = db_select('field_data_field_drop_tags', 'ft')
+    ->fields('ft', array('entity_id', 'field_drop_tags_tid'))
+    ->condition('ft.entity_type', 'drop_ticket')
+    ->condition('ft.deleted', 0)
+    ->condition('ft.entity_id', $tids, 'IN');
+  $q->innerJoin('taxonomy_term_data', 'td', 'td.tid = ft.field_drop_tags_tid');
+  $q->fields('td', array('name'));
+  $q->orderBy('td.name');
+  foreach ($q->execute() as $row) {
+    $map[(int) $row->entity_id][] = (object) array(
+      'tid'  => (int) $row->field_drop_tags_tid,
+      'name' => $row->name,
+    );
+  }
+  return $map;
+}
+
+/**
+ * Renders a small "untagged" indicator glyph for a ticket with zero tags.
+ *
+ * Rendered inline next to the ticket title on list views. Always-on —
+ * independent of the "Show tags" toggle — so the scannable "did someone
+ * forget to tag this?" signal remains visible even in audit mode.
+ *
+ * @param bool $has_tags  TRUE if the ticket has ≥1 tag (returns '').
+ * @return string         HTML, or '' when the ticket is tagged.
+ */
+function _droptickets_untagged_indicator($has_tags) {
+  if ($has_tags) {
+    return '';
+  }
+  return ' <span class="droptickets-untagged-indicator" title="' . t('Untagged') . '">'
+    . icon('warning-circle', array('attributes' => array('width' => 13, 'height' => 13)))
+    . '</span>';
+}
+
+/**
+ * Renders the chip strip shown under a ticket title when "Show tags" is on.
+ *
+ * Returns '' when the ticket has no tags OR the toggle is off, so callers
+ * can unconditionally concatenate the return value into the title cell.
+ *
+ * @param array|null $terms     Array of (object) [tid, name] from the bulk
+ *                              tags map, or NULL / empty for untagged.
+ * @param bool       $show_tags Per-user "Show tags" toggle state.
+ * @return string               HTML, or '' when nothing should be rendered.
+ */
+function _droptickets_tag_chip_strip($terms, $show_tags) {
+  if (!$show_tags || empty($terms)) {
+    return '';
+  }
+  $chips = array();
+  foreach ($terms as $term) {
+    $chips[] = l(check_plain($term->name), 'drop/tickets', array(
+      'query'      => array('tag' => $term->tid),
+      'attributes' => array('class' => array('droptickets-tag-chip')),
+    ));
+  }
+  return '<div class="droptickets-tag-strip">' . implode(' ', $chips) . '</div>';
+}
+
+/**
+ * Returns the per-user "Show tags on list views" preference.
+ *
+ * Stored in state (not user data) to match the existing droptickets
+ * per-user pattern used by Project Mode and the Review queue. State keeps
+ * the preference server-side so it follows the user across browsers —
+ * at the cost of one state lookup per list page render. We accepted that
+ * tradeoff for consistency with the rest of the module.
+ *
+ * @param int $uid  User ID. Anonymous (0) always returns FALSE.
+ * @return bool
+ */
+function droptickets_show_list_tags_get($uid) {
+  if (empty($uid)) {
+    return FALSE;
+  }
+  return (bool) state_get('droptickets.show_list_tags.' . $uid, FALSE);
+}
+
+/**
+ * Sets the per-user "Show tags on list views" preference.
+ *
+ * @param int  $uid  User ID.
+ * @param bool $on   TRUE to enable, FALSE to disable.
+ */
+function droptickets_show_list_tags_set($uid, $on) {
+  if (empty($uid)) {
+    return;
+  }
+  if ($on) {
+    state_set('droptickets.show_list_tags.' . $uid, TRUE);
+  }
+  else {
+    state_del('droptickets.show_list_tags.' . $uid);
+  }
+}
+
+/**
+ * Handles a ?show_tags=0|1 URL param by persisting the user preference,
+ * then redirecting back to the clean URL (param stripped).
+ *
+ * Call this at the top of any ticket list page callback. It only acts when
+ * the query param is present, so list pages can invoke it unconditionally.
+ *
+ * @param string $current_path  The menu path of the current list page
+ *                              (e.g. 'drop/tickets', 'drop/tickets/review').
+ *                              Used to build the redirect URL.
+ */
+function _droptickets_handle_show_tags_toggle($current_path) {
+  global $user;
+  if (!isset($_GET['show_tags'])) {
+    return;
+  }
+  $want_on = !empty($_GET['show_tags']) && $_GET['show_tags'] !== '0';
+  droptickets_show_list_tags_set($user->uid, $want_on);
+
+  // Rebuild the query string without the show_tags param so refresh
+  // doesn't re-toggle and so the URL is cache-friendly.
+  $clean_query = $_GET;
+  unset($clean_query['show_tags'], $clean_query['q']);
+  backdrop_goto($current_path, array('query' => $clean_query));
+}
+
+/**
+ * Renders the "Show tags" toggle control for a ticket list filter row.
+ *
+ * Rendered as a checkbox-style link so it fits the existing GET-form filter
+ * strip without adding a second <form>. Clicking flips the persisted
+ * preference and returns to the same page with the same filters preserved.
+ *
+ * @param int    $uid           Current user ID.
+ * @param string $current_path  Menu path for the current list page.
+ * @param array  $base_query    Existing filter query params to preserve.
+ * @return string               HTML for the toggle control.
+ */
+function _droptickets_show_tags_toggle_html($uid, $current_path, array $base_query = array()) {
+  $on = droptickets_show_list_tags_get($uid);
+  $next_query = $base_query;
+  $next_query['show_tags'] = $on ? '0' : '1';
+  $classes = array('droptickets-show-tags-toggle');
+  if ($on) {
+    $classes[] = 'droptickets-show-tags-toggle--on';
+  }
+  $label = icon($on ? 'tag-fill' : 'tag', array('attributes' => array('width' => 14, 'height' => 14)))
+    . ' ' . t('Show tags');
+  return l($label, $current_path, array(
+    'query'      => $next_query,
+    'html'       => TRUE,
+    'attributes' => array(
+      'class' => $classes,
+      'title' => $on ? t('Hide tags on this list') : t('Show tag chips under each title on this list'),
+    ),
+  ));
+}
+
+/**
  * Returns the statuses shown on the Kanban board (in column order).
  *
  * Only statuses with kanban = TRUE are included, sorted by weight.
