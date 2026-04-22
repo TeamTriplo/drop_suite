@@ -293,6 +293,7 @@ function dropcrm_install() {
   _dropcrm_create_fields();
   _dropcrm_ensure_contact_tags();
   _dropcrm_ensure_contact_types();
+  _dropcrm_ensure_contact_groups();
 
   module_load_include('inc', 'dropcrm', 'dropcrm.admin');
   $config = config('dropcrm.settings');
@@ -383,6 +384,65 @@ function _dropcrm_ensure_contact_tags() {
         'vocabulary' => $vocab->machine_name,
       ));
       taxonomy_term_save($term);
+    }
+  }
+}
+
+/**
+ * Creates the crm_groups vocabulary and attaches field_crm_groups to all
+ * CRM contact bundles. Groups model segmentation lists (newsletter
+ * subscribers, advisory board members, volunteer rosters, etc.) — unlike
+ * drop_tags (free-form labels) they're meant to be a curated set of lists
+ * used as audience targets for outreach.
+ *
+ * Seeded empty; populated either by the CiviCRM importer
+ * (dropcrm_civicrm_import) or by the Site Architect directly. Idempotent.
+ */
+function _dropcrm_ensure_contact_groups() {
+  $vocab = taxonomy_vocabulary_machine_name_load('crm_groups');
+  if (!$vocab) {
+    $vocab = new TaxonomyVocabulary(array(
+      'name'         => 'CRM Groups',
+      'machine_name' => 'crm_groups',
+      'description'  => 'Curated segmentation lists attached to CRM contacts (newsletter subscribers, committee rosters, volunteer pools, etc.). Use drop_tags for free-form tagging; use crm_groups for lists you would target in outreach.',
+    ));
+    taxonomy_vocabulary_save($vocab);
+  }
+
+  if (!field_info_field('field_crm_groups')) {
+    field_create_field(array(
+      'field_name'  => 'field_crm_groups',
+      'type'        => 'taxonomy_term_reference',
+      'settings'    => array(
+        'allowed_values' => array(
+          array('vocabulary' => 'crm_groups', 'parent' => 0),
+        ),
+      ),
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    ));
+  }
+
+  foreach (array('crm_person', 'crm_organization', 'crm_household') as $bundle) {
+    if (!field_info_instance('crm_contact', 'field_crm_groups', $bundle)) {
+      field_create_instance(array(
+        'field_name'  => 'field_crm_groups',
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => 'Groups',
+        'required'    => FALSE,
+        'description' => 'Segmentation lists — curated audiences for newsletters, events, appeals, etc.',
+        'widget'      => array(
+          'type'     => 'taxonomy_autocomplete',
+          'settings' => array('size' => 60),
+        ),
+        'display' => array(
+          'default' => array(
+            'label'  => 'above',
+            'type'   => 'taxonomy_term_reference_link',
+            'weight' => 6,
+          ),
+        ),
+      ));
     }
   }
 }
@@ -1153,6 +1213,7 @@ function dropcrm_uninstall() {
     'field_crm_birth_date',
     'field_crm_gender',
     'field_crm_phone_type',
+    'field_crm_groups',
   );
   foreach ($crm_fields as $field_name) {
     $field = field_info_field($field_name);
@@ -1895,4 +1956,14 @@ function dropcrm_update_1029() {
   $instance['widget']['settings']['year_range'] = '-100:+0';
   field_update_instance($instance);
   return t('Set field_crm_birth_date year_range to -100:+0.');
+}
+
+/**
+ * Add the crm_groups taxonomy and field_crm_groups term-reference field on
+ * all three contact bundles. Seeded empty; populated by
+ * dropcrm_civicrm_import or by Site Architects directly.
+ */
+function dropcrm_update_1030() {
+  _dropcrm_ensure_contact_groups();
+  return t('Created crm_groups vocabulary and attached field_crm_groups to crm_person, crm_organization, crm_household.');
 }
