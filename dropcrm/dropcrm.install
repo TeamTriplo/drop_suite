@@ -1967,3 +1967,30 @@ function dropcrm_update_1030() {
   _dropcrm_ensure_contact_groups();
   return t('Created crm_groups vocabulary and attached field_crm_groups to crm_person, crm_organization, crm_household.');
 }
+
+/**
+ * Add household_member and head_of_household relationship types to sites
+ * whose config was seeded before these types existed. Preserves any
+ * existing types the Site Architect has added. Idempotent.
+ */
+function dropcrm_update_1031() {
+  module_load_include('inc', 'dropcrm', 'dropcrm.admin');
+  $config = config('dropcrm.settings');
+  $current = (array) $config->get('relationship_types');
+  $added = array();
+  foreach (array(
+    'household_member'  => array('key' => 'household_member',  'label' => 'Household member'),
+    'head_of_household' => array('key' => 'head_of_household', 'label' => 'Head of household'),
+  ) as $key => $def) {
+    if (!isset($current[$key])) {
+      $current[$key] = $def;
+      $added[] = $key;
+    }
+  }
+  if ($added) {
+    $config->set('relationship_types', $current);
+    $config->save();
+    return t('Added relationship types: @types', array('@types' => implode(', ', $added)));
+  }
+  return t('household_member and head_of_household already present; no change.');
+}
