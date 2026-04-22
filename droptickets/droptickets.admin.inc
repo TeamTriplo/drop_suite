@@ -74,7 +74,21 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#format'        => $is_edit ? $ticket->body_format : NULL,
     '#rows'          => 10,
     '#weight'        => -19,
+    '#description'   => module_exists('mentions') ? t('Type @username to mention a team member.') : '',
+    '#after_build'   => array('_droptickets_ticket_body_tag_textarea'),
   );
+
+  // Attach our mentions JS to the ticket form. We can't rely on contrib's
+  // mentions_process_text_format() auto-attach because it only fires when
+  // the text_format's format selector has #options containing a
+  // filter_mentions format — a condition that doesn't hold on every render
+  // path of this form.
+  if (module_exists('mentions')) {
+    $mentions_path = backdrop_get_path('module', 'mentions');
+    $form['#attached']['css'][] = $mentions_path . '/textcomplete/dist/jquery.textcomplete.css';
+    $form['#attached']['js'][]  = $mentions_path . '/textcomplete/dist/jquery.textcomplete.min.js';
+    $form['#attached']['js'][]  = backdrop_get_path('module', 'droptickets') . '/droptickets.mentions.js';
+  }
 
   $form['layout']['sidebar']['type'] = array(
     '#type'          => 'select',
@@ -379,6 +393,22 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
  */
 
 /**
+ * #after_build callback: tag the text_format inner textarea with the
+ * droptickets-comment-body class so droptickets.mentions.js picks it up.
+ * Class goes on #attributes of the inner textarea, not the wrapper, which
+ * is why we need a late hook instead of a direct #attributes set.
+ */
+function _droptickets_ticket_body_tag_textarea($element, &$form_state) {
+  if (isset($element['value']) && isset($element['value']['#attributes']['class'])) {
+    $element['value']['#attributes']['class'][] = 'droptickets-comment-body';
+  }
+  elseif (isset($element['value'])) {
+    $element['value']['#attributes']['class'] = array('droptickets-comment-body');
+  }
+  return $element;
+}
+
+/**
  * Validation handler for droptickets_ticket_form().
  */
 function droptickets_ticket_form_validate($form, &$form_state) {
@@ -499,6 +529,24 @@ function droptickets_ticket_form_submit($form, &$form_state) {
       if ($uid != $user->uid) {
         droptickets_notify_create((int) $uid, $ticket->tid, NULL, 'created', $user->uid);
       }
+    }
+  }
+
+  // On create: notify any @mentioned team members and add them as watchers.
+  // Mirrors the comment submit handler. Edit-time mentions are intentionally
+  // out of scope for tid 528 — the ticket asked for mentions on creation.
+  if ($is_new && module_exists('mentions') && !empty($ticket->body)) {
+    global $user;
+    $mentions = mentions_get_mentions($ticket->body);
+    $already_notified = array();
+    foreach ($mentions as $mention) {
+      $mentioned_uid = (int) $mention['user']->uid;
+      if ($mentioned_uid === (int) $user->uid || in_array($mentioned_uid, $already_notified, TRUE)) {
+        continue;
+      }
+      droptickets_watcher_add($ticket->tid, $mentioned_uid);
+      droptickets_notify_create($mentioned_uid, $ticket->tid, NULL, 'mentioned', $user->uid);
+      $already_notified[] = $mentioned_uid;
     }
   }
 

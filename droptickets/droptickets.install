@@ -833,6 +833,10 @@ function droptickets_install() {
 
   drop_base_grant_admin_permissions('droptickets');
 
+  // Align the mentions module's input syntax with how droptickets inserts
+  // @mentions. See _droptickets_ensure_mentions_plain_syntax() for why.
+  _droptickets_ensure_mentions_plain_syntax();
+
   // Seed age-badge defaults so fresh installs match what update 1031 does.
   $config = config('droptickets.statuses');
   if ($config->get('age_badge_threshold_days') === NULL) {
@@ -1790,4 +1794,83 @@ function droptickets_update_1034() {
   return $enabled
     ? t('Grandfathered CSV importer as enabled (existing imports or JIRA base URL detected).')
     : t('CSV importer left disabled (no prior use detected). Install drop_labs to toggle.');
+}
+
+/**
+ * Align the mentions module's input syntax with how droptickets inserts
+ * @mentions (plain @username instead of the default [@username]).
+ *
+ * Without this, mentions_get_mentions() never matches droptickets-generated
+ * text, and no 'mentioned' notifications have ever been created on this
+ * site — verified against drop_notification history. Ships as part of tid 528.
+ */
+function droptickets_update_1035() {
+  _droptickets_ensure_mentions_plain_syntax();
+}
+
+/**
+ * Re-run the mentions config helper: sets mentions.textcomplete under the
+ * 'mentions' key (silences the undefined-key warning) and flips it to FALSE
+ * (droptickets attaches its own mention JS; contrib's auto-attach would
+ * double-bind on the ticket form).
+ */
+function droptickets_update_1036() {
+  _droptickets_ensure_mentions_plain_syntax();
+}
+
+/**
+ * Ensures mentions.settings uses plain @username syntax (no bracket
+ * wrapping) so droptickets-generated text matches the mentions regex.
+ * Idempotent — only overwrites the bracketed default or an empty value,
+ * never a custom non-default syntax a site has deliberately set.
+ */
+function _droptickets_ensure_mentions_plain_syntax() {
+  if (!module_exists('mentions')) {
+    return;
+  }
+  $config = config('mentions.settings');
+  $input  = $config->get('mentions.input');
+  $current_prefix = is_array($input) && isset($input['prefix']) ? $input['prefix'] : '';
+  $current_suffix = is_array($input) && isset($input['suffix']) ? $input['suffix'] : '';
+
+  // Known-safe states: contrib default (empty), contrib's shipped bracketed
+  // form, or our own plain '@' from a previous run of this helper. Anything
+  // else is a deliberate site customization we should leave alone.
+  $known_safe = array('', '[@', '@');
+  if (!in_array($current_prefix, $known_safe, TRUE)) {
+    return;
+  }
+  if ($current_suffix !== '' && $current_suffix !== ']') {
+    return;
+  }
+
+  $config->set('mentions.input.prefix', '@');
+  $config->set('mentions.input.suffix', '');
+  if (!$config->get('mentions.input.source')) {
+    $config->set('mentions.input.source', 'property:name');
+  }
+  if (!$config->get('mentions.output.prefix')) {
+    $config->set('mentions.output.prefix', '@');
+  }
+  if (!$config->get('mentions.output.suffix')) {
+    $config->set('mentions.output.suffix', '');
+  }
+  if (!$config->get('mentions.output.text')) {
+    $config->set('mentions.output.text', '[user:name]');
+  }
+  if (!$config->get('mentions.output.link')) {
+    $config->set('mentions.output.link', 'user/[user:uid]');
+  }
+  // Contrib's mentions_process_text_format() reads $settings['textcomplete']
+  // from the 'mentions' subkey, but the module ships the flag at the top
+  // level of mentions.settings. The mismatch causes an undefined-key warning
+  // on every text_format render once a filter_mentions format is available.
+  // Set it where the code actually looks AND turn it off: droptickets
+  // attaches its own mentions JS deliberately on the forms that need it
+  // (ticket form + comment form), so the contrib auto-attach path would
+  // only produce a double-bind.
+  if ($config->get('mentions.textcomplete') === NULL || $config->get('mentions.textcomplete') === TRUE) {
+    $config->set('mentions.textcomplete', FALSE);
+  }
+  $config->save();
 }
