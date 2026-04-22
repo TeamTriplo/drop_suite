@@ -27,6 +27,8 @@ function dropcrm_autoload_info() {
     'CrmActivity'                   => 'dropcrm.entity.inc',
     'CrmActivityController'         => 'dropcrm.entity.inc',
     'CrmActivityUIController'       => 'dropcrm.entity.inc',
+    'CrmContribution'               => 'dropcrm.entity.inc',
+    'CrmContributionController'     => 'dropcrm.entity.inc',
     'CrmContactInlineEntityFormController'                   => 'dropcrm.inline_entity_form.inc',
     'EntityReferenceSelectionHandlerGeneric_crm_contact'     => 'dropcrm.entity.inc',
   );
@@ -157,6 +159,26 @@ function dropcrm_entity_info() {
       'controller class' => 'CrmActivityUIController',
       'menu wildcard'    => '%crm_activity',
     ),
+  );
+
+  // --- crm_contribution ---
+  $info['crm_contribution'] = array(
+    'label'         => t('CRM Contribution'),
+    'plural label'  => t('CRM Contributions'),
+    'description'   => t('A donation, membership dues payment, event fee, or other incoming revenue record.'),
+    'entity class'  => 'CrmContribution',
+    'controller class' => 'CrmContributionController',
+    'base table'    => 'crm_contribution',
+    'fieldable'     => TRUE,
+    'entity keys'   => array(
+      'id' => 'cnid',
+    ),
+    'view modes'    => array(
+      'full' => array('label' => t('Full'), 'custom settings' => FALSE),
+    ),
+    'uri callback'  => 'entity_class_uri',
+    'access callback' => 'dropcrm_contribution_access',
+    'module'        => 'dropcrm',
   );
 
   return $info;
@@ -613,6 +635,21 @@ function dropcrm_activity_access($op, $entity = NULL, $account = NULL) {
   return FALSE;
 }
 
+/**
+ * Access callback for crm_contribution entities. Mirrors activity access —
+ * no finer-grained perms defined yet; 'administer crm' gates everything,
+ * 'access crm' allows view.
+ */
+function dropcrm_contribution_access($op, $entity = NULL, $account = NULL) {
+  if (user_access('administer crm', $account)) {
+    return TRUE;
+  }
+  if ($op === 'view') {
+    return user_access('access crm', $account);
+  }
+  return FALSE;
+}
+
 // ---------------------------------------------------------------------------
 // Entity load helpers
 // ---------------------------------------------------------------------------
@@ -865,6 +902,16 @@ function _dropcrm_generate_activity_subject(CrmActivity $activity) {
  */
 function dropcrm_menu() {
   $items = array();
+
+  // Historical income report (tid 628) — aggregates crm_contribution rows
+  // by year + month, filterable by contribution_type.
+  $items['drop/crm/reports/income'] = array(
+    'title'            => 'Historical income',
+    'description'      => 'Monthly and annual totals across contributions, membership dues, and event revenue.',
+    'page callback'    => 'dropcrm_contribution_income_report',
+    'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+  );
 
   // CRM landing page — shows the "People by Last Contact" report so admins
   // land on an actionable working surface instead of a welcome page. The

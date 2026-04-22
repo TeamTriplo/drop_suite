@@ -201,6 +201,51 @@ class CrmActivityController extends EntityPlusController {
 }
 
 // ---------------------------------------------------------------------------
+// CrmContribution
+// ---------------------------------------------------------------------------
+
+/**
+ * Entity class for CRM contributions (incoming revenue records).
+ */
+class CrmContribution extends Entity {
+
+  public function id() {
+    return isset($this->cnid) ? $this->cnid : NULL;
+  }
+
+  public function entityType() {
+    return 'crm_contribution';
+  }
+
+  public function uri() {
+    return array('path' => 'drop/crm/contribution/' . $this->id(), 'options' => array());
+  }
+
+  /**
+   * Formatted dollar amount, e.g. "$45.00".
+   */
+  public function formattedAmount() {
+    $dollars = ((int) $this->amount_cents) / 100;
+    $symbol  = $this->currency === 'USD' ? '$' : ($this->currency . ' ');
+    return $symbol . number_format($dollars, 2);
+  }
+
+  public function save() {
+    if (empty($this->created)) {
+      $this->created = REQUEST_TIME;
+    }
+    $this->changed = REQUEST_TIME;
+    return parent::save();
+  }
+}
+
+/**
+ * Controller for CRM contributions.
+ */
+class CrmContributionController extends EntityPlusController {
+}
+
+// ---------------------------------------------------------------------------
 // EntityReference selection handler for crm_contact
 // ---------------------------------------------------------------------------
 
