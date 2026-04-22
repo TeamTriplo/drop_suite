@@ -1809,10 +1809,10 @@ function droptickets_update_1035() {
 }
 
 /**
- * Re-run the mentions config helper now that it also sets
- * mentions.textcomplete under the 'mentions' key, silencing the undefined
- * array key warning from mentions_process_text_format() on every
- * text_format render.
+ * Re-run the mentions config helper: sets mentions.textcomplete under the
+ * 'mentions' key (silences the undefined-key warning) and flips it to FALSE
+ * (droptickets attaches its own mention JS; contrib's auto-attach would
+ * double-bind on the ticket form).
  */
 function droptickets_update_1036() {
   _droptickets_ensure_mentions_plain_syntax();
@@ -1865,9 +1865,12 @@ function _droptickets_ensure_mentions_plain_syntax() {
   // from the 'mentions' subkey, but the module ships the flag at the top
   // level of mentions.settings. The mismatch causes an undefined-key warning
   // on every text_format render once a filter_mentions format is available.
-  // Set it where the code actually looks.
-  if ($config->get('mentions.textcomplete') === NULL) {
-    $config->set('mentions.textcomplete', TRUE);
+  // Set it where the code actually looks AND turn it off: droptickets
+  // attaches its own mentions JS deliberately on the forms that need it
+  // (ticket form + comment form), so the contrib auto-attach path would
+  // only produce a double-bind.
+  if ($config->get('mentions.textcomplete') === NULL || $config->get('mentions.textcomplete') === TRUE) {
+    $config->set('mentions.textcomplete', FALSE);
   }
   $config->save();
 }

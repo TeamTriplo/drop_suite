@@ -67,10 +67,6 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#weight'        => -20,
   );
 
-  // mentions module's hook_element_info_alter adds a process callback to every
-  // text_format element that auto-attaches its textcomplete JS when any
-  // available format has filter_mentions enabled. No need to load the
-  // mentions library ourselves here — contrib handles the ticket body.
   $form['layout']['main']['body'] = array(
     '#type'          => 'text_format',
     '#title'         => t('Description'),
@@ -79,7 +75,20 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#rows'          => 10,
     '#weight'        => -19,
     '#description'   => module_exists('mentions') ? t('Type @username to mention a team member.') : '',
+    '#after_build'   => array('_droptickets_ticket_body_tag_textarea'),
   );
+
+  // Attach our mentions JS to the ticket form. We can't rely on contrib's
+  // mentions_process_text_format() auto-attach because it only fires when
+  // the text_format's format selector has #options containing a
+  // filter_mentions format — a condition that doesn't hold on every render
+  // path of this form.
+  if (module_exists('mentions')) {
+    $mentions_path = backdrop_get_path('module', 'mentions');
+    $form['#attached']['css'][] = $mentions_path . '/textcomplete/dist/jquery.textcomplete.css';
+    $form['#attached']['js'][]  = $mentions_path . '/textcomplete/dist/jquery.textcomplete.min.js';
+    $form['#attached']['js'][]  = backdrop_get_path('module', 'droptickets') . '/droptickets.mentions.js';
+  }
 
   $form['layout']['sidebar']['type'] = array(
     '#type'          => 'select',
@@ -382,6 +391,22 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
  * form builder, except for field_ticket_files which stays at form root for
  * AJAX upload compatibility.
  */
+
+/**
+ * #after_build callback: tag the text_format inner textarea with the
+ * droptickets-comment-body class so droptickets.mentions.js picks it up.
+ * Class goes on #attributes of the inner textarea, not the wrapper, which
+ * is why we need a late hook instead of a direct #attributes set.
+ */
+function _droptickets_ticket_body_tag_textarea($element, &$form_state) {
+  if (isset($element['value']) && isset($element['value']['#attributes']['class'])) {
+    $element['value']['#attributes']['class'][] = 'droptickets-comment-body';
+  }
+  elseif (isset($element['value'])) {
+    $element['value']['#attributes']['class'] = array('droptickets-comment-body');
+  }
+  return $element;
+}
 
 /**
  * Validation handler for droptickets_ticket_form().
