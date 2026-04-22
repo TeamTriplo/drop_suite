@@ -712,6 +712,121 @@ function _dropcrm_create_fields() {
         ),
       ),
     ),
+    // --- tid 610 P1: CiviCRM-import-driven contact fields ---
+    // Privacy / opt-out flags. Stored as list_boolean so they render as a
+    // single checkbox with a descriptive on-state label.
+    array(
+      'field_name' => 'field_crm_do_not_email',
+      'type'       => 'list_boolean',
+      'cardinality' => 1,
+      'settings'   => array('allowed_values' => array(0 => '', 1 => 'Do not email')),
+    ),
+    array(
+      'field_name' => 'field_crm_do_not_phone',
+      'type'       => 'list_boolean',
+      'cardinality' => 1,
+      'settings'   => array('allowed_values' => array(0 => '', 1 => 'Do not phone')),
+    ),
+    array(
+      'field_name' => 'field_crm_do_not_mail',
+      'type'       => 'list_boolean',
+      'cardinality' => 1,
+      'settings'   => array('allowed_values' => array(0 => '', 1 => 'Do not mail (postal)')),
+    ),
+    array(
+      'field_name' => 'field_crm_bulk_opt_out',
+      'type'       => 'list_boolean',
+      'cardinality' => 1,
+      'settings'   => array('allowed_values' => array(0 => '', 1 => 'Bulk mail opt-out')),
+    ),
+    // Source / provenance — free-form campaign or origin tag (e.g.
+    // "mn opera donor 02", "spcofriends19"). Kept text rather than
+    // taxonomy because values are free-form and don't aggregate well.
+    array(
+      'field_name'  => 'field_crm_source',
+      'type'        => 'text',
+      'cardinality' => 1,
+    ),
+    // Name prefix (Mr./Mrs./Ms./Dr.). crm_person only.
+    array(
+      'field_name'  => 'field_crm_name_prefix',
+      'type'        => 'list_text',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          'Mr.'  => 'Mr.',
+          'Mrs.' => 'Mrs.',
+          'Ms.'  => 'Ms.',
+          'Dr.'  => 'Dr.',
+        ),
+      ),
+    ),
+    // Name suffix (Jr./Sr./II–VII). crm_person only.
+    array(
+      'field_name'  => 'field_crm_name_suffix',
+      'type'        => 'list_text',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          'Jr.' => 'Jr.',
+          'Sr.' => 'Sr.',
+          'II'  => 'II',
+          'III' => 'III',
+          'IV'  => 'IV',
+          'V'   => 'V',
+          'VI'  => 'VI',
+          'VII' => 'VII',
+        ),
+      ),
+    ),
+    // Birth date (date only, no time). Useful for CRM segmentation.
+    array(
+      'field_name'  => 'field_crm_birth_date',
+      'type'        => 'datetime',
+      'cardinality' => 1,
+      'settings'    => array(
+        'granularity' => array('year' => 'year', 'month' => 'month', 'day' => 'day'),
+        'tz_handling' => 'none',
+      ),
+    ),
+    // Gender. crm_person only. Short list to keep things simple — sites
+    // that need richer options can extend via hook_form_alter.
+    array(
+      'field_name'  => 'field_crm_gender',
+      'type'        => 'list_text',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          'female' => 'Female',
+          'male'   => 'Male',
+          'other'  => 'Other',
+        ),
+      ),
+    ),
+    // Address line 2 — "apartment 3B" line. Attaches to the address
+    // bundle on crm_contact_method, same pattern as field_crm_street.
+    array(
+      'field_name'  => 'field_crm_street_2',
+      'type'        => 'text',
+      'cardinality' => 1,
+    ),
+    // Phone type (Phone/Mobile/Fax/Pager/Voicemail). Attaches to the
+    // telephone bundle on crm_contact_method; location (Home/Work/…)
+    // stays on the method's label per existing convention.
+    array(
+      'field_name'  => 'field_crm_phone_type',
+      'type'        => 'list_text',
+      'cardinality' => 1,
+      'settings'    => array(
+        'allowed_values' => array(
+          'phone'     => 'Phone',
+          'mobile'    => 'Mobile',
+          'fax'       => 'Fax',
+          'pager'     => 'Pager',
+          'voicemail' => 'Voicemail',
+        ),
+      ),
+    ),
   );
 
   foreach ($fields as $field) {
@@ -898,6 +1013,97 @@ function _dropcrm_create_fields() {
     ),
   );
 
+  // --- tid 610 P1 instances: privacy flags on all three contact bundles ---
+  foreach (array('crm_person', 'crm_organization', 'crm_household') as $bundle) {
+    foreach (array(
+      'field_crm_do_not_email'  => array(t('Do not email'),           t('Honor this when sending any email — CAN-SPAM / CASL requirement for many of these flags.')),
+      'field_crm_do_not_phone'  => array(t('Do not phone'),           t('Honor this when initiating phone outreach.')),
+      'field_crm_do_not_mail'   => array(t('Do not mail (postal)'),   t('Honor this when doing postal mail runs.')),
+      'field_crm_bulk_opt_out'  => array(t('Bulk mail opt-out'),      t('Overrides bulk email regardless of the per-channel flags above.')),
+    ) as $field_name => $meta) {
+      list($label, $description) = $meta;
+      $instances[] = array(
+        'field_name'  => $field_name,
+        'entity_type' => 'crm_contact',
+        'bundle'      => $bundle,
+        'label'       => $label,
+        'required'    => FALSE,
+        'description' => $description,
+        'widget'      => array('type' => 'options_onoff', 'settings' => array('display_label' => TRUE)),
+        'display'     => array('default' => array('label' => 'hidden', 'type' => 'list_default')),
+      );
+    }
+
+    // Source on all three bundles.
+    $instances[] = array(
+      'field_name'  => 'field_crm_source',
+      'entity_type' => 'crm_contact',
+      'bundle'      => $bundle,
+      'label'       => t('Source'),
+      'required'    => FALSE,
+      'description' => t('How this contact entered the system — campaign, event, referrer, etc. Free-form text.'),
+      'widget'      => array('type' => 'text_textfield'),
+      'display'     => array('default' => array('label' => 'inline', 'type' => 'text_default')),
+    );
+  }
+
+  // --- tid 610 P1 instances: person-only fields ---
+  $instances[] = array(
+    'field_name'  => 'field_crm_name_prefix',
+    'entity_type' => 'crm_contact',
+    'bundle'      => 'crm_person',
+    'label'       => t('Name prefix'),
+    'required'    => FALSE,
+    'widget'      => array('type' => 'options_select'),
+    'display'     => array('default' => array('label' => 'hidden', 'type' => 'list_default')),
+  );
+  $instances[] = array(
+    'field_name'  => 'field_crm_name_suffix',
+    'entity_type' => 'crm_contact',
+    'bundle'      => 'crm_person',
+    'label'       => t('Name suffix'),
+    'required'    => FALSE,
+    'widget'      => array('type' => 'options_select'),
+    'display'     => array('default' => array('label' => 'hidden', 'type' => 'list_default')),
+  );
+  $instances[] = array(
+    'field_name'  => 'field_crm_birth_date',
+    'entity_type' => 'crm_contact',
+    'bundle'      => 'crm_person',
+    'label'       => t('Birth date'),
+    'required'    => FALSE,
+    'widget'      => array('type' => 'date_popup'),
+    'display'     => array('default' => array('label' => 'inline', 'type' => 'date_default')),
+  );
+  $instances[] = array(
+    'field_name'  => 'field_crm_gender',
+    'entity_type' => 'crm_contact',
+    'bundle'      => 'crm_person',
+    'label'       => t('Gender'),
+    'required'    => FALSE,
+    'widget'      => array('type' => 'options_select'),
+    'display'     => array('default' => array('label' => 'inline', 'type' => 'list_default')),
+  );
+
+  // --- tid 610 P1 instances: contact-method bundles ---
+  $instances[] = array(
+    'field_name'  => 'field_crm_street_2',
+    'entity_type' => 'crm_contact_method',
+    'bundle'      => 'address',
+    'label'       => t('Street (line 2)'),
+    'required'    => FALSE,
+    'widget'      => array('type' => 'text_textfield'),
+  );
+  $instances[] = array(
+    'field_name'  => 'field_crm_phone_type',
+    'entity_type' => 'crm_contact_method',
+    'bundle'      => 'telephone',
+    'label'       => t('Phone type'),
+    'required'    => FALSE,
+    'description' => t('Phone/Mobile/Fax/etc. The Home/Work/Main location stays on the method label.'),
+    'widget'      => array('type' => 'options_select'),
+  );
+
   foreach ($instances as $instance) {
     if (!field_info_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
       field_create_instance($instance);
@@ -930,10 +1136,21 @@ function dropcrm_uninstall() {
     'field_crm_activity_body',
     'field_crm_contacts',
     'field_crm_street',
+    'field_crm_street_2',
     'field_crm_city',
     'field_crm_state_province',
     'field_crm_postal_code',
     'field_crm_country',
+    'field_crm_do_not_email',
+    'field_crm_do_not_phone',
+    'field_crm_do_not_mail',
+    'field_crm_bulk_opt_out',
+    'field_crm_source',
+    'field_crm_name_prefix',
+    'field_crm_name_suffix',
+    'field_crm_birth_date',
+    'field_crm_gender',
+    'field_crm_phone_type',
   );
   foreach ($crm_fields as $field_name) {
     $field = field_info_field($field_name);
@@ -1644,4 +1861,21 @@ function dropcrm_update_1027() {
   return $enabled
     ? t('Grandfathered Outreach Goal as enabled (existing goal or outreach-flagged activities detected).')
     : t('Outreach Goal left disabled (no prior use detected). Install drop_labs to toggle.');
+}
+
+/**
+ * tid 610 P1: add 11 contact fields driven by the CiviCRM import gap
+ * analysis. _dropcrm_create_fields() is idempotent so re-running it just
+ * creates whatever is missing.
+ *
+ * Adds to all three contact bundles: field_crm_do_not_email,
+ * field_crm_do_not_phone, field_crm_do_not_mail, field_crm_bulk_opt_out,
+ * field_crm_source. crm_person only: field_crm_name_prefix,
+ * field_crm_name_suffix, field_crm_birth_date, field_crm_gender.
+ * address bundle on crm_contact_method: field_crm_street_2.
+ * telephone bundle on crm_contact_method: field_crm_phone_type.
+ */
+function dropcrm_update_1028() {
+  _dropcrm_create_fields();
+  return t('Added 11 contact fields from the CiviCRM gap analysis (tid 610 P1).');
 }
