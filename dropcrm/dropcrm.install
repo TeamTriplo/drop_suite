@@ -1072,7 +1072,9 @@ function _dropcrm_create_fields() {
     'bundle'      => 'crm_person',
     'label'       => t('Birth date'),
     'required'    => FALSE,
-    'widget'      => array('type' => 'date_popup'),
+    // -100:+0 — 100 years back, no future dates. date_popup's default
+    // year_range is -3:+3 which is useless for birthdays.
+    'widget'      => array('type' => 'date_popup', 'settings' => array('year_range' => '-100:+0')),
     'display'     => array('default' => array('label' => 'inline', 'type' => 'date_default')),
   );
   $instances[] = array(
@@ -1878,4 +1880,19 @@ function dropcrm_update_1027() {
 function dropcrm_update_1028() {
   _dropcrm_create_fields();
   return t('Added 11 contact fields from the CiviCRM gap analysis (tid 610 P1).');
+}
+
+/**
+ * Fix field_crm_birth_date widget year_range. Default date_popup range is
+ * -3:+3, which is absurd for a birthday. Widen to 100 years back / no
+ * future dates. Idempotent.
+ */
+function dropcrm_update_1029() {
+  $instance = field_info_instance('crm_contact', 'field_crm_birth_date', 'crm_person');
+  if (!$instance) {
+    return t('field_crm_birth_date instance not found — nothing to update.');
+  }
+  $instance['widget']['settings']['year_range'] = '-100:+0';
+  field_update_instance($instance);
+  return t('Set field_crm_birth_date year_range to -100:+0.');
 }
