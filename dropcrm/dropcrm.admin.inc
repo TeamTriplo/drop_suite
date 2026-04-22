@@ -2936,3 +2936,113 @@ function dropcrm_email_audit_toggle_newsletter() {
 
   print backdrop_json_encode(array('success' => TRUE));
 }
+
+// ---------------------------------------------------------------------------
+// Historical income report (tid 628)
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback for drop/crm/reports/income. Renders a year × month grid of
+ * contribution totals, filterable by contribution_type.
+ */
+function dropcrm_contribution_income_report() {
+  $type_filter = isset($_GET['type']) ? $_GET['type'] : '';
+  $status_filter = isset($_GET['status']) ? $_GET['status'] : 'completed';
+
+  $where = array('1=1');
+  $args  = array();
+  if ($status_filter !== 'all') {
+    $where[] = 'status = :st';
+    $args[':st'] = $status_filter;
+  }
+  if ($type_filter !== '' && $type_filter !== 'all') {
+    $where[] = 'contribution_type = :ct';
+    $args[':ct'] = $type_filter;
+  }
+
+  // Aggregate by year + month.
+  $sql = "
+    SELECT
+      FROM_UNIXTIME(received_at, '%Y') AS y,
+      FROM_UNIXTIME(received_at, '%m') AS m,
+      SUM(amount_cents) AS cents,
+      COUNT(*) AS n
+    FROM {crm_contribution}
+    WHERE " . implode(' AND ', $where) . "
+    GROUP BY y, m
+    ORDER BY y DESC, m ASC
+  ";
+  $grid = array();
+  $year_totals = array();
+  $month_totals = array_fill(1, 12, 0);
+  $month_counts = array_fill(1, 12, 0);
+  foreach (db_query($sql, $args)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $y = (int) $r['y'];
+    $m = (int) $r['m'];
+    $grid[$y][$m] = array('cents' => (int) $r['cents'], 'n' => (int) $r['n']);
+    $year_totals[$y]   = ($year_totals[$y] ?? 0) + (int) $r['cents'];
+    $month_totals[$m] += (int) $r['cents'];
+    $month_counts[$m] += (int) $r['n'];
+  }
+
+  // Build render table.
+  $month_labels = array('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec');
+  $header = array_merge(array(t('Year')), $month_labels, array(t('Total')));
+  $rows = array();
+  $grand_total = 0;
+  foreach ($grid as $y => $months) {
+    $row = array((string) $y);
+    for ($m = 1; $m <= 12; $m++) {
+      if (isset($months[$m])) {
+        $row[] = '$' . number_format($months[$m]['cents'] / 100, 0);
+      }
+      else {
+        $row[] = '';
+      }
+    }
+    $row[] = '<strong>$' . number_format($year_totals[$y] / 100, 0) . '</strong>';
+    $grand_total += $year_totals[$y];
+    $rows[] = $row;
+  }
+  // Monthly totals row.
+  $totals_row = array('<strong>' . t('Month total') . '</strong>');
+  for ($m = 1; $m <= 12; $m++) {
+    $totals_row[] = $month_totals[$m] > 0 ? '<strong>$' . number_format($month_totals[$m] / 100, 0) . '</strong>' : '';
+  }
+  $totals_row[] = '<strong>$' . number_format($grand_total / 100, 0) . '</strong>';
+  $rows[] = $totals_row;
+
+  // Filter strip.
+  $type_opts = array('all' => '— all types —', 'donation' => 'Donations', 'membership_dues' => 'Membership dues', 'event' => 'Event', 'other' => 'Other');
+  $status_opts = array('completed' => 'Completed only', 'all' => 'All statuses');
+  $type_select = '<select name="type">';
+  foreach ($type_opts as $k => $l) {
+    $type_select .= '<option value="' . $k . '"' . ($type_filter === $k ? ' selected' : '') . '>' . check_plain($l) . '</option>';
+  }
+  $type_select .= '</select>';
+  $status_select = '<select name="status">';
+  foreach ($status_opts as $k => $l) {
+    $status_select .= '<option value="' . $k . '"' . ($status_filter === $k ? ' selected' : '') . '>' . check_plain($l) . '</option>';
+  }
+  $status_select .= '</select>';
+
+  $filter_html = '<form method="get" style="margin-bottom:1em;display:flex;gap:0.5em;align-items:center;">'
+    . '<label>Type: ' . $type_select . '</label>'
+    . '<label>Status: ' . $status_select . '</label>'
+    . '<button type="submit">Apply</button>'
+    . '</form>';
+
+  $total_rows = (int) db_query("SELECT COUNT(*) FROM {crm_contribution}" . ($status_filter !== 'all' ? " WHERE status = :st" : ''), $status_filter !== 'all' ? array(':st' => $status_filter) : array())->fetchField();
+
+  return array(
+    'intro' => array('#markup' => '<p>' . t('Historical income — monthly totals across @n contribution rows.', array('@n' => $total_rows)) . '</p>'),
+    'filter' => array('#markup' => $filter_html),
+    'table' => array(
+      '#theme'  => 'table',
+      '#header' => $header,
+      '#rows'   => $rows,
+      '#empty'  => t('No contributions match.'),
+      '#attributes' => array('style' => 'font-size:0.95em;'),
+    ),
+  );
+}
