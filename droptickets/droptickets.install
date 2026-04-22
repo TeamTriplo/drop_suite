@@ -1809,6 +1809,16 @@ function droptickets_update_1035() {
 }
 
 /**
+ * Re-run the mentions config helper now that it also sets
+ * mentions.textcomplete under the 'mentions' key, silencing the undefined
+ * array key warning from mentions_process_text_format() on every
+ * text_format render.
+ */
+function droptickets_update_1036() {
+  _droptickets_ensure_mentions_plain_syntax();
+}
+
+/**
  * Ensures mentions.settings uses plain @username syntax (no bracket
  * wrapping) so droptickets-generated text matches the mentions regex.
  * Idempotent — only overwrites the bracketed default or an empty value,
@@ -1823,8 +1833,11 @@ function _droptickets_ensure_mentions_plain_syntax() {
   $current_prefix = is_array($input) && isset($input['prefix']) ? $input['prefix'] : '';
   $current_suffix = is_array($input) && isset($input['suffix']) ? $input['suffix'] : '';
 
-  $known_defaults = array('', '[@');
-  if (!in_array($current_prefix, $known_defaults, TRUE)) {
+  // Known-safe states: contrib default (empty), contrib's shipped bracketed
+  // form, or our own plain '@' from a previous run of this helper. Anything
+  // else is a deliberate site customization we should leave alone.
+  $known_safe = array('', '[@', '@');
+  if (!in_array($current_prefix, $known_safe, TRUE)) {
     return;
   }
   if ($current_suffix !== '' && $current_suffix !== ']') {
@@ -1847,6 +1860,14 @@ function _droptickets_ensure_mentions_plain_syntax() {
   }
   if (!$config->get('mentions.output.link')) {
     $config->set('mentions.output.link', 'user/[user:uid]');
+  }
+  // Contrib's mentions_process_text_format() reads $settings['textcomplete']
+  // from the 'mentions' subkey, but the module ships the flag at the top
+  // level of mentions.settings. The mismatch causes an undefined-key warning
+  // on every text_format render once a filter_mentions format is available.
+  // Set it where the code actually looks.
+  if ($config->get('mentions.textcomplete') === NULL) {
+    $config->set('mentions.textcomplete', TRUE);
   }
   $config->save();
 }

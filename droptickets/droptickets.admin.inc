@@ -67,6 +67,10 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#weight'        => -20,
   );
 
+  // mentions module's hook_element_info_alter adds a process callback to every
+  // text_format element that auto-attaches its textcomplete JS when any
+  // available format has filter_mentions enabled. No need to load the
+  // mentions library ourselves here — contrib handles the ticket body.
   $form['layout']['main']['body'] = array(
     '#type'          => 'text_format',
     '#title'         => t('Description'),
@@ -75,19 +79,7 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     '#rows'          => 10,
     '#weight'        => -19,
     '#description'   => module_exists('mentions') ? t('Type @username to mention a team member.') : '',
-    '#after_build'   => array('_droptickets_ticket_body_tag_textarea'),
   );
-
-  // Attach the mentions autocomplete behaviour to the ticket form too, not
-  // just to comments. The JS targets textareas tagged with
-  // .droptickets-comment-body and the _after_build adds that class to the
-  // text_format inner textarea.
-  if (module_exists('mentions')) {
-    $mentions_path = backdrop_get_path('module', 'mentions');
-    $form['#attached']['css'][] = $mentions_path . '/textcomplete/dist/jquery.textcomplete.css';
-    $form['#attached']['js'][]  = $mentions_path . '/textcomplete/dist/jquery.textcomplete.min.js';
-    $form['#attached']['js'][]  = backdrop_get_path('module', 'droptickets') . '/droptickets.mentions.js';
-  }
 
   $form['layout']['sidebar']['type'] = array(
     '#type'          => 'select',
@@ -390,22 +382,6 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
  * form builder, except for field_ticket_files which stays at form root for
  * AJAX upload compatibility.
  */
-
-/**
- * #after_build callback: tag the text_format inner textarea with the
- * droptickets-comment-body class so droptickets.mentions.js picks it up.
- * Attaching via #attributes on the text_format element only lands on the
- * wrapper, not the textarea, so we need this late hook.
- */
-function _droptickets_ticket_body_tag_textarea($element, &$form_state) {
-  if (isset($element['value']) && isset($element['value']['#attributes']['class'])) {
-    $element['value']['#attributes']['class'][] = 'droptickets-comment-body';
-  }
-  elseif (isset($element['value'])) {
-    $element['value']['#attributes']['class'] = array('droptickets-comment-body');
-  }
-  return $element;
-}
 
 /**
  * Validation handler for droptickets_ticket_form().
