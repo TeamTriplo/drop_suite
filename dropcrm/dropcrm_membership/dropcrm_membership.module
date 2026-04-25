@@ -1461,3 +1461,27 @@ function dropcrm_membership_droppay_payment_status($payment, $previous_status) {
   // _dropcrm_membership_recompute_derived() to refresh the denormalized
   // last_payment_date / total_paid columns.
 }
+
+// ---------------------------------------------------------------------------
+// Sample content generator (tid 587)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * Registers the demo-content generator route. Lives in hook_menu_alter()
+ * rather than hook_menu() to keep the demo feature additive — easier to
+ * review and easy to remove if the module ever drops sample content
+ * support.
+ */
+function dropcrm_membership_menu_alter(&$items) {
+  $items['drop/crm/memberships/sample-content'] = array(
+    'title'            => 'Generate sample memberships',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_membership_demo_form'),
+    'access arguments' => array('administer dropcrm_membership'),
+    'file'             => 'dropcrm_membership.demo.inc',
+    'file path'        => backdrop_get_path('module', 'dropcrm_membership'),
+    'type'             => MENU_CALLBACK,
+  );
+}
