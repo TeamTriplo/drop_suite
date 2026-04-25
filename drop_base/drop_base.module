@@ -305,6 +305,13 @@ function drop_base_layout_load_by_router_item_alter(&$layouts, $router_item) {
 function _drop_base_report_pin_action_item($path) {
   global $user;
 
+  // Pin Report is hidden until we have a coherent place to surface pinned
+  // reports. Helpers, state, and menu callback remain so existing pin data
+  // survives a future re-enable. See ticket linked in commit message.
+  if (!drop_base_pin_reports_enabled()) {
+    return NULL;
+  }
+
   $all_reports = drop_base_get_all_reports();
   if (empty($all_reports)) {
     return NULL;
@@ -668,31 +675,34 @@ function _drop_base_section_nav_block() {
   $links = module_invoke_all('drop_section_links', $section);
   backdrop_alter('drop_section_links', $links, $section);
 
-  // Inject pinned reports that belong to this section.
-  global $user;
-  $pinned      = drop_base_get_pinned_reports($user->uid);
-  $all_reports = drop_base_get_all_reports();
-  $pin_weight  = 50;
-  foreach ($pinned as $report_id) {
-    if (!isset($all_reports[$report_id])) {
-      continue;
-    }
-    $report = $all_reports[$report_id];
-    if (!_drop_base_report_in_section($report, $section)) {
-      continue;
-    }
-    if (!empty($report['access callback'])) {
-      $args = !empty($report['access arguments']) ? $report['access arguments'] : array();
-      if (!call_user_func_array($report['access callback'], $args)) {
+  // Inject pinned reports that belong to this section. Gated by feature
+  // flag — currently disabled until pinned reports have a clear UI home.
+  if (drop_base_pin_reports_enabled()) {
+    global $user;
+    $pinned      = drop_base_get_pinned_reports($user->uid);
+    $all_reports = drop_base_get_all_reports();
+    $pin_weight  = 50;
+    foreach ($pinned as $report_id) {
+      if (!isset($all_reports[$report_id])) {
         continue;
       }
+      $report = $all_reports[$report_id];
+      if (!_drop_base_report_in_section($report, $section)) {
+        continue;
+      }
+      if (!empty($report['access callback'])) {
+        $args = !empty($report['access arguments']) ? $report['access arguments'] : array();
+        if (!call_user_func_array($report['access callback'], $args)) {
+          continue;
+        }
+      }
+      $links['pinned_' . $report_id] = array(
+        'title'  => $report['title'],
+        'href'   => $report['path'],
+        'weight' => $pin_weight++,
+        'pinned' => TRUE,
+      );
     }
-    $links['pinned_' . $report_id] = array(
-      'title'  => $report['title'],
-      'href'   => $report['path'],
-      'weight' => $pin_weight++,
-      'pinned' => TRUE,
-    );
   }
 
   if (empty($links)) {
@@ -1488,6 +1498,20 @@ function drop_base_get_all_reports() {
     $reports = module_invoke_all('drop_reports');
   }
   return $reports;
+}
+
+/**
+ * Whether the Pin Report UI is currently exposed.
+ *
+ * Returning FALSE hides the pin/unpin local action and keeps pinned reports
+ * out of the section nav. Helpers, state, and the toggle endpoint remain
+ * functional so saved pins survive when this flips back on.
+ *
+ * Flip to TRUE (or wire to a config flag) once pinned reports have a clear
+ * UI home.
+ */
+function drop_base_pin_reports_enabled() {
+  return FALSE;
 }
 
 /**
