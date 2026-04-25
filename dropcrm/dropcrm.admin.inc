@@ -1836,13 +1836,15 @@ function dropcrm_settings_form_validate($form, &$form_state) {
  */
 function _dropcrm_default_relationship_types() {
   return array(
-    'referral'     => array('key' => 'referral',     'label' => 'Referral / Connection'),
-    'spouse'       => array('key' => 'spouse',       'label' => 'Spouse / Partner'),
-    'parent_child' => array('key' => 'parent_child', 'label' => 'Parent / Child'),
-    'sibling'      => array('key' => 'sibling',      'label' => 'Sibling'),
-    'friend'       => array('key' => 'friend',       'label' => 'Friend'),
-    'colleague'    => array('key' => 'colleague',    'label' => 'Colleague'),
-    'other'        => array('key' => 'other',        'label' => 'Other'),
+    'referral'          => array('key' => 'referral',          'label' => 'Referral / Connection'),
+    'spouse'            => array('key' => 'spouse',            'label' => 'Spouse / Partner'),
+    'parent_child'      => array('key' => 'parent_child',      'label' => 'Parent / Child'),
+    'sibling'           => array('key' => 'sibling',           'label' => 'Sibling'),
+    'household_member'  => array('key' => 'household_member',  'label' => 'Household member'),
+    'head_of_household' => array('key' => 'head_of_household', 'label' => 'Head of household'),
+    'friend'            => array('key' => 'friend',            'label' => 'Friend'),
+    'colleague'         => array('key' => 'colleague',         'label' => 'Colleague'),
+    'other'             => array('key' => 'other',             'label' => 'Other'),
   );
 }
 

@@ -2001,12 +2001,35 @@ function dropcrm_update_1030() {
 }
 
 /**
+ * Add household_member and head_of_household relationship types to sites
+ * whose config was seeded before these types existed. Preserves any
+ * existing types the Site Architect has added. Idempotent.
+ */
+function dropcrm_update_1031() {
+  module_load_include('inc', 'dropcrm', 'dropcrm.admin');
+  $config = config('dropcrm.settings');
+  $current = (array) $config->get('relationship_types');
+  $added = array();
+  foreach (array(
+    'household_member'  => array('key' => 'household_member',  'label' => 'Household member'),
+    'head_of_household' => array('key' => 'head_of_household', 'label' => 'Head of household'),
+  ) as $key => $def) {
+    if (!isset($current[$key])) {
+      $current[$key] = $def;
+      $added[] = $key;
+    }
+  }
+  if ($added) {
+    $config->set('relationship_types', $current);
+    $config->save();
+    return t('Added relationship types: @types', array('@types' => implode(', ', $added)));
+  }
+  return t('household_member and head_of_household already present; no change.');
+}
+
+/**
  * Create the crm_contribution table on existing sites. Fresh installs pick
  * this up via drupal_install_schema. Idempotent.
- *
- * (Numbered 1032 to leave 1031 available for the household_member /
- * head_of_household relationship-types update on the sibling branch for
- * tid 626.)
  */
 function dropcrm_update_1032() {
   if (!db_table_exists('crm_contribution')) {
