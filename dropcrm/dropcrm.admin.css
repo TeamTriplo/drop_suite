@@ -844,3 +844,54 @@ a.crm-method-edit-link:hover {
 .dropcrm-clients-table tr.dropcrm-row-warm td {
   background-color: #fffbeb;
 }
+
+/* Duplicates merge form — side-by-side compare cards. */
+.crm-merge-cards {
+  display: flex;
+  gap: 1em;
+  margin: 1em 0;
+}
+.crm-merge-card {
+  flex: 1;
+  padding: 0.75em;
+  border: 1px solid #ccc;
+  background: #fafafa;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+.crm-merge-fieldkey {
+  font-size: 0.75em;
+  color: #666;
+  font-weight: normal;
+}
+.crm-merge-preview {
+  margin-top: 1em;
+  padding: 0.75em;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+}
+.crm-merge-preview pre {
+  font-size: 0.8em;
+  background: #fff;
+  padding: 0.5em;
+}
+.crm-duplicates-actions {
+  margin: 0.5em 0 0 0;
+  font-size: 0.9em;
+}
+
+.crm-merge-card-refs {
+  margin-top: 0.75em;
+  padding-top: 0.5em;
+  border-top: 1px dashed #ccc;
+  font-size: 0.85em;
+}
+.crm-merge-card-refs-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.25em 0 0 0;
+}
+.crm-merge-card-refs-list code {
+  font-size: 0.9em;
+  color: #555;
+}
