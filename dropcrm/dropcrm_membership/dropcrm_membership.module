@@ -860,10 +860,11 @@ function _dropcrm_membership_latest_term($mid) {
 
 /**
  * Adds a term_length string (strtotime-compatible) to a Unix timestamp and
- * returns the resulting timestamp.
+ * returns the resulting timestamp. The literal value 'lifetime' (and empty)
+ * are treated as no-expiration sentinels and return NULL.
  */
 function _dropcrm_membership_add_term_length($start_ts, $term_length) {
-  if (empty($term_length)) {
+  if (empty($term_length) || strtolower(trim($term_length)) === 'lifetime') {
     return NULL;
   }
   $start_ts = is_numeric($start_ts) ? (int) $start_ts : strtotime($start_ts);
@@ -998,7 +999,7 @@ function dropcrm_membership_form_dropcrm_settings_form_alter(&$form, &$form_stat
   // --- Types table ---
   $form['memberships']['types_header'] = array(
     '#markup' => '<h4>' . t('Membership types') . '</h4>'
-      . '<p class="description">' . t('The machine key cannot be changed after saving. Term length is any <code>strtotime</code>-compatible phrase (e.g. <code>1 year</code>, <code>6 months</code>).') . '</p>'
+      . '<p class="description">' . t('The machine key cannot be changed after saving. Term length is any <code>strtotime</code>-compatible phrase (e.g. <code>1 year</code>, <code>6 months</code>) or <code>lifetime</code> for memberships that never expire.') . '</p>'
       . '<table class="dropcrm-settings-table">'
       . '<thead><tr>'
       . '<th>' . t('Key') . '</th>'
@@ -1117,7 +1118,7 @@ function dropcrm_membership_form_dropcrm_settings_form_alter(&$form, &$form_stat
     '#title'         => t('Term length'),
     '#size'          => 16,
     '#default_value' => '1 year',
-    '#description'   => t('e.g. "1 year", "6 months", "90 days".'),
+    '#description'   => t('e.g. "1 year", "6 months", "90 days", or "lifetime".'),
   );
   $form['memberships']['new_type']['mt_new_grace'] = array(
     '#type'             => 'textfield',
@@ -1191,8 +1192,8 @@ function dropcrm_membership_settings_validate($form, &$form_state) {
     if ($new_label === '') {
       form_set_error('mt_new_label', t('Label is required for a new membership type.'));
     }
-    if (!empty($v['mt_new_term']) && strtotime('+' . $v['mt_new_term']) === FALSE) {
-      form_set_error('mt_new_term', t('Term length must be a recognizable duration (e.g. "1 year").'));
+    if (!empty($v['mt_new_term']) && strtolower(trim($v['mt_new_term'])) !== 'lifetime' && strtotime('+' . $v['mt_new_term']) === FALSE) {
+      form_set_error('mt_new_term', t('Term length must be a recognizable duration (e.g. "1 year") or "lifetime".'));
     }
   }
 
@@ -1201,8 +1202,8 @@ function dropcrm_membership_settings_validate($form, &$form_state) {
   if (is_array($types)) {
     foreach ($types as $key => $info) {
       $field = 'mt_term_' . $key;
-      if (!empty($v[$field]) && strtotime('+' . $v[$field]) === FALSE) {
-        form_set_error($field, t('Term length for %key must be a recognizable duration.', array('%key' => $key)));
+      if (!empty($v[$field]) && strtolower(trim($v[$field])) !== 'lifetime' && strtotime('+' . $v[$field]) === FALSE) {
+        form_set_error($field, t('Term length for %key must be a recognizable duration or "lifetime".', array('%key' => $key)));
       }
     }
   }

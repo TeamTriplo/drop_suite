@@ -27,3 +27,9 @@ name = DropCRM Contact Methods
 description = Primary email replacement notification and contact method operations.
 group = DropCRM
 file = dropcrm.test
+
+[DropCRMLinksSmokeTest]
+name = Drop list-page link smoke test
+description = Discovers every drop/* page-display View and verifies its result-row links load without error.
+group = DropCRM
+file = dropcrm_links.test

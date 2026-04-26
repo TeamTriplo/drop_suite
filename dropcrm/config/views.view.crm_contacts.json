@@ -67,6 +67,7 @@
                         "table": "crm_contact",
                         "field": "cid",
                         "label": "Actions",
+                        "separator": "",
                         "alter": {
                             "alter_text": true,
                             "text": "<a href=\"/drop/crm/contacts/[cid]/edit\">Edit</a> \u00b7 <a href=\"/drop/crm/contacts/[cid]/delete\">Delete</a>"
