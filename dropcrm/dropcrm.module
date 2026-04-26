@@ -913,18 +913,10 @@ function dropcrm_menu() {
     'file'             => 'dropcrm.admin.inc',
   );
 
-  // CRM landing page — shows the "People by Last Contact" report so admins
-  // land on an actionable working surface instead of a welcome page. The
-  // report is also reachable (unchanged) at /drop/crm/reports/last-contact
-  // to preserve bookmarks.
-  $items['drop/crm'] = array(
-    'title'            => 'CRM',
-    'description'      => 'People prioritized by how long since your last contact.',
-    'page callback'    => 'dropcrm_report_last_contact',
-    'page arguments'   => array(),
-    'access arguments' => array('access crm'),
-    'file'             => 'dropcrm.admin.inc',
-  );
+  // CRM landing page (drop/crm) is now claimed by the views.view.crm_last_contact
+  // page display — admins arrive at the People by Last Contact report rendered
+  // by Views (editable via the Views UI). The legacy callback at
+  // /drop/crm/reports/last-contact remains for bookmarks.
 
   // "Overview" default tab — keeps the dashboard accessible as a tab when
   // the user navigates to a sibling tab (contacts, activities, settings).
@@ -1117,6 +1109,23 @@ function dropcrm_menu() {
     'title'            => 'Tag Filter',
     'page callback'    => 'dropcrm_report_tag_filter',
     'access arguments' => array('access crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // De-duplication review (Phase 1: detection by shared email).
+  $items['drop/crm/duplicates'] = array(
+    'title'            => 'Possible duplicates',
+    'page callback'    => 'dropcrm_duplicates_page',
+    'access arguments' => array('administer crm'),
+    'file'             => 'dropcrm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  // De-duplication merge form (Phase 2: side-by-side compare + hard delete).
+  $items['drop/crm/duplicates/merge'] = array(
+    'title'            => 'Compare and merge',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('dropcrm_duplicates_merge_form'),
+    'access arguments' => array('administer crm'),
     'file'             => 'dropcrm.admin.inc',
     'type'             => MENU_CALLBACK,
   );
@@ -1903,6 +1912,15 @@ function dropcrm_drop_section_links($section) {
     'href'   => 'drop/crm/reports/tag-filter',
     'weight' => 35,
   );
+
+  // Admin-only utility — surfaces duplicate-email contacts for review.
+  if (user_access('administer crm')) {
+    $links['duplicates'] = array(
+      'title'  => t('Duplicates'),
+      'href'   => 'drop/crm/duplicates',
+      'weight' => 50,
+    );
+  }
 
   return $links;
 }

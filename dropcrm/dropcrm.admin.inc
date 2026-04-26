@@ -386,6 +386,626 @@ function dropcrm_report_last_contact() {
 }
 
 // ---------------------------------------------------------------------------
+// Possible duplicates (Phase 1: detection by shared email)
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: lists contacts that share an email address with another
+ * contact. Phase 1 of the de-duplication feature — review only, no merge.
+ *
+ * Phase 2 will add a side-by-side compare + field-by-field merge UI; the
+ * loser record is hard-deleted on merge.
+ *
+ * @return array
+ *   A render array.
+ */
+function dropcrm_duplicates_page() {
+  // Find email values that map to 2+ distinct cids. Case-insensitive,
+  // ignores empty values. GROUP_CONCAT keeps the cid set with the row.
+  $sql = "SELECT LOWER(value) AS email_lc,
+                 GROUP_CONCAT(DISTINCT cid ORDER BY cid SEPARATOR ',') AS cids,
+                 COUNT(DISTINCT cid) AS dup_count
+          FROM {crm_contact_method}
+          WHERE type = 'email' AND value IS NOT NULL AND value <> ''
+          GROUP BY LOWER(value)
+          HAVING COUNT(DISTINCT cid) > 1
+          ORDER BY dup_count DESC, email_lc ASC";
+  $groups = db_query($sql)->fetchAll();
+
+  if (empty($groups)) {
+    return array(
+      '#markup' => '<p>' . t('No duplicate contacts found by email.') . '</p>',
+    );
+  }
+
+  // Bulk-load every contact involved in any duplicate group.
+  $all_cids = array();
+  foreach ($groups as $g) {
+    foreach (explode(',', $g->cids) as $cid) {
+      $all_cids[(int) $cid] = (int) $cid;
+    }
+  }
+  $contacts = entity_load('crm_contact', array_values($all_cids));
+
+  // Friendly bundle labels.
+  $bundle_labels = array(
+    'crm_person'       => t('Person'),
+    'crm_organization' => t('Organization'),
+    'crm_household'    => t('Household'),
+  );
+
+  $total_contacts = 0;
+  foreach ($groups as $g) {
+    $total_contacts += $g->dup_count;
+  }
+
+  $output = array();
+  $output['summary'] = array(
+    '#markup' => '<p>'
+      . format_plural(
+          count($groups),
+          'Found <strong>1 duplicate email</strong> shared by @people contacts.',
+          'Found <strong>@count duplicate emails</strong> affecting @people contacts.',
+          array('@people' => $total_contacts)
+        )
+      . ' ' . t('Phase 2 will let you compare and merge these — for now this page is review-only.')
+      . '</p>',
+  );
+
+  $output['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
+
+  $output['groups'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('crm-duplicates-list')),
+  );
+
+  foreach ($groups as $g) {
+    $cids = array_map('intval', explode(',', $g->cids));
+    $rows = array();
+    foreach ($cids as $cid) {
+      if (!isset($contacts[$cid])) {
+        continue;
+      }
+      $c = $contacts[$cid];
+      $bundle_label = isset($bundle_labels[$c->type]) ? $bundle_labels[$c->type] : $c->type;
+      $created = !empty($c->created) ? format_date((int) $c->created, 'custom', 'M j, Y') : '—';
+      $status = !empty($c->status) ? t('active') : t('inactive');
+      $rows[] = array(
+        l($c->label() . ' (cid ' . $cid . ')', 'drop/crm/contact/' . $cid),
+        check_plain($bundle_label),
+        $status,
+        $created,
+      );
+    }
+
+    // Pairwise compare links: cids[0] vs cids[1], cids[0] vs cids[2], etc.
+    // For 2-contact groups this is a single link; larger groups iterate the
+    // first against each other so admins can collapse them one at a time.
+    $compare_links = array();
+    $first = $cids[0];
+    for ($i = 1; $i < count($cids); $i++) {
+      $compare_links[] = l(
+        t('Compare cid @a ↔ cid @b', array('@a' => $first, '@b' => $cids[$i])),
+        'drop/crm/duplicates/merge',
+        array('query' => array('cids' => $first . ',' . $cids[$i]))
+      );
+    }
+
+    $output['groups'][$g->email_lc] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('@email — @count records', array(
+        '@email' => $g->email_lc,
+        '@count' => $g->dup_count,
+      )),
+      '#collapsible' => TRUE,
+      '#collapsed'   => FALSE,
+      'table'        => array(
+        '#theme'  => 'table',
+        '#header' => array(t('Name'), t('Type'), t('Status'), t('Created')),
+        '#rows'   => $rows,
+      ),
+      'actions'      => array(
+        '#markup' => '<p class="crm-duplicates-actions">' . implode(' &middot; ', $compare_links) . '</p>',
+      ),
+    );
+  }
+
+  return $output;
+}
+
+// ---------------------------------------------------------------------------
+// Duplicates Phase 2: compare-and-merge form
+// ---------------------------------------------------------------------------
+
+/**
+ * Form: side-by-side compare and merge of two contacts.
+ *
+ * Takes ?cids=A,B from the query string. Lets the admin pick a winner,
+ * resolve per-field conflicts, and merge — references to the loser are
+ * reassigned to the winner and the loser is hard-deleted.
+ *
+ * The whole reassign+delete runs inside a transaction so partial failures
+ * roll back cleanly.
+ */
+function dropcrm_duplicates_merge_form($form, &$form_state) {
+  $cids = isset($_GET['cids']) ? array_unique(array_filter(array_map('intval', explode(',', $_GET['cids'])))) : array();
+  if (count($cids) !== 2) {
+    backdrop_set_message(t('Provide exactly 2 contact IDs to merge (?cids=A,B).'), 'error');
+    backdrop_goto('drop/crm/duplicates');
+  }
+  sort($cids);
+  list($cid_a, $cid_b) = $cids;
+  $contacts = entity_load('crm_contact', $cids);
+  if (count($contacts) !== 2) {
+    backdrop_set_message(t('One or both contacts not found.'), 'error');
+    backdrop_goto('drop/crm/duplicates');
+  }
+  $a = $contacts[$cid_a];
+  $b = $contacts[$cid_b];
+
+  $form_state['cid_a'] = $cid_a;
+  $form_state['cid_b'] = $cid_b;
+  $form['#tree'] = TRUE;
+  $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
+
+  backdrop_set_title(t('Compare and merge: @a (cid @ca) ↔ @b (cid @cb)', array(
+    '@a' => $a->label(), '@ca' => $cid_a, '@b' => $b->label(), '@cb' => $cid_b,
+  )), PASS_THROUGH);
+
+  // Cross-bundle warning.
+  if ($a->type !== $b->type) {
+    $form['cross_bundle_warning'] = array(
+      '#markup' => '<div class="messages warning">'
+        . t('These two contacts are different types (%a vs %b). Merging across types will keep the winner&#039;s type and discard the loser&#039;s. Proceed only if you&#039;re sure.', array(
+            '%a' => $a->type, '%b' => $b->type,
+          ))
+        . '</div>',
+    );
+  }
+
+  // Pre-compute reference counts so each card can display its own footprint.
+  $refs_a = _dropcrm_count_contact_references($cid_a);
+  $refs_b = _dropcrm_count_contact_references($cid_b);
+
+  // Side-by-side preview cards (each carries its own reassignment footprint).
+  $form['cards'] = array(
+    '#markup' => '<div class="crm-merge-cards">'
+      . '<div class="crm-merge-card">' . _dropcrm_duplicates_render_card($a, $refs_a) . '</div>'
+      . '<div class="crm-merge-card">' . _dropcrm_duplicates_render_card($b, $refs_b) . '</div>'
+      . '</div>',
+  );
+
+  // Winner picker.
+  $form['winner'] = array(
+    '#type'          => 'radios',
+    '#title'         => t('Which record wins? (the other will be deleted)'),
+    '#options'       => array(
+      $cid_a => t('@name (cid @cid)', array('@name' => $a->label(), '@cid' => $cid_a)),
+      $cid_b => t('@name (cid @cid)', array('@name' => $b->label(), '@cid' => $cid_b)),
+    ),
+    '#default_value' => $cid_a,
+    '#required'      => TRUE,
+  );
+
+  // Field conflicts.
+  $diffs = _dropcrm_duplicates_field_diff($a, $b);
+  if (empty($diffs)) {
+    $form['no_conflicts'] = array(
+      '#markup' => '<p><em>' . t('No conflicting field values — the winner&#039;s data is already complete.') . '</em></p>',
+    );
+  }
+  else {
+    $form['fields'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => t('Field conflicts'),
+      '#description' => t('Where the two records have different values, pick which value the merged record should keep.'),
+    );
+    foreach ($diffs as $key => $diff) {
+      $form['fields'][$key] = array(
+        '#type'          => 'radios',
+        '#title'         => check_plain($diff['label']) . ' <code class="crm-merge-fieldkey">' . check_plain($key) . '</code>',
+        '#options'       => array(
+          'a' => t('From cid @cid: !v', array('@cid' => $cid_a, '!v' => $diff['a_display'])),
+          'b' => t('From cid @cid: !v', array('@cid' => $cid_b, '!v' => $diff['b_display'])),
+        ),
+        '#default_value' => 'a',
+      );
+    }
+  }
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Merge and delete loser'),
+  );
+  $form['actions']['cancel'] = array(
+    '#type'  => 'link',
+    '#title' => t('Cancel'),
+    '#href'  => 'drop/crm/duplicates',
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the merge form.
+ *
+ * Wraps the destructive operations in a transaction so partial failures
+ * roll back. On success, redirects back to the duplicates list.
+ */
+function dropcrm_duplicates_merge_form_submit($form, &$form_state) {
+  $cid_a = (int) $form_state['cid_a'];
+  $cid_b = (int) $form_state['cid_b'];
+  $winner_cid = (int) $form_state['values']['winner'];
+  $loser_cid = ($winner_cid === $cid_a) ? $cid_b : $cid_a;
+
+  $contacts = entity_load('crm_contact', array($cid_a, $cid_b));
+  if (!isset($contacts[$winner_cid]) || !isset($contacts[$loser_cid])) {
+    backdrop_set_message(t('Contact lookup failed mid-merge — aborting.'), 'error');
+    return;
+  }
+  $winner = $contacts[$winner_cid];
+  $loser  = $contacts[$loser_cid];
+  $loser_label = $loser->label();
+  $winner_label = $winner->label();
+
+  // Apply field-value overrides from the conflict picker.
+  $by_side = array('a' => $contacts[$cid_a], 'b' => $contacts[$cid_b]);
+  $field_choices = !empty($form_state['values']['fields']) ? $form_state['values']['fields'] : array();
+  _dropcrm_duplicates_apply_choices($winner, $by_side, $field_choices);
+
+  $transaction = db_transaction();
+  try {
+    // 1. Save winner with merged values.
+    $winner->save();
+
+    // 2. Reassign every reference from loser → winner.
+    $reassigned = _dropcrm_reassign_contact_references($loser_cid, $winner_cid);
+
+    // 2b. Collapse exact-duplicate contact methods on the winner. Without
+    //     this, merging two contacts that both had the same email/phone
+    //     produces twin rows on the winner.
+    $methods_deduped = _dropcrm_dedupe_contact_methods($winner_cid);
+
+    // 3. Hard-delete loser. entity_delete_multiple() fires hook_entity_delete
+    //    and the per-entity-type hook (Backdrop has no singular entity_delete()).
+    entity_delete_multiple('crm_contact', array($loser_cid));
+
+    // (transaction commits when $transaction goes out of scope)
+  }
+  catch (Throwable $e) {
+    // Throwable catches both Exception AND Error (e.g. undefined function),
+    // so a fatal mid-merge still triggers the rollback instead of leaving
+    // partially-applied changes.
+    $transaction->rollback();
+    watchdog('dropcrm', 'Merge cid @loser into cid @winner failed: @msg @trace', array(
+      '@loser' => $loser_cid, '@winner' => $winner_cid,
+      '@msg' => $e->getMessage(), '@trace' => $e->getTraceAsString(),
+    ), WATCHDOG_ERROR);
+    backdrop_set_message(t('Merge failed and was rolled back: @msg', array('@msg' => $e->getMessage())), 'error');
+    return;
+  }
+
+  watchdog('dropcrm', 'Merged contact cid @loser (@l_label) into cid @winner (@w_label). Reassignments: @r', array(
+    '@loser' => $loser_cid, '@l_label' => $loser_label,
+    '@winner' => $winner_cid, '@w_label' => $winner_label,
+    '@r' => json_encode($reassigned),
+  ));
+  backdrop_set_message(t('Merged %loser (cid @lcid) into %winner (cid @wcid). Reassigned @count references; collapsed @dedup duplicate contact methods on the winner.', array(
+    '%loser' => $loser_label, '@lcid' => $loser_cid,
+    '%winner' => $winner_label, '@wcid' => $winner_cid,
+    '@count' => array_sum($reassigned),
+    '@dedup' => (int) $methods_deduped,
+  )));
+  $form_state['redirect'] = 'drop/crm/duplicates';
+}
+
+// ---------------------------------------------------------------------------
+// Duplicates Phase 2: helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders a compact summary card for a contact (used in the merge form).
+ *
+ * @param object $contact
+ *   Loaded crm_contact entity.
+ * @param array|null $refs
+ *   Optional reference-count map (table => row count). When passed, an
+ *   inline footer summarising the contact's reassignment footprint is
+ *   appended, with a <details> accordion for the table-by-table breakdown.
+ */
+function _dropcrm_duplicates_render_card($contact, $refs = NULL) {
+  $rows = array();
+  $rows[] = '<strong>cid</strong> ' . $contact->cid;
+  $rows[] = '<strong>Type</strong> ' . check_plain($contact->type);
+  $rows[] = '<strong>Name</strong> ' . check_plain($contact->label());
+  $rows[] = '<strong>Status</strong> ' . (!empty($contact->status) ? t('active') : t('inactive'));
+  if (!empty($contact->uid)) {
+    $rows[] = '<strong>User</strong> uid ' . (int) $contact->uid;
+  }
+  if (!empty($contact->created)) {
+    $rows[] = '<strong>Created</strong> ' . format_date((int) $contact->created, 'custom', 'M j, Y');
+  }
+  // Contact methods.
+  $methods = db_query('SELECT type, value, label, is_primary FROM {crm_contact_method} WHERE cid = :cid ORDER BY type, is_primary DESC', array(':cid' => $contact->cid))->fetchAll();
+  if ($methods) {
+    $m_lines = array();
+    foreach ($methods as $m) {
+      $tag = !empty($m->is_primary) ? ' [primary]' : '';
+      $lbl = $m->label ? ' (' . check_plain($m->label) . ')' : '';
+      $m_lines[] = check_plain($m->type) . $tag . $lbl . ': ' . check_plain($m->value);
+    }
+    $rows[] = '<strong>Contact methods</strong><br>' . implode('<br>', $m_lines);
+  }
+  // Field API fields on the bundle.
+  $instances = field_info_instances('crm_contact', $contact->type);
+  foreach ($instances as $field_name => $instance) {
+    $items = field_get_items('crm_contact', $contact, $field_name);
+    if (!empty($items)) {
+      $rows[] = '<strong>' . check_plain($instance['label']) . '</strong> <code>' . check_plain($field_name) . '</code><br>'
+        . _dropcrm_format_field_items($items);
+    }
+  }
+
+  $body = implode('<br>', $rows);
+
+  // Optional reference footer: total count + table-by-table accordion.
+  if (is_array($refs)) {
+    $total = array_sum($refs);
+    $body .= '<div class="crm-merge-card-refs">'
+      . '<strong>' . t('References:') . '</strong> '
+      . format_plural($total, '@count row will be reassigned if this record loses.', '@count rows will be reassigned if this record loses.');
+    if ($total > 0) {
+      $detail_rows = array();
+      foreach ($refs as $table => $n) {
+        $detail_rows[] = '<li><code>' . check_plain($table) . '</code>: ' . (int) $n . '</li>';
+      }
+      $body .= ' <details><summary>' . t('breakdown') . '</summary>'
+        . '<ul class="crm-merge-card-refs-list">' . implode('', $detail_rows) . '</ul>'
+        . '</details>';
+    }
+    $body .= '</div>';
+  }
+
+  return $body;
+}
+
+/**
+ * Builds a diff of fields between two contacts. Returns only the keys
+ * where values differ.
+ */
+function _dropcrm_duplicates_field_diff($a, $b) {
+  $diffs = array();
+  // Schema columns to compare. Skip identity + auto-managed timestamps.
+  foreach (array('name' => t('Name'), 'type' => t('Type'), 'status' => t('Status'), 'uid' => t('User account')) as $col => $label) {
+    if (((string) $a->{$col}) !== ((string) $b->{$col})) {
+      $diffs[$col] = array(
+        'kind'      => 'schema',
+        'label'     => $label,
+        'a_value'   => $a->{$col},
+        'b_value'   => $b->{$col},
+        'a_display' => check_plain((string) $a->{$col}),
+        'b_display' => check_plain((string) $b->{$col}),
+      );
+    }
+  }
+  // Field API fields on the (winner's) bundle. Cross-bundle merges only
+  // diff fields that exist on the winner's bundle — the loser-side field
+  // values won't survive anyway.
+  $bundle = $a->type;
+  $instances = field_info_instances('crm_contact', $bundle);
+  foreach ($instances as $field_name => $instance) {
+    $a_items = field_get_items('crm_contact', $a, $field_name);
+    $b_items = field_get_items('crm_contact', $b, $field_name);
+    if ($a_items != $b_items) {
+      $diffs[$field_name] = array(
+        'kind'      => 'field',
+        'label'     => $instance['label'],
+        'a_value'   => $a_items,
+        'b_value'   => $b_items,
+        'a_display' => _dropcrm_format_field_items($a_items),
+        'b_display' => _dropcrm_format_field_items($b_items),
+      );
+    }
+  }
+  return $diffs;
+}
+
+/**
+ * Pretty-prints field API items. Handles common columns (value, target_id).
+ */
+function _dropcrm_format_field_items($items) {
+  if (empty($items)) {
+    return '<em>(empty)</em>';
+  }
+  $parts = array();
+  foreach ($items as $item) {
+    if (isset($item['target_id'])) {
+      // Entityreference. Try to resolve label via the parent field's target type.
+      $parts[] = 'cid:' . (int) $item['target_id'];
+    }
+    elseif (isset($item['value'])) {
+      $parts[] = check_plain((string) $item['value']);
+    }
+    else {
+      $parts[] = check_plain(json_encode($item));
+    }
+  }
+  return implode(', ', $parts);
+}
+
+/**
+ * Applies field-conflict choices onto the winner entity.
+ *
+ * For each chosen side ('a' or 'b'), copies that side's value of the
+ * field onto $winner. No-op when the chosen side IS the winner.
+ */
+function _dropcrm_duplicates_apply_choices($winner, array $by_side, array $choices) {
+  $bundle = $winner->type;
+  $instances = field_info_instances('crm_contact', $bundle);
+  foreach ($choices as $key => $side) {
+    if (!in_array($side, array('a', 'b'), TRUE)) {
+      continue;
+    }
+    $source = $by_side[$side];
+    if ($source->cid == $winner->cid) {
+      continue;
+    }
+    if (isset($instances[$key])) {
+      $items = field_get_items('crm_contact', $source, $key);
+      $winner->{$key} = ($items === FALSE) ? array() : array(LANGUAGE_NONE => $items);
+    }
+    else {
+      $winner->{$key} = $source->{$key};
+    }
+  }
+}
+
+/**
+ * Counts references to a given contact across every known table /
+ * entityref field. Used by the merge preview.
+ */
+function _dropcrm_count_contact_references($cid) {
+  $counts = array();
+  foreach (_dropcrm_contact_ref_tables() as $table => $col) {
+    if (db_table_exists($table)) {
+      $counts[$table] = (int) db_query('SELECT COUNT(*) FROM {' . $table . '} WHERE ' . $col . ' = :cid', array(':cid' => $cid))->fetchField();
+    }
+  }
+  foreach (_dropcrm_entityref_fields_targeting('crm_contact') as $field_name) {
+    foreach (array('field_data_', 'field_revision_') as $prefix) {
+      $table = $prefix . $field_name;
+      if (db_table_exists($table)) {
+        $col = $field_name . '_target_id';
+        $counts[$table] = (int) db_query('SELECT COUNT(*) FROM {' . $table . '} WHERE ' . $col . ' = :cid', array(':cid' => $cid))->fetchField();
+      }
+    }
+  }
+  return array_filter($counts);
+}
+
+/**
+ * Reassigns every reference from $from_cid to $to_cid. Returns a map of
+ * table => updated rowcount. Caller must wrap in a transaction.
+ */
+function _dropcrm_reassign_contact_references($from_cid, $to_cid) {
+  $updated = array();
+  foreach (_dropcrm_contact_ref_tables() as $table => $col) {
+    if (!db_table_exists($table)) {
+      continue;
+    }
+    $n = db_update($table)
+      ->fields(array($col => $to_cid))
+      ->condition($col, $from_cid)
+      ->execute();
+    if ($n) {
+      $updated[$table] = (int) $n;
+    }
+  }
+  foreach (_dropcrm_entityref_fields_targeting('crm_contact') as $field_name) {
+    foreach (array('field_data_', 'field_revision_') as $prefix) {
+      $table = $prefix . $field_name;
+      if (!db_table_exists($table)) {
+        continue;
+      }
+      $col = $field_name . '_target_id';
+      $n = db_update($table)
+        ->fields(array($col => $to_cid))
+        ->condition($col, $from_cid)
+        ->execute();
+      if ($n) {
+        $updated[$table] = (int) $n;
+      }
+    }
+  }
+  // Reset entity caches so the next read of either side sees the merged data.
+  entity_get_controller('crm_contact')->resetCache(array($from_cid, $to_cid));
+  if (function_exists('field_cache_clear')) {
+    field_cache_clear();
+  }
+  return $updated;
+}
+
+/**
+ * Returns the explicit list of tables with a column referencing
+ * crm_contact.cid. Hand-curated because the column name 'cid' is
+ * overloaded across Backdrop core (comment.cid, cache_*.cid, etc.) and a
+ * heuristic match would corrupt unrelated data.
+ *
+ * Add to this list whenever a new dropcrm-adjacent module introduces a
+ * cid FK.
+ */
+function _dropcrm_contact_ref_tables() {
+  return array(
+    'crm_contact_method' => 'cid',
+    'crm_membership'     => 'cid',
+    'crm_contribution'   => 'cid',
+    'drop_payment'       => 'cid',
+    'drop_project'       => 'cid',
+  );
+}
+
+/**
+ * Collapses exact-duplicate contact methods on a single contact.
+ *
+ * Groups rows by (type, normalized value). For each group with >1 row,
+ * keeps one (preferring is_primary, then lowest cmid) and deletes the
+ * rest. Returns the number of rows deleted.
+ *
+ * "Normalized value" is lowercased + trimmed. Sufficient for emails and
+ * phone-as-typed; address dedup works when the value column carries the
+ * full address (which is how the existing card renderer pulls it). Two
+ * addresses spelled differently won't be detected — that's intentional;
+ * we'd rather miss a fuzzy dupe than collapse a real distinct address.
+ *
+ * Safe to call on any cid (not just merged contacts) — useful as
+ * standalone cleanup for contacts that picked up dupes pre-fix.
+ */
+function _dropcrm_dedupe_contact_methods($cid) {
+  $rows = db_query("SELECT cmid, type, LOWER(TRIM(value)) AS value_norm, is_primary
+                    FROM {crm_contact_method}
+                    WHERE cid = :cid AND value IS NOT NULL AND value <> ''
+                    ORDER BY type ASC, value_norm ASC, is_primary DESC, cmid ASC",
+                   array(':cid' => $cid))->fetchAll();
+  $groups = array();
+  foreach ($rows as $r) {
+    $key = $r->type . '|' . $r->value_norm;
+    $groups[$key][] = (int) $r->cmid;
+  }
+  $to_delete = array();
+  foreach ($groups as $cmids) {
+    if (count($cmids) <= 1) {
+      continue;
+    }
+    array_shift($cmids);
+    $to_delete = array_merge($to_delete, $cmids);
+  }
+  if ($to_delete) {
+    entity_delete_multiple('crm_contact_method', $to_delete);
+  }
+  return count($to_delete);
+}
+
+/**
+ * Discovers entityreference fields whose target_type is the given entity.
+ * Used to find every multi-value reference that needs reassignment on
+ * merge. Future-proof: any new entityref field targeting crm_contact is
+ * picked up automatically.
+ */
+function _dropcrm_entityref_fields_targeting($entity_type) {
+  $matching = array();
+  foreach (field_info_fields() as $name => $field) {
+    if ($field['type'] !== 'entityreference') {
+      continue;
+    }
+    if (!empty($field['settings']['target_type']) && $field['settings']['target_type'] === $entity_type) {
+      $matching[] = $name;
+    }
+  }
+  return $matching;
+}
+
+// ---------------------------------------------------------------------------
 // Activity list page
 // ---------------------------------------------------------------------------
 
