@@ -261,9 +261,12 @@ function dropcrm_contact_view(CrmContact $contact) {
   $status_options = _dropcrm_activity_status_options();
 
   // Find which activities have meeting notes — single query for all IDs.
+  // Guard against the field's data table being absent on sites whose
+  // schema_version says update_1012 ran but didn't actually create the
+  // field/storage (tcog hit this 2026-04-26).
   $aids = array_keys($activities);
   $aids_with_notes = array();
-  if ($aids) {
+  if ($aids && db_table_exists('field_data_field_crm_meeting_notes')) {
     $notes_result = db_select('field_data_field_crm_meeting_notes', 'n')
       ->fields('n', array('entity_id'))
       ->condition('entity_id', $aids, 'IN')
