@@ -10,5 +10,6 @@
   "kanban_modals": true,
   "review_enabled": true,
   "default_type": "task",
-  "default_assignee": ""
+  "default_assignee": "",
+  "default_status": "open"
 }
