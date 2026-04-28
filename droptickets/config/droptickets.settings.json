@@ -8,5 +8,7 @@
   "reactions_enabled": true,
   "slack_webhook_url": "",
   "kanban_modals": true,
-  "review_enabled": true
+  "review_enabled": true,
+  "default_type": "task",
+  "default_assignee": ""
 }
