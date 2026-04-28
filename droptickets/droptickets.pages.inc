@@ -1932,6 +1932,13 @@ function droptickets_ticket_view(DropTicket $ticket) {
   if ($tag_html) {
     $meta_items[t('Tags')] = $tag_html;
   }
+  if (module_exists('dropstrategic') && !empty($ticket->goal_id)) {
+    $goal = drop_goal_strategic_load($ticket->goal_id);
+    if ($goal) {
+      $type_label_goal = $goal->type === 'team' ? t('Team') : t('Personal');
+      $meta_items[t('Goal')] = l('[' . $type_label_goal . '] ' . $goal->title, 'drop/strategic/' . $goal->gid);
+    }
+  }
   if (!empty($ticket->external_link)) {
     $host = parse_url($ticket->external_link, PHP_URL_HOST);
     if ($host) {
