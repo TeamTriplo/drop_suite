@@ -874,6 +874,7 @@ function droptickets_kanban_page() {
     $js_settings['modalQuickAddUrl']    = url('drop/tickets/kanban/quick-add');
     $js_settings['tokenAssignee']       = backdrop_get_token('droptickets_inline_assignee');
     $js_settings['tokenPriority']       = backdrop_get_token('droptickets_inline_priority');
+    $js_settings['tokenStatus']         = backdrop_get_token('droptickets_inline_status');
 
     // Board options for modal (only if taxonomy and field exist). The
     // "All" board is filtered out because it's the unscoped view — tagging
@@ -1475,6 +1476,28 @@ function droptickets_modal_data(DropTicket $ticket) {
 
   $can_edit = droptickets_ticket_access('update', $ticket);
 
+  // Status options available for this ticket — discussion vs regular, with
+  // done/closed filtered out when the user lacks the capability.
+  $is_discussion = ($ticket->type === 'discussion');
+  if ($is_discussion) {
+    $status_options = droptickets_discussion_status_options();
+  }
+  else {
+    $status_options = droptickets_status_options();
+    if (!droptickets_done_access($ticket)) {
+      unset($status_options['done']);
+    }
+    if (!droptickets_close_access($ticket)) {
+      unset($status_options['closed']);
+    }
+  }
+  // Always include the ticket's current status so the select can show it
+  // even if the user can't transition out of it.
+  $all_statuses = droptickets_all_status_options();
+  if (!isset($status_options[$ticket->status]) && isset($all_statuses[$ticket->status])) {
+    $status_options[$ticket->status] = $all_statuses[$ticket->status];
+  }
+
   // Current board assignments.
   $board_tids = db_select('field_data_field_drop_board', 'fb')
     ->fields('fb', array('field_drop_board_tid'))
@@ -1494,6 +1517,8 @@ function droptickets_modal_data(DropTicket $ticket) {
     'body_format'   => $ticket->body_format,
     'assignee'      => $assignee_value,
     'priority'      => (int) $ticket->priority,
+    'status'        => $ticket->status,
+    'status_options' => $status_options,
     'boards'        => $boards,
     'comment_count'       => $comment_count,
     'last_comment_when'   => $last_comment_when,

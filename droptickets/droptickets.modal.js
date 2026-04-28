@@ -20,6 +20,7 @@
       var quickAddUrl = cfg.modalQuickAddUrl || '';
       var tokenAssignee = cfg.tokenAssignee || '';
       var tokenPriority = cfg.tokenPriority || '';
+      var tokenStatus   = cfg.tokenStatus || '';
       var boards    = cfg.modalBoards || [];
 
       // Build the modal DOM once.
@@ -113,6 +114,12 @@
         sidebar.innerHTML = '';
 
         if (data.can_edit) {
+          // Status select.
+          sidebar.innerHTML += '<div class="droptickets-modal-field">'
+            + '<label>' + Backdrop.t('Status') + '</label>'
+            + _buildStatusSelect(data.status, data.status_options || {}, 'droptickets-modal-status-select')
+            + '</div>';
+
           // Assignee select.
           sidebar.innerHTML += '<div class="droptickets-modal-field">'
             + '<label>' + Backdrop.t('Assignee') + '</label>'
@@ -134,6 +141,12 @@
           }
 
           // Bind change events.
+          var statusSel = sidebar.querySelector('.droptickets-modal-status-select');
+          statusSel.addEventListener('change', function () {
+            var newStatus = this.value;
+            _postInline(baseUrl + data.tid + '/inline-status', 'status', newStatus, tokenStatus);
+            _moveCardToStatus(data.tid, newStatus);
+          });
           var assigneeSel = sidebar.querySelector('.droptickets-modal-assignee-select');
           assigneeSel.addEventListener('change', function () {
             _postInline(baseUrl + data.tid + '/inline-assignee', 'assignee', this.value, tokenAssignee);
@@ -155,8 +168,11 @@
           }
         }
         else {
+          var statusOpts = data.status_options || {};
+          var statusLabel = statusOpts[data.status] || data.status || '—';
           var assigneeLabel = _assigneeLabel(data.assignee);
           var prioLabel = priorities[data.priority] || '—';
+          sidebar.innerHTML += '<div class="droptickets-modal-field"><label>' + Backdrop.t('Status') + '</label><span>' + Backdrop.checkPlain(statusLabel) + '</span></div>';
           sidebar.innerHTML += '<div class="droptickets-modal-field"><label>' + Backdrop.t('Assignee') + '</label><span>' + Backdrop.checkPlain(assigneeLabel) + '</span></div>';
           sidebar.innerHTML += '<div class="droptickets-modal-field"><label>' + Backdrop.t('Priority') + '</label><span>' + Backdrop.checkPlain(prioLabel) + '</span></div>';
           // Boards (read-only).
@@ -528,6 +544,18 @@
         return html;
       }
 
+      function _buildStatusSelect(currentVal, options, className) {
+        var html = '<select class="' + className + '">';
+        for (var key in options) {
+          if (options.hasOwnProperty(key)) {
+            var sel = (key === currentVal) ? ' selected' : '';
+            html += '<option value="' + Backdrop.checkPlain(key) + '"' + sel + '>' + Backdrop.checkPlain(options[key]) + '</option>';
+          }
+        }
+        html += '</select>';
+        return html;
+      }
+
       function _buildPrioritySelect(currentVal, className) {
         var html = '<select class="' + className + '">';
         for (var key in priorities) {
@@ -561,6 +589,30 @@
         }
         html += '</div>';
         return html;
+      }
+
+      function _moveCardToStatus(tid, newStatus) {
+        var card = board.querySelector('.droptickets-kanban-card[data-tid="' + tid + '"]');
+        if (!card) return;
+        var fromCol = card.closest('.droptickets-kanban-col');
+        var toCol = board.querySelector('.droptickets-kanban-col[data-status="' + newStatus + '"]');
+        if (!toCol || fromCol === toCol) return;
+        var toCards = toCol.querySelector('.droptickets-kanban-cards');
+        var toEmpty = toCards.querySelector('.droptickets-kanban-empty');
+        if (toEmpty) toEmpty.remove();
+        toCards.appendChild(card);
+        _updateColCount(fromCol);
+        _updateColCount(toCol);
+        var fromCards = fromCol.querySelector('.droptickets-kanban-cards');
+        if (!fromCards.querySelector('.droptickets-kanban-card')) {
+          fromCards.innerHTML = '<div class="droptickets-kanban-empty">' + Backdrop.t('No tickets') + '</div>';
+        }
+      }
+
+      function _updateColCount(col) {
+        var counter = col.querySelector('.droptickets-kanban-col-count');
+        if (!counter) return;
+        counter.textContent = col.querySelectorAll('.droptickets-kanban-card').length;
       }
 
       function _postInline(url, fieldName, value, inlineToken) {
