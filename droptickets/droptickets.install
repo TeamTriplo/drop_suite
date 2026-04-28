@@ -1874,3 +1874,19 @@ function _droptickets_ensure_mentions_plain_syntax() {
   }
   $config->save();
 }
+
+/**
+ * Seed default_type and default_assignee on droptickets.settings for existing
+ * sites. Fresh installs get these via the config JSON template.
+ */
+function droptickets_update_1037() {
+  $config = config('droptickets.settings');
+  if ($config->get('default_type') === NULL) {
+    $config->set('default_type', 'task');
+  }
+  if ($config->get('default_assignee') === NULL) {
+    $config->set('default_assignee', '');
+  }
+  $config->save();
+  return t('Seeded default_type and default_assignee on droptickets.settings.');
+}

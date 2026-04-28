@@ -90,11 +90,12 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     $form['#attached']['js'][]  = backdrop_get_path('module', 'droptickets') . '/droptickets.mentions.js';
   }
 
+  $default_type = config_get('droptickets.settings', 'default_type') ?: 'task';
   $form['layout']['sidebar']['type'] = array(
     '#type'          => 'select',
     '#title'         => t('Type'),
     '#options'       => droptickets_type_options(),
-    '#default_value' => $is_edit ? $ticket->type : 'task',
+    '#default_value' => $is_edit ? $ticket->type : $default_type,
     '#required'      => TRUE,
     '#weight'        => -18,
     '#attributes'    => array('class' => array('droptickets-type-select')),
@@ -214,7 +215,13 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
     }
   }
   else {
-    $default_assignee = NULL;
+    $default_assignee = (string) config_get('droptickets.settings', 'default_assignee');
+    // Defensive: if a stored uid no longer maps to a current team member,
+    // fall back to Unassigned rather than leave an out-of-range selection.
+    if ($default_assignee !== '' && $default_assignee !== 'team' && $default_assignee !== 'on_hold'
+        && !isset($assignee_options[$default_assignee])) {
+      $default_assignee = '';
+    }
   }
 
   $form['layout']['sidebar']['assignee_uid'] = array(
@@ -947,6 +954,33 @@ function droptickets_settings_form($form, &$form_state) {
   $form['statuses_link'] = array(
     '#markup' => '<p>' . l(t('Manage statuses and Kanban lanes'), 'drop/tickets/settings/statuses') . '</p>',
     '#weight' => -100,
+  );
+
+  // --- Defaults for new tickets ---
+  $form['defaults'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Defaults for new tickets'),
+    '#description' => t('These selections pre-fill the new-ticket form. Authors can still change them per ticket.'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+  );
+  $form['defaults']['default_type'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Default ticket type'),
+    '#options'       => droptickets_type_options(),
+    '#default_value' => $config->get('default_type') ?: 'task',
+  );
+  $assignee_default_options = array(
+    ''        => t('— Unassigned —'),
+    'team'    => t('— The Team —'),
+    'on_hold' => t('— On Hold —'),
+  ) + droptickets_assignee_options();
+  $form['defaults']['default_assignee'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Default assignee'),
+    '#description'   => t('"The Team" routes to anyone with the appropriate permission; "On Hold" parks a ticket until someone picks it up.'),
+    '#options'       => $assignee_default_options,
+    '#default_value' => (string) $config->get('default_assignee'),
   );
 
   // --- Notifications ---
