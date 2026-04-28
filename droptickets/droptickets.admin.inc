@@ -170,27 +170,37 @@ function droptickets_ticket_form($form, &$form_state, $ticket = NULL) {
 
   $is_discussion = $is_edit && ($ticket->type === 'discussion');
 
-  if ($is_edit) {
-    if ($is_discussion) {
-      $status_options = droptickets_discussion_status_options();
+  if ($is_discussion) {
+    $status_options = droptickets_discussion_status_options();
+    $status_default = $ticket->status;
+  }
+  else {
+    $status_options = droptickets_status_options();
+    if (!droptickets_done_access($ticket)) {
+      unset($status_options['done']);
+    }
+    if (!droptickets_close_access($ticket)) {
+      unset($status_options['closed']);
+    }
+    if ($is_edit) {
+      $status_default = $ticket->status;
     }
     else {
-      $status_options = droptickets_status_options();
-      if (!droptickets_done_access($ticket)) {
-        unset($status_options['done']);
-      }
-      if (!droptickets_close_access($ticket)) {
-        unset($status_options['closed']);
+      $status_default = config_get('droptickets.settings', 'default_status') ?: 'open';
+      // Defensive: configured default may have been removed from the
+      // status list. Fall back to 'open' if so.
+      if (!isset($status_options[$status_default])) {
+        $status_default = isset($status_options['open']) ? 'open' : key($status_options);
       }
     }
-    $form['layout']['sidebar']['status'] = array(
-      '#type'          => 'select',
-      '#title'         => t('Status'),
-      '#options'       => $status_options,
-      '#default_value' => $ticket->status,
-      '#weight'        => -15,
-    );
   }
+  $form['layout']['sidebar']['status'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Status'),
+    '#options'       => $status_options,
+    '#default_value' => $status_default,
+    '#weight'        => -15,
+  );
 
   $team_options = droptickets_assignee_options();
 
@@ -969,6 +979,13 @@ function droptickets_settings_form($form, &$form_state) {
     '#title'         => t('Default ticket type'),
     '#options'       => droptickets_type_options(),
     '#default_value' => $config->get('default_type') ?: 'task',
+  );
+  $form['defaults']['default_status'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Default status'),
+    '#description'   => t('Discussion-type tickets always start at "Open" regardless of this setting.'),
+    '#options'       => droptickets_status_options(),
+    '#default_value' => $config->get('default_status') ?: 'open',
   );
   $assignee_default_options = array(
     ''        => t('— Unassigned —'),

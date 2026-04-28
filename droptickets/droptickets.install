@@ -1890,3 +1890,16 @@ function droptickets_update_1037() {
   $config->save();
   return t('Seeded default_type and default_assignee on droptickets.settings.');
 }
+
+/**
+ * Seed default_status on droptickets.settings for existing sites. Fresh
+ * installs get this via the config JSON template.
+ */
+function droptickets_update_1038() {
+  $config = config('droptickets.settings');
+  if ($config->get('default_status') === NULL) {
+    $config->set('default_status', 'open');
+    $config->save();
+  }
+  return t('Seeded default_status on droptickets.settings.');
+}
