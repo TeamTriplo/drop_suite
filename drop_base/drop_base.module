@@ -576,7 +576,23 @@ function _drop_base_render_nav() {
     if (!empty($link['hidden'])) {
       return FALSE;
     }
-    return empty($link['permission']) || user_access($link['permission']);
+    // Explicit permission declared by the hook entry.
+    if (!empty($link['permission']) && !user_access($link['permission'])) {
+      return FALSE;
+    }
+    // Auto-check via the menu router for paths Backdrop knows about — mirrors
+    // what _menu_link_translate() does for standard menu links. Custom shortcuts
+    // added via drop/settings/navigation never carry a permission, so without
+    // this check they'd show to everyone regardless of access to the target.
+    // External URLs and unknown paths fall through (router returns FALSE) and
+    // stay visible, matching the existing "no permission = show" default.
+    if (!empty($link['path'])) {
+      $router = menu_get_item($link['path']);
+      if (is_array($router) && isset($router['access']) && !$router['access']) {
+        return FALSE;
+      }
+    }
+    return TRUE;
   });
   if (empty($links)) {
     return FALSE;
