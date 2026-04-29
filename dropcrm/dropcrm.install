@@ -2039,3 +2039,26 @@ function dropcrm_update_1032() {
   }
   return t('crm_contribution already exists; no change.');
 }
+
+/**
+ * Re-import the crm_last_contact view to pick up hide_empty + empty_zero on
+ * the activity_date field. Without those flags Views' date handler calls
+ * strtotime() on the NULL value of contacts who have no activities yet,
+ * triggering "Passing null to parameter #1 of strtotime() is deprecated"
+ * deprecation notices on the CRM landing page (one per such contact).
+ *
+ * Fresh installs already get the updated view from the JSON template; this
+ * update only refreshes existing sites' active config.
+ */
+function dropcrm_update_1033() {
+  $module_path = backdrop_get_path('module', 'dropcrm');
+  $config_path = $module_path . '/config/views.view.crm_last_contact.json';
+  if (!file_exists($config_path)) {
+    return t('crm_last_contact view config file not found; nothing to update.');
+  }
+  $data = json_decode(file_get_contents($config_path), TRUE);
+  $config = config('views.view.crm_last_contact');
+  $config->setData($data);
+  $config->save();
+  return t('Re-imported the crm_last_contact view (added hide_empty on activity_date).');
+}

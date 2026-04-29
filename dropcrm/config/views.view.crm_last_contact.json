@@ -72,7 +72,9 @@
                         "group_type": "max",
                         "date_format": "custom",
                         "custom_date_format": "M j, Y",
-                        "empty": "Never"
+                        "empty": "Never",
+                        "hide_empty": true,
+                        "empty_zero": true
                     }
                 },
                 "filters": {
