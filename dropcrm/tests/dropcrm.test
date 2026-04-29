@@ -333,6 +333,55 @@ class DropCRMContactCRUDTest extends DropCRMTestBase {
     $this->assertResponse(200);
     $this->assertField('name', 'Name field is present on the add organization form.');
   }
+
+  /**
+   * Submitting the Add Organization form via the action-link path
+   * (drop/crm/organizations/add) creates the entity successfully.
+   *
+   * Regression test: this path goes through dropcrm_contact_add_page() which
+   * calls backdrop_get_form('crm_contact_form', $entity) directly. entity_ui's
+   * hook_forms wrapper only fires when the entity-type string is passed as
+   * args[0] or args[2], so $form_state['entity_type'] is not seeded
+   * automatically. crm_contact_form() must set it explicitly so
+   * entity_ui_form_submit_build_entity() can resolve the controller. Without
+   * the fix this submit fatals with "Undefined array key entity_type" /
+   * "Call to a member function entityFormSubmitBuildEntity() on array".
+   */
+  public function testAddOrganizationViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/organizations/add', array(
+      'name' => 'Action Link Org',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('Action Link Org');
+  }
+
+  /**
+   * Same regression coverage for the Add Person action-link path.
+   */
+  public function testAddPersonViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/people/add', array(
+      'field_crm_first_name[und][0][value]' => 'Action',
+      'field_crm_last_name[und][0][value]'  => 'Link',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+  }
+
+  /**
+   * Same regression coverage for the Add Household action-link path.
+   */
+  public function testAddHouseholdViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/households/add', array(
+      'name' => 'Action Link Household',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('Action Link Household');
+  }
 }
 
 // ---------------------------------------------------------------------------

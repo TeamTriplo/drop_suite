@@ -1433,8 +1433,14 @@ function dropcrm_admin_overview() {
  *   The form array.
  */
 function crm_contact_form($form, &$form_state, $entity, $op = 'edit') {
-  // Ensure the entity is stored in form_state for submit.
+  // Ensure the entity and its type are stored in form_state for submit.
+  // entity_ui_form_submit_build_entity() reads form_state['entity_type'] to
+  // look up the controller. The wrapper that normally seeds this only fires
+  // when backdrop_get_form() receives the entity-type string as its first or
+  // third argument; dropcrm_contact_add_page() passes the entity object, so
+  // we must set entity_type explicitly.
   $form_state['crm_contact'] = $entity;
+  $form_state['entity_type'] = 'crm_contact';
 
   // The bundle determines which field API fields are attached.
   $bundle = $entity->bundle();
@@ -1623,7 +1629,10 @@ function crm_contact_form_submit($form, &$form_state) {
  *   The form array.
  */
 function crm_activity_form($form, &$form_state, $entity, $op = 'edit') {
+  // entity_ui_form_submit_build_entity() needs both keys; see crm_contact_form
+  // comment for why we set entity_type explicitly.
   $form_state['crm_activity'] = $entity;
+  $form_state['entity_type'] = 'crm_activity';
 
   // CSS.
   $form['#attached']['css'][] = backdrop_get_path('module', 'dropcrm') . '/dropcrm.admin.css';
@@ -2035,7 +2044,10 @@ function _dropcrm_build_attendees_checkboxes(array $org_cids, array $already_lin
  *   The form array.
  */
 function crm_contact_method_form($form, &$form_state, $entity, $op = 'edit') {
+  // entity_ui_form_submit_build_entity() needs both keys; see crm_contact_form
+  // comment for why we set entity_type explicitly.
   $form_state['crm_contact_method'] = $entity;
+  $form_state['entity_type'] = 'crm_contact_method';
 
   $bundle = $entity->bundle();
 
