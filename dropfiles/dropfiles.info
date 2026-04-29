@@ -1,6 +1,6 @@
 name = DropFiles
 description = Team file sharing library for the Drop Suite.
-package = Drop Suites
+package = Drop Suite
 backdrop = 1.x
 type = module
 

@@ -3,5 +3,5 @@ description = Shared utilities, project entity, CSS variables, and base styles f
 type = module
 backdrop = 1.x
 version = 1.x-1.0-dev
-package = Drop Suites
+package = Drop Suite
 dependencies[] = entity_plus

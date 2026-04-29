@@ -3462,11 +3462,11 @@ function droptickets_flags_clear_form_submit($form, &$form_state) {
 }
 
 // ---------------------------------------------------------------------------
-// Bulk tickets tool — MOVED to drop_admin_tools module (drop_suites_lab).
+// Bulk tickets tool — MOVED to drop_admin_tools module (drop_suite_lab).
 // ---------------------------------------------------------------------------
 
 // (Bulk ticket page, form, query, and tag-add/remove helpers have been
-// extracted into modules/drop_suites_lab/drop_admin_tools/ so droptickets
+// extracted into modules/drop_suite_lab/drop_admin_tools/ so droptickets
 // stays focused on contrib-quality ticket functionality. The route
 // drop/tickets/bulk is now served by drop_admin_tools_menu().)
 

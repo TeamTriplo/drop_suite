@@ -1,6 +1,6 @@
 name = DropCRM Membership
 description = Membership management for DropCRM. Tracks members, terms, renewals, and dues. State machine handles active/grace/lapsed lifecycle via cron.
-package = Drop Suites
+package = Drop Suite
 version = 1.x-1.0.0
 type = module
 backdrop = 1.x

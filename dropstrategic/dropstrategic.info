@@ -1,6 +1,6 @@
 name = Drop Strategic
 description = Strategic goals and OKRs for Drop Suite teams.
-package = Drop Suites
+package = Drop Suite
 version = 1.x-1.0.0
 backdrop = 1.x
 

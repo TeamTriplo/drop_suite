@@ -8,4 +8,4 @@ dependencies[] = drop_base
 dependencies[] = entity_plus
 dependencies[] = entity_ui
 dependencies[] = entityreference
-package = Drop Suites
+package = Drop Suite
