@@ -470,21 +470,43 @@ span.drop-pin-link.drop-pin-disabled {
   cursor: default;
 }
 
-/* Local actions in top region (+ Add ticket etc.) */
-.l-top ul.action-links {
+/* Local actions (MENU_LOCAL_ACTION items: + Add Person, + Add Organization,
+   + Add Project, etc.). Style guide places these as action links below the
+   page title on listing pages — render them as a prominent pill button so
+   they read as a clear primary call-to-action rather than a faint hyperlink.
+   Selector is unscoped so the styling applies whichever region the layout
+   places the action-links block in. */
+ul.action-links {
   list-style: none;
-  margin: 0 0 0.4rem;
+  margin: 0 0 1rem;
   padding: 0;
 }
 
-.l-top ul.action-links li {
+ul.action-links li {
   display: inline-block;
-  margin-right: 0.75rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
-.l-top ul.action-links li a {
-  font-size: 0.9em;
-  font-weight: 500;
+ul.action-links li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.95rem;
+  background: var(--drop-primary, #1565c0);
+  color: #fff !important;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+ul.action-links li a:hover,
+ul.action-links li a:focus {
+  background: #0d4a8c;
+  color: #fff !important;
+  text-decoration: none;
 }
 
 /* ==========================================================================
