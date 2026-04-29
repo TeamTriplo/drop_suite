@@ -13,6 +13,25 @@
 function drop_base_settings_dashboard() {
   backdrop_set_title(t('Drop Suite Settings'));
 
+  $action_links = array();
+  if (user_access('administer users')) {
+    $icon = icon('user-plus', array('attributes' => array('width' => 18, 'height' => 18)));
+    $action_links[] = l($icon . ' ' . t('Add Person'), 'admin/people/create', array(
+      'html' => TRUE,
+      'query' => array('destination' => 'drop/settings'),
+      'attributes' => array('class' => array('button')),
+    ));
+  }
+  if (user_access('administer taxonomy')) {
+    $icon = icon('kanban', array('attributes' => array('width' => 18, 'height' => 18)));
+    $action_links[] = l($icon . ' ' . t('Add Board'), 'admin/structure/taxonomy/drop_boards/add', array(
+      'html' => TRUE,
+      'query' => array('destination' => 'drop/settings'),
+      'attributes' => array('class' => array('button')),
+    ));
+  }
+  $actions_html = drop_base_page_actions($action_links);
+
   $items = module_invoke_all('drop_settings_info');
 
   // Sort by weight.
@@ -32,10 +51,11 @@ function drop_base_settings_dashboard() {
   });
 
   if (empty($items)) {
-    return '<p>' . t('No settings pages are available.') . '</p>';
+    return $actions_html . '<p>' . t('No settings pages are available.') . '</p>';
   }
 
-  $output = '<div class="drop-settings-dashboard">';
+  $output = $actions_html;
+  $output .= '<div class="drop-settings-dashboard">';
 
   foreach ($items as $key => $item) {
     $classes = array('drop-settings-card');
