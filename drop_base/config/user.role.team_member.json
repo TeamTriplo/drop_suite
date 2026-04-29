@@ -1,0 +1,27 @@
+{
+    "_config_name": "user.role.team_member",
+    "name": "team_member",
+    "label": "Team Member",
+    "description": "Day-to-day access to Drop Suite features (CRM, docs, files, projects). No site administration.",
+    "weight": 2,
+    "permissions": [
+        "access drop team",
+        "access drop_dashboard",
+        "access projects",
+        "access crm",
+        "create crm contacts",
+        "edit crm contacts",
+        "create crm activities",
+        "edit crm activities",
+        "access dropdocs",
+        "view drop docs book content",
+        "create doc content",
+        "edit own doc content",
+        "delete own doc content",
+        "access dropfiles",
+        "upload dropfiles",
+        "upload editor files",
+        "use text format markdown",
+        "use text format full_html"
+    ]
+}
