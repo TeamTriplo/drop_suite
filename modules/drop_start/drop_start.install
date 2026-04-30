@@ -1,0 +1,158 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for Drop Start.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_start_install() {
+  drop_suite_grant_admin_permissions('drop_start');
+
+  // Place the persistent wizard-progress block at the top of the default
+  // layout's TOP region. The block renders empty once setup is complete.
+  _drop_start_install_progress_block();
+
+  backdrop_set_message(t('Drop Suite installed. <a href="@wizard">Run the setup wizard</a> to configure your site.', array(
+    '@wizard' => url('drop/start'),
+  )));
+}
+
+/**
+ * Adds drop_start:wizard_progress to the TOP region of the drop_pages and
+ * admin_default layouts, at position 0. drop_pages covers /drop/* pages;
+ * admin_default covers /admin/* pages so the admin can detour and still
+ * have a one-click path back to the wizard. Idempotent per layout.
+ *
+ * As a migration step, also strips the block from the default layout if
+ * it was placed there by earlier versions of this installer.
+ */
+function _drop_start_install_progress_block() {
+  module_load_include('install', 'drop_suite');
+
+  // Remove any stale placement on the default layout (pre-drop_pages split).
+  $default = layout_load('default');
+  if ($default) {
+    $removed = _drop_suite_remove_blocks_by_plugin($default, array('drop_start:wizard_progress'));
+    if ($removed) {
+      $default->save();
+    }
+  }
+
+  foreach (array('drop_pages', 'admin_default') as $layout_name) {
+    $layout = layout_load($layout_name);
+    if (!$layout) {
+      continue;
+    }
+    // Most admin layouts don't have a 'top' region by default. Skip
+    // gracefully rather than creating a region that doesn't render.
+    if (!isset($layout->positions['top']) && !_drop_start_layout_template_has_top($layout)) {
+      continue;
+    }
+    $uuid = _drop_suite_ensure_block_in_region($layout, 'drop_start:wizard_progress', 'top');
+    if (!$uuid) {
+      continue;
+    }
+    if (!empty($layout->positions['top'])) {
+      $positions = $layout->positions['top'];
+      $positions = array_values(array_diff($positions, array($uuid)));
+      array_unshift($positions, $uuid);
+      $layout->positions['top'] = $positions;
+    }
+    $layout->save();
+  }
+}
+
+/**
+ * Checks whether a layout's template defines a 'top' region.
+ */
+function _drop_start_layout_template_has_top($layout) {
+  if (empty($layout->layout_template)) {
+    return FALSE;
+  }
+  $info = layout_get_layout_template_info($layout->layout_template);
+  return !empty($info['regions']['top']);
+}
+
+/**
+ * Implements hook_schema().
+ */
+function drop_start_schema() {
+  $schema['drop_start_content'] = array(
+    'description' => 'Tracks sample content created by Drop Start for safe deletion.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'The entity type (e.g. drop_ticket, crm_contact, node).',
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE,
+        'default'     => '',
+      ),
+      'entity_id' => array(
+        'description' => 'The entity ID.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+      'created' => array(
+        'description' => 'Unix timestamp when the sample content was created.',
+        'type'        => 'int',
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'entity' => array('entity_type', 'entity_id'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function drop_start_uninstall() {
+  // Remove the tracking table — but do NOT delete the sample content itself.
+  // If users want to clean up content they should use the UI before uninstalling.
+}
+
+/**
+ * Place the persistent wizard-progress block on existing installs.
+ *
+ * Fresh installs get this via drop_start_install(). This update hook covers
+ * sites that already had drop_start enabled before the block existed.
+ */
+function drop_start_update_1100() {
+  _drop_start_install_progress_block();
+  return t('Added the wizard-progress block to the default layout.');
+}
+
+/**
+ * Also place the wizard-progress block on the admin_default layout so the
+ * admin can find their way back to the wizard from any /admin/* page.
+ * Idempotent — reuses _drop_start_install_progress_block(), which now
+ * handles both layouts.
+ */
+function drop_start_update_1101() {
+  _drop_start_install_progress_block();
+  return t('Added the wizard-progress block to the admin_default layout.');
+}
+
+/**
+ * Re-place the wizard-progress block: strip it from default (which reverted
+ * to stock in drop_suite_update_1207) and add it to drop_pages instead.
+ */
+function drop_start_update_1102() {
+  _drop_start_install_progress_block();
+  return t('Moved the wizard-progress block to the drop_pages layout.');
+}

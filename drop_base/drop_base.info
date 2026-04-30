@@ -1,7 +1,0 @@
-name = Drop Base
-description = Shared utilities, project entity, CSS variables, and base styles for the Drop Suite.
-type = module
-backdrop = 1.x
-version = 1.x-1.0-dev
-package = Drop Suite
-dependencies[] = entity_plus

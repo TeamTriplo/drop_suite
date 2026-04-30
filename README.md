@@ -14,25 +14,25 @@ over time.
 
 | Module | Description | Path | Dependencies |
 |--------|-------------|------|--------------|
-| [drop_base](drop_base/) | Shared CSS, helpers, nav bar, team directory | — | *none* |
-| [DropBridge](dropbridge/) | Unified daily dashboard, Slack DMs, inbound email | `drop/` | drop_base |
-| [DropCRM](dropcrm/) | Contacts, activities, projects, contact methods | `drop/crm` | drop_base, entity_plus, entity_ui, entityreference |
-| [DropDocs](dropdocs/) | Hierarchical team wiki / documentation | `drop/docs` | drop_base |
+| [drop_suite](drop_suite/) | Shared CSS, helpers, nav bar, team directory | — | *none* |
+| [DropBridge](dropbridge/) | Unified daily dashboard, Slack DMs, inbound email | `drop/` | drop_suite |
+| [DropCRM](dropcrm/) | Contacts, activities, projects, contact methods | `drop/crm` | drop_suite, entity_plus, entity_ui, entityreference |
+| [DropDocs](dropdocs/) | Hierarchical team wiki / documentation | `drop/docs` | drop_suite |
 | [DropEmail](dropemail/) | Outbound email from contacts & tickets, activity logging | — | dropcrm |
-| [DropGoals](dropgoals/) | Daily habit / goal tracking with flexible frequency | `drop/goals` | drop_base |
+| [DropGoals](dropgoals/) | Daily habit / goal tracking with flexible frequency | `drop/goals` | drop_suite |
 | [DropNewsletter](dropnewsletter/) | Newsletter subscriptions on CRM contacts | — | dropcrm, simplenews |
-| [DropStrategic](dropstrategic/) | OKR-style strategic goal tracking | `drop/strategic` | drop_base, entity_plus |
-| [DropTasks](droptasks/) | Personal task management with tags and priorities | `drop/tasks` | drop_base |
-| [DropTickets](droptickets/) | Team ticket tracker with kanban, watchers, Slack | `drop/tickets` | drop_base, dropcrm, entity_plus |
-| [DropTime](droptime/) | Project time tracking, timesheets, reports | `drop/time` | drop_base, dropcrm |
+| [DropStrategic](dropstrategic/) | OKR-style strategic goal tracking | `drop/strategic` | drop_suite, entity_plus |
+| [DropTasks](droptasks/) | Personal task management with tags and priorities | `drop/tasks` | drop_suite |
+| [DropTickets](droptickets/) | Team ticket tracker with kanban, watchers, Slack | `drop/tickets` | drop_suite, dropcrm, entity_plus |
+| [DropTime](droptime/) | Project time tracking, timesheets, reports | `drop/time` | drop_suite, dropcrm |
 
 ### Architecture at a glance
 
-- **drop_base** is the foundation. Every other Drop module depends on it (directly or transitively). It provides shared CSS custom properties, priority helpers, the Drop navigation bar, and the team directory.
+- **drop_suite** is the foundation. Every other Drop module depends on it (directly or transitively). It provides shared CSS custom properties, priority helpers, the Drop navigation bar, and the team directory.
 - **DropCRM** is the core data module. It defines contacts, activities, contact methods, and the `drop_project` entity used by DropTickets and DropTime.
 - **DropBridge** is the integration hub. It pulls from DropCRM, DropTasks, DropGoals, DropTickets, and DropTime via `module_exists()` checks — all are optional.
 - **DropEmail**, **DropNewsletter**, and **DropTime** extend DropCRM with email, newsletter, and time tracking capabilities.
-- **DropTasks**, **DropGoals**, **DropDocs**, and **DropStrategic** are standalone modules that depend only on drop_base (and entity_plus where needed).
+- **DropTasks**, **DropGoals**, **DropDocs**, and **DropStrategic** are standalone modules that depend only on drop_suite (and entity_plus where needed).
 
 ## Requirements
 
@@ -45,7 +45,7 @@ over time.
 ## Installation
 
 1. Place the entire `drop/` directory in your site's `modules/` folder (e.g. `modules/drop/`).
-2. Enable **drop_base** first, then enable whichever modules you need. Backdrop will resolve dependencies automatically.
+2. Enable **drop_suite** first, then enable whichever modules you need. Backdrop will resolve dependencies automatically.
 3. Place the **Drop Nav** block in your layout to get the shared navigation bar across all Drop pages.
 4. Grant permissions under **Administration > Configuration > People > Permissions**. Key roles:
    - `team_member` — basic access to tickets, tasks, time, and the team directory
@@ -54,10 +54,10 @@ over time.
 ## Quick start
 
 For a minimal CRM setup:
-- Enable: `drop_base`, `dropcrm`
+- Enable: `drop_suite`, `dropcrm`
 
 For a full team productivity suite:
-- Enable: `drop_base`, `dropcrm`, `droptickets`, `droptime`, `droptasks`, `dropgoals`, `dropbridge`
+- Enable: `drop_suite`, `dropcrm`, `droptickets`, `droptime`, `droptasks`, `dropgoals`, `dropbridge`
 
 For documentation and strategic planning:
 - Add: `dropdocs`, `dropstrategic`

@@ -1,0 +1,10 @@
+name = DropFiles
+description = Team file sharing library for the Drop Suite.
+package = Drop Suite
+backdrop = 1.x
+type = module
+
+dependencies[] = drop_suite
+dependencies[] = taxonomy
+
+configure = drop/files/settings

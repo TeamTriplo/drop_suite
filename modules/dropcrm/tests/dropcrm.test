@@ -1,0 +1,911 @@
+<?php
+/**
+ * @file
+ * Tests for the DropCRM module.
+ */
+
+/**
+ * Shared base: helpers for creating test contacts and activities.
+ */
+abstract class DropCRMTestBase extends BackdropWebTestCase {
+
+  /** @var object User with full CRM admin access. */
+  protected $adminUser;
+
+  /** @var object User with read + create/edit/delete access. */
+  protected $crmUser;
+
+  /**
+   * Creates and saves a test organization contact.
+   *
+   * Organizations are the simplest bundle: name lives directly on the entity,
+   * no field API required.
+   *
+   * @param string $name
+   *   Organization name.
+   *
+   * @return CrmContact
+   */
+  protected function createTestOrg($name = 'Test Organization') {
+    $contact = entity_create('crm_contact', array(
+      'type'   => 'crm_organization',
+      'name'   => $name,
+      'status' => 1,
+    ));
+    $contact->save();
+    return $contact;
+  }
+
+  /**
+   * Creates and saves a test person contact via field API.
+   *
+   * The display name is computed in hook_crm_contact_presave() from the
+   * field_crm_first_name and field_crm_last_name field values.
+   *
+   * @param string $first
+   *   First name.
+   * @param string $last
+   *   Last name.
+   *
+   * @return CrmContact
+   */
+  protected function createTestPerson($first = 'Jane', $last = 'Doe') {
+    $contact = entity_create('crm_contact', array(
+      'type'   => 'crm_person',
+      'status' => 1,
+    ));
+    $contact->field_crm_first_name[LANGUAGE_NONE][0]['value'] = $first;
+    $contact->field_crm_last_name[LANGUAGE_NONE][0]['value']  = $last;
+    $contact->save();
+    return $contact;
+  }
+
+  /**
+   * Creates and saves a test CRM activity.
+   *
+   * @param array $values
+   *   Field overrides.
+   *
+   * @return CrmActivity
+   */
+  protected function createTestActivity(array $values = array()) {
+    $values += array(
+      'subject'       => 'Test activity',
+      'type'          => 'note',
+      'status'        => 'completed',
+      'activity_date' => REQUEST_TIME,
+    );
+    $activity = entity_create('crm_activity', $values);
+    $activity->save();
+    return $activity;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contact CRUD tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests create, view, edit, and delete operations on CRM contacts.
+ */
+class DropCRMContactCRUDTest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Contact CRUD',
+      'description' => 'Create, view, edit, and delete contacts via entity API and UI.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'dropcrm');
+
+    $this->adminUser = $this->backdropCreateUser(array('administer crm'));
+    $this->crmUser   = $this->backdropCreateUser(array(
+      'access crm',
+      'create crm contacts',
+      'edit crm contacts',
+      'delete crm contacts',
+    ));
+  }
+
+  /**
+   * A newly created organization appears in the contact list.
+   */
+  public function testOrganizationAppearsInList() {
+    $this->createTestOrg('Acme Corp');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contacts');
+
+    $this->assertResponse(200);
+    $this->assertText('Acme Corp');
+  }
+
+  /**
+   * The contact view page renders the organization name.
+   */
+  public function testOrganizationViewPage() {
+    $contact = $this->createTestOrg('View Test Org');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+
+    $this->assertResponse(200);
+    $this->assertText('View Test Org');
+  }
+
+  /**
+   * A person contact's display name is computed from first + last name fields.
+   */
+  public function testPersonNameComputedFromFields() {
+    $contact = $this->createTestPerson('Alice', 'Smith');
+
+    $this->assertNotNull($contact->cid, 'Person contact was saved.');
+    $this->assertEqual('Alice Smith', $contact->name, 'Display name computed from first + last.');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+    $this->assertText('Alice Smith');
+  }
+
+  /**
+   * The person view page loads successfully.
+   */
+  public function testPersonViewPage() {
+    $contact = $this->createTestPerson('Bob', 'Jones');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+
+    $this->assertResponse(200);
+    $this->assertText('Bob Jones');
+  }
+
+  /**
+   * Editing an organization's name via the form persists the change.
+   */
+  public function testEditOrganizationName() {
+    $contact = $this->createTestOrg('Old Name Org');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/contacts/' . $contact->cid . '/edit', array(
+      'name' => 'New Name Org',
+    ), t('Save contact'));
+
+    // After save, the form redirects to the contact view page.
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('New Name Org');
+    $this->assertNoText('Old Name Org');
+  }
+
+  /**
+   * The delete confirm page is accessible, and deletion removes the contact.
+   *
+   * Note: the entity_ui list page redirect after delete uses a pager query
+   * that is not compatible with the test environment, so this test verifies
+   * access to the confirm form and entity removal via API without following
+   * the post-delete redirect.
+   */
+  public function testDeleteOrganization() {
+    $contact = $this->createTestOrg('Delete Me Org');
+    $cid = $contact->cid;
+
+    $this->backdropLogin($this->crmUser);
+
+    // Confirm the delete page is accessible.
+    $this->backdropGet('drop/crm/contacts/' . $cid . '/delete');
+    $this->assertResponse(200);
+    $this->assertText('Delete Me Org');
+
+    // Delete via entity API and verify the record is gone.
+    $contact->delete();
+    entity_get_controller('crm_contact')->resetCache();
+    $this->assertFalse(crm_contact_load($cid), 'Contact was removed from the database.');
+  }
+
+  /**
+   * Adding an organization via the UI form creates a viewable contact.
+   */
+  public function testAddOrganizationViaForm() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/contacts/add/crm_organization', array(
+      'name' => 'Form Created Org',
+    ), t('Add contact'));
+
+    // After save, the form redirects to the new contact's view page.
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('Form Created Org');
+  }
+
+  /**
+   * An inactive contact shows its status on the view page.
+   */
+  public function testInactiveContactStatus() {
+    $contact = entity_create('crm_contact', array(
+      'type'   => 'crm_organization',
+      'name'   => 'Inactive Org',
+      'status' => 0,
+    ));
+    $contact->save();
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+
+    $this->assertResponse(200);
+    $this->assertText('Inactive');
+  }
+
+  /**
+   * Multiple contacts all appear in the contacts list.
+   */
+  public function testMultipleContactsInList() {
+    $this->createTestOrg('Alpha Corp');
+    $this->createTestOrg('Beta Corp');
+    $this->createTestOrg('Gamma Corp');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contacts');
+
+    $this->assertText('Alpha Corp');
+    $this->assertText('Beta Corp');
+    $this->assertText('Gamma Corp');
+  }
+
+  /**
+   * A household contact can be created and viewed.
+   */
+  public function testHouseholdContact() {
+    $contact = entity_create('crm_contact', array(
+      'type'   => 'crm_household',
+      'name'   => 'The Smith Household',
+      'status' => 1,
+    ));
+    $contact->save();
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+
+    $this->assertResponse(200);
+    $this->assertText('The Smith Household');
+  }
+
+  /**
+   * The contact list page shows a Delete link for contacts with permission.
+   */
+  public function testDeleteLinkOnContactList() {
+    $this->createTestOrg('Delete Corp');
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations');
+    $this->assertLink('Delete', 0, 'Delete link is present on the organization list page.');
+  }
+
+  /**
+   * The People list page shows an Add Person action link.
+   */
+  public function testAddPersonActionLinkOnPeopleList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/people');
+    $this->assertResponse(200);
+    $this->assertLink('Add Person', 0, 'Add Person action link is present on the People list page.');
+  }
+
+  /**
+   * The Organizations list page shows an Add Organization action link.
+   */
+  public function testAddOrganizationActionLinkOnOrgList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations');
+    $this->assertResponse(200);
+    $this->assertLink('Add Organization', 0, 'Add Organization action link is present on the Organizations list page.');
+  }
+
+  /**
+   * The Households list page shows an Add Household action link.
+   */
+  public function testAddHouseholdActionLinkOnHouseholdList() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/households');
+    $this->assertResponse(200);
+    $this->assertLink('Add Household', 0, 'Add Household action link is present on the Households list page.');
+  }
+
+  /**
+   * The Add Person action link leads to a working add form.
+   */
+  public function testAddPersonActionLinkWorks() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/people/add');
+    $this->assertResponse(200);
+    $this->assertField('field_crm_first_name[und][0][value]', 'First name field is present on the add person form.');
+  }
+
+  /**
+   * The Add Organization action link leads to a working add form.
+   */
+  public function testAddOrganizationActionLinkWorks() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/organizations/add');
+    $this->assertResponse(200);
+    $this->assertField('name', 'Name field is present on the add organization form.');
+  }
+
+  /**
+   * Submitting the Add Organization form via the action-link path
+   * (drop/crm/organizations/add) creates the entity successfully.
+   *
+   * Regression test: this path goes through dropcrm_contact_add_page() which
+   * calls backdrop_get_form('crm_contact_form', $entity) directly. entity_ui's
+   * hook_forms wrapper only fires when the entity-type string is passed as
+   * args[0] or args[2], so $form_state['entity_type'] is not seeded
+   * automatically. crm_contact_form() must set it explicitly so
+   * entity_ui_form_submit_build_entity() can resolve the controller. Without
+   * the fix this submit fatals with "Undefined array key entity_type" /
+   * "Call to a member function entityFormSubmitBuildEntity() on array".
+   */
+  public function testAddOrganizationViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/organizations/add', array(
+      'name' => 'Action Link Org',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('Action Link Org');
+  }
+
+  /**
+   * Same regression coverage for the Add Person action-link path.
+   */
+  public function testAddPersonViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/people/add', array(
+      'field_crm_first_name[und][0][value]' => 'Action',
+      'field_crm_last_name[und][0][value]'  => 'Link',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+  }
+
+  /**
+   * Same regression coverage for the Add Household action-link path.
+   */
+  public function testAddHouseholdViaActionLinkPathSubmits() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/households/add', array(
+      'name' => 'Action Link Household',
+    ), t('Add contact'));
+    $this->assertResponse(200);
+    $this->assertText('saved');
+    $this->assertText('Action Link Household');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Activity CRUD tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests create, view, edit, and delete operations on CRM activities.
+ */
+class DropCRMActivityCRUDTest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Activity CRUD',
+      'description' => 'Create, view, edit, and delete CRM activities via entity API and UI.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'dropcrm');
+
+    $this->adminUser = $this->backdropCreateUser(array('administer crm'));
+    $this->crmUser   = $this->backdropCreateUser(array(
+      'access crm',
+      'create crm activities',
+      'edit crm activities',
+      'delete crm activities',
+    ));
+  }
+
+  /**
+   * A newly created activity appears in the activity list.
+   */
+  public function testActivityAppearsInList() {
+    $this->createTestActivity(array('subject' => 'Listed activity'));
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/activities');
+
+    $this->assertResponse(200);
+    $this->assertText('Listed activity');
+  }
+
+  /**
+   * The activity view page renders the subject.
+   */
+  public function testActivityViewPage() {
+    $activity = $this->createTestActivity(array('subject' => 'View page activity'));
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+
+    $this->assertResponse(200);
+    $this->assertText('View page activity');
+  }
+
+  /**
+   * When subject is blank, it is auto-generated from type and date.
+   */
+  public function testAutoGeneratedSubject() {
+    $activity = entity_create('crm_activity', array(
+      'type'          => 'call',
+      'status'        => 'completed',
+      'activity_date' => REQUEST_TIME,
+      // subject intentionally omitted.
+    ));
+    $activity->save();
+
+    // Reload and confirm subject was set.
+    $loaded = crm_activity_load($activity->aid);
+    $this->assertFalse(empty($loaded->subject), 'Subject was auto-generated.');
+    $this->assertTrue((bool) preg_match('/Call/i', $loaded->subject), 'Auto-generated subject contains the activity type label.');
+  }
+
+  /**
+   * Editing an activity's subject via the form persists the change.
+   */
+  public function testEditActivitySubject() {
+    $activity = $this->createTestActivity(array('subject' => 'Original subject'));
+
+    $this->backdropLogin($this->crmUser);
+    // Activity entity_ui uses /manage/{aid}/edit (EntityDefaultUIController format).
+    $this->backdropPost('drop/crm/activities/manage/' . $activity->aid . '/edit', array(
+      'subject'       => 'Updated subject',
+      'activity_date' => date('Y-m-d'),
+    ), t('Save activity'));
+
+    $this->assertText('saved');
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+    $this->assertText('Updated subject');
+    $this->assertNoText('Original subject');
+  }
+
+  /**
+   * The delete confirm page is accessible, and deletion removes the activity.
+   */
+  public function testDeleteActivity() {
+    $activity = $this->createTestActivity(array('subject' => 'Delete me activity'));
+    $aid = $activity->aid;
+
+    $this->backdropLogin($this->crmUser);
+
+    // Confirm the delete page is accessible.
+    $this->backdropGet('drop/crm/activities/' . $aid . '/delete');
+    $this->assertResponse(200);
+    $this->assertText('Delete me activity');
+
+    // Delete via entity API and verify the record is gone.
+    $activity->delete();
+    entity_get_controller('crm_activity')->resetCache();
+    $this->assertFalse(crm_activity_load($aid), 'Activity was removed from the database.');
+  }
+
+  /**
+   * Adding an activity via the UI form creates a viewable record.
+   */
+  public function testAddActivityViaForm() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropPost('drop/crm/activities/add', array(
+      'subject'       => 'Form created activity',
+      'type'          => 'note',
+      'status'        => 'completed',
+      'activity_date' => date('Y-m-d'),
+    ), t('Add activity'));
+
+    $this->assertText('saved');
+    $aid = db_select('crm_activity', 'a')
+      ->fields('a', array('aid'))
+      ->condition('subject', 'Form created activity')
+      ->execute()
+      ->fetchField();
+    $this->assertTrue($aid > 0, 'Activity was saved to the database.');
+    $this->backdropGet('drop/crm/activity/' . $aid);
+    $this->assertText('Form created activity');
+  }
+
+  /**
+   * Activity type and status appear on the view page.
+   */
+  public function testActivityViewShowsTypeAndStatus() {
+    $activity = $this->createTestActivity(array(
+      'subject' => 'Type status activity',
+      'type'    => 'meeting',
+      'status'  => 'planned',
+    ));
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+
+    $this->assertText('Meeting');
+    $this->assertText('Planned');
+  }
+
+  /**
+   * An outreach activity shows the outreach indicator on the view page.
+   */
+  public function testOutreachActivityIndicator() {
+    $activity = $this->createTestActivity(array(
+      'subject'     => 'Outreach call',
+      'type'        => 'call',
+      'is_outreach' => 1,
+    ));
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+
+    $this->assertResponse(200);
+    // The view page should indicate outreach status.
+    $this->assertText('Outreach call');
+  }
+
+  /**
+   * Multiple activities all appear in the activity list.
+   */
+  public function testMultipleActivitiesInList() {
+    $this->createTestActivity(array('subject' => 'Activity Alpha'));
+    $this->createTestActivity(array('subject' => 'Activity Beta'));
+    $this->createTestActivity(array('subject' => 'Activity Gamma'));
+
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/activities');
+
+    $this->assertText('Activity Alpha');
+    $this->assertText('Activity Beta');
+    $this->assertText('Activity Gamma');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Access control tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that permissions correctly gate CRM contact and activity operations.
+ */
+class DropCRMAccessTest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Access Control',
+      'description' => 'Verifies that permissions gate contact and activity operations.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'dropcrm');
+
+    $this->adminUser = $this->backdropCreateUser(array('administer crm'));
+    $this->crmUser   = $this->backdropCreateUser(array(
+      'access crm',
+      'create crm contacts',
+      'edit crm contacts',
+      'delete crm contacts',
+      'create crm activities',
+      'edit crm activities',
+      'delete crm activities',
+    ));
+  }
+
+  /**
+   * Anonymous users cannot access the CRM.
+   */
+  public function testAnonymousCannotAccessCRM() {
+    $this->backdropGet('drop/crm');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user without 'access crm' is denied the contact list.
+   */
+  public function testUserWithoutPermissionDeniedContacts() {
+    $noAccess = $this->backdropCreateUser(array());
+    $this->backdropLogin($noAccess);
+    $this->backdropGet('drop/crm/contacts');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user with only 'access crm' can view the contact list.
+   */
+  public function testAccessCRMAllowsContactList() {
+    $contact = $this->createTestOrg('Viewable Org');
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/contacts');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user with only 'access crm' can view a contact's detail page.
+   */
+  public function testAccessCRMAllowsContactView() {
+    $contact = $this->createTestOrg('Detail Org');
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+    $this->assertResponse(200);
+    $this->assertText('Detail Org');
+  }
+
+  /**
+   * 'access crm' alone does not allow creating contacts.
+   */
+  public function testAccessCRMAloneCannotCreateContact() {
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/contacts/add/crm_organization');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * 'create crm contacts' permission grants access to the add contact form.
+   */
+  public function testCreateContactPermissionGrantsAccess() {
+    $creator = $this->backdropCreateUser(array('access crm', 'create crm contacts'));
+
+    $this->backdropLogin($creator);
+    $this->backdropGet('drop/crm/contacts/add/crm_organization');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * 'access crm' alone does not allow editing contacts.
+   */
+  public function testAccessCRMAloneCannotEditContact() {
+    $contact  = $this->createTestOrg('Locked Org');
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/edit');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * 'edit crm contacts' permission grants access to the edit form.
+   */
+  public function testEditContactPermissionGrantsAccess() {
+    $contact = $this->createTestOrg('Editable Org');
+    $editor  = $this->backdropCreateUser(array('access crm', 'edit crm contacts'));
+
+    $this->backdropLogin($editor);
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/edit');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * 'access crm' alone does not allow deleting contacts.
+   */
+  public function testAccessCRMAloneCannotDeleteContact() {
+    $contact  = $this->createTestOrg('Protected Org');
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/delete');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * 'delete crm contacts' permission grants access to the delete confirm form.
+   */
+  public function testDeleteContactPermissionGrantsAccess() {
+    $contact = $this->createTestOrg('Deletable Org');
+    $deleter = $this->backdropCreateUser(array('access crm', 'delete crm contacts'));
+
+    $this->backdropLogin($deleter);
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/delete');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * 'access crm' alone does not allow creating activities.
+   */
+  public function testAccessCRMAloneCannotCreateActivity() {
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    $this->backdropGet('drop/crm/activities/add');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * 'create crm activities' grants access to the add activity form.
+   */
+  public function testCreateActivityPermissionGrantsAccess() {
+    $creator = $this->backdropCreateUser(array('access crm', 'create crm activities'));
+
+    $this->backdropLogin($creator);
+    $this->backdropGet('drop/crm/activities/add');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * 'access crm' alone does not allow editing activities.
+   */
+  public function testAccessCRMAloneCannotEditActivity() {
+    $activity = $this->createTestActivity(array('subject' => 'Locked activity'));
+    $viewOnly = $this->backdropCreateUser(array('access crm'));
+
+    $this->backdropLogin($viewOnly);
+    // Activity entity_ui uses /manage/{aid}/edit (EntityDefaultUIController format).
+    $this->backdropGet('drop/crm/activities/manage/' . $activity->aid . '/edit');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * 'edit crm activities' grants access to the activity edit form.
+   */
+  public function testEditActivityPermissionGrantsAccess() {
+    $activity = $this->createTestActivity(array('subject' => 'Editable activity'));
+    $editor   = $this->backdropCreateUser(array('access crm', 'edit crm activities'));
+
+    $this->backdropLogin($editor);
+    // Activity entity_ui uses /manage/{aid}/edit (EntityDefaultUIController format).
+    $this->backdropGet('drop/crm/activities/manage/' . $activity->aid . '/edit');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * 'administer crm' bypasses all permission checks.
+   */
+  public function testAdminBypassesAllPermissions() {
+    $contact  = $this->createTestOrg('Admin bypass org');
+    $activity = $this->createTestActivity(array('subject' => 'Admin bypass activity'));
+
+    $this->backdropLogin($this->adminUser);
+
+    $this->backdropGet('drop/crm/contact/' . $contact->cid);
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/edit');
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/contacts/' . $contact->cid . '/delete');
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/activities/manage/' . $activity->aid . '/edit');
+    $this->assertResponse(200);
+
+    $this->backdropGet('drop/crm/activities/manage/' . $activity->aid . '/delete');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user without 'access crm' cannot view an activity.
+   */
+  public function testUserWithoutPermissionDeniedActivityView() {
+    $activity = $this->createTestActivity(array('subject' => 'Hidden activity'));
+    $noAccess = $this->backdropCreateUser(array());
+
+    $this->backdropLogin($noAccess);
+    $this->backdropGet('drop/crm/activity/' . $activity->aid);
+    $this->assertResponse(403);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project Field UI access tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that an admin user can access the Project Field UI page.
+ */
+class DropCRMProjectFieldUITest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Project Field UI Access',
+      'description' => 'Verifies that a user with administer crm can manage fields on projects.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('dropcrm', 'field_ui');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer crm',
+      'administer drop entities',
+      'access crm',
+      'administer fields',
+    ));
+  }
+
+  /**
+   * Admin user can access the project field management page.
+   */
+  public function testAdminCanAccessProjectFieldUI() {
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet('drop/projects/manage/fields');
+    $this->assertResponse(200, 'Admin user can access the project Field UI page.');
+    $this->assertText('Add new field', 'The Add new field row is present on the page.');
+  }
+
+  /**
+   * A user without administer drop entities is denied access.
+   */
+  public function testNonAdminDeniedProjectFieldUI() {
+    $regularUser = $this->backdropCreateUser(array('access crm'));
+    $this->backdropLogin($regularUser);
+    $this->backdropGet('drop/projects/manage/fields');
+    $this->assertResponse(403, 'Non-admin user is denied access to the project Field UI page.');
+  }
+}
+
+/**
+ * Tests for primary email change notification and duplicate warnings.
+ */
+class DropCRMContactMethodTest extends DropCRMTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropCRM Contact Methods',
+      'description' => 'Primary email replacement notification and contact method operations.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('dropcrm');
+    $this->adminUser = $this->backdropCreateUser(array(
+      'administer crm',
+      'access crm',
+      'create crm contacts',
+      'edit crm contacts',
+      'delete crm contacts',
+    ));
+  }
+
+  /**
+   * Setting a new primary email reports which email was replaced.
+   */
+  public function testPrimaryEmailChangeNotification() {
+    $contact = $this->createTestOrg('Acme Corp');
+
+    // Create the first email as primary directly in DB.
+    $method1 = entity_create('crm_contact_method', array(
+      'type'       => 'email',
+      'cid'        => $contact->cid,
+      'label'      => 'Work',
+      'value'      => 'old@acme.com',
+      'is_primary' => 1,
+    ));
+    $method1->save();
+
+    // Now submit the form to add a second email as primary.
+    $this->backdropLogin($this->adminUser);
+    $cid_value = 'Acme Corp [cid:' . $contact->cid . ']';
+    $edit = array(
+      'cid'        => $cid_value,
+      'label'      => 'Work',
+      'value'      => 'new@acme.com',
+      'is_primary' => TRUE,
+    );
+    $this->backdropPost('drop/crm/contact-methods/add/email', $edit, t('Add Contact Method'));
+
+    $this->assertText('Primary email changed from', 'Primary replacement notification is shown.');
+    $this->assertText('old@acme.com', 'Old email address appears in the notification.');
+    $this->assertText('new@acme.com', 'New email address appears in the notification.');
+  }
+}

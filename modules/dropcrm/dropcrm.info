@@ -1,0 +1,11 @@
+name = DropCRM
+description = A lightweight, flexible CRM for Backdrop CMS. Tracks contacts, activities, and contact methods with full Views integration.
+type = module
+backdrop = 1.x
+version = 1.x-1.0-dev
+
+dependencies[] = drop_suite
+dependencies[] = entity_plus
+dependencies[] = entity_ui
+dependencies[] = entityreference
+package = Drop Suite

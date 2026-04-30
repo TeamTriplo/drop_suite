@@ -1,0 +1,27 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall for Drop Dashboard.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Migrates the old 'access dropbridge' permission to 'access drop_dashboard'
+ * for any role that already had it, so existing users keep dashboard access
+ * after the refactor.
+ */
+function drop_dashboard_install() {
+  $roles = user_roles();
+  foreach (array_keys($roles) as $role_name) {
+    $role_perms = user_role_permissions(array($role_name));
+    if (!empty($role_perms[$role_name]['access dropbridge'])) {
+      user_role_grant_permissions($role_name, array('access drop_dashboard'));
+    }
+  }
+
+  // Grant admin permission to the standard admin role.
+  if (function_exists('drop_suite_grant_admin_permissions')) {
+    drop_suite_grant_admin_permissions('drop_dashboard');
+  }
+}

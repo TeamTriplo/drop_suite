@@ -1,0 +1,249 @@
+<?php
+/**
+ * @file
+ * Tests for the Drop Suite module.
+ */
+
+/**
+ * Tests that Drop Suite install correctly sets up the default layout.
+ *
+ * Verifies that essential blocks (messages, tabs, action links, nav, title)
+ * are placed in the layout after drop_suite is enabled.
+ */
+class DropBaseLayoutSetupTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop Suite Layout Setup',
+      'description' => 'Verifies that enabling Drop Suite places all essential blocks in the default layout.',
+      'group'       => 'Drop Suite',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite');
+  }
+
+  /**
+   * The default layout uses the drop_suite template after install.
+   */
+  public function testLayoutUsesDropSuiteTemplate() {
+    $layout = layout_load('default');
+    $this->assertEqual('drop_suite', $layout->layout_template, 'Default layout uses the drop_suite template.');
+  }
+
+  /**
+   * A messages block is present in the layout.
+   */
+  public function testMessagesBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:messages');
+    $this->assertTrue($found, 'Messages block is placed in the layout.');
+  }
+
+  /**
+   * A page title block is present in the layout.
+   */
+  public function testTitleBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:title');
+    $this->assertTrue($found, 'Page title block is placed in the layout.');
+  }
+
+  /**
+   * A tabs block is present in the layout.
+   */
+  public function testTabsBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:tabs');
+    $this->assertTrue($found, 'Tabs block is placed in the layout.');
+  }
+
+  /**
+   * An action links block is present in the layout.
+   */
+  public function testActionLinksBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'system:page_components:action_links');
+    $this->assertTrue($found, 'Action links block is placed in the layout.');
+  }
+
+  /**
+   * The Drop Nav block is present in the layout.
+   */
+  public function testDropNavBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'drop_suite:drop_nav');
+    $this->assertTrue($found, 'Drop Nav block is placed in the layout.');
+  }
+
+  /**
+   * The Drop Section Nav block is present in the layout.
+   */
+  public function testDropSectionNavBlockPlaced() {
+    $layout = layout_load('default');
+    $found = $this->layoutHasPlugin($layout, 'drop_suite:drop_section_nav');
+    $this->assertTrue($found, 'Drop Section Nav block is placed in the layout.');
+  }
+
+  /**
+   * Status messages render on the page after a form submission.
+   */
+  public function testStatusMessagesRender() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+
+    // Save the site name form to trigger a status message.
+    $this->backdropPost('admin/config/system/site-information', array(
+      'site_name' => 'Test Site',
+    ), t('Save configuration'));
+
+    $this->assertText('saved', 'Status message is visible after form submission.');
+  }
+
+  /**
+   * Helper: checks whether a layout has a block with a given plugin name.
+   *
+   * @param Layout $layout
+   * @param string $plugin
+   *
+   * @return bool
+   */
+  protected function layoutHasPlugin($layout, $plugin) {
+    foreach ($layout->content as $block) {
+      if (isset($block->plugin) && $block->plugin === $plugin) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+}
+
+/**
+ * Tests the settings dashboard at drop/settings.
+ *
+ * Verifies that enabled modules with hook_drop_settings_info() show cards,
+ * and that the dashboard is access-controlled.
+ */
+class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Settings Dashboard',
+      'description' => 'Verifies settings cards appear for enabled modules and access is restricted.',
+      'group'       => 'Drop Suite',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite');
+  }
+
+  /**
+   * Admin sees the Drop Suite settings card on the dashboard.
+   */
+  public function testAdminSeesDropBaseCard() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+    $this->backdropGet('drop/settings');
+    $this->assertResponse(200, 'Admin can access the settings dashboard.');
+    $this->assertText('Drop Suite', 'Drop Suite settings card is displayed.');
+    $this->assertText('Page width and other base settings.', 'Drop Suite description is shown.');
+  }
+
+  /**
+   * Anonymous users cannot access the settings dashboard.
+   */
+  public function testAnonymousCannotAccessSettings() {
+    $this->backdropGet('drop/settings');
+    $this->assertResponse(403, 'Anonymous users cannot access settings dashboard.');
+  }
+
+  /**
+   * A module that is not enabled does not show a settings card.
+   *
+   * DropTickets is not enabled in this test, so its card should not appear.
+   */
+  public function testDisabledModuleHasNoCard() {
+    $admin = $this->backdropCreateUser(array('administer site configuration'));
+    $this->backdropLogin($admin);
+    $this->backdropGet('drop/settings');
+    $this->assertNoText('DropTickets', 'Disabled module does not show a settings card.');
+  }
+}
+
+/**
+ * Tests that Drop module hook_install() grants every declared permission to
+ * the configured administrator role via drop_suite_grant_admin_permissions().
+ *
+ * Enables drop_suite plus one additional Drop module (dropbridge) so that both
+ * drop_suite's own install path and a second module's install path are covered
+ * in a single test site without loading the full Drop Suite.
+ */
+class DropBaseAdminPermissionsTest extends BackdropWebTestCase {
+
+  protected $profile = 'standard';
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Admin permissions granted on install',
+      'description' => 'Verifies Drop modules grant all declared permissions to the admin role on fresh install.',
+      'group'       => 'Drop Suite',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'dropbridge');
+  }
+
+  /**
+   * drop_suite_install() grants every drop_suite permission to the admin role.
+   */
+  public function testDropBasePermissionsGrantedToAdminRole() {
+    $this->assertAllModulePermissionsGranted('drop_suite');
+  }
+
+  /**
+   * dropbridge_install() grants every dropbridge permission to the admin role.
+   */
+  public function testDropBridgePermissionsGrantedToAdminRole() {
+    $this->assertAllModulePermissionsGranted('dropbridge');
+  }
+
+  /**
+   * The helper silently no-ops for a module with no declared permissions.
+   *
+   * Covers modules like drop_start whose hook_permission() returns an empty
+   * array — the helper must not warn or error in that case.
+   */
+  public function testHelperNoOpForModuleWithoutPermissions() {
+    // Pass a module name whose permission hook returns nothing. The helper
+    // should return cleanly without granting anything or triggering errors.
+    drop_suite_grant_admin_permissions('nonexistent_module_xyz');
+    $this->pass('drop_suite_grant_admin_permissions() handled a module with no permissions without error.');
+  }
+
+  /**
+   * Asserts that every permission declared by a module has been granted to
+   * the configured administrator role.
+   *
+   * @param string $module
+   *   Machine name of the module whose permissions should have been granted.
+   */
+  protected function assertAllModulePermissionsGranted($module) {
+    $admin_role = config_get('system.core', 'user_admin_role');
+    $this->assertTrue(!empty($admin_role) && $admin_role !== 'anonymous', 'Admin role is configured: ' . $admin_role);
+
+    $declared = module_invoke($module, 'permission');
+    $this->assertTrue(!empty($declared), "$module declares at least one permission.");
+
+    $granted = user_role_permissions(array($admin_role));
+
+    foreach (array_keys($declared) as $perm) {
+      $this->assertTrue(
+        in_array($perm, $granted),
+        format_string("Admin role has @module permission: @perm", array('@module' => $module, '@perm' => $perm))
+      );
+    }
+  }
+}

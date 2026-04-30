@@ -1,0 +1,209 @@
+<?php
+/**
+ * @file
+ * Smoke test: discovers every drop/* page-display View, follows the action
+ * links rendered in each list's results table, and asserts each linked page
+ * loads without error.
+ *
+ * Catches anything that breaks an action link in a list — bad URL paths,
+ * id-formatting bugs (e.g. comma thousands-separator leaking into a URL
+ * token), permission regressions, broken page callbacks. Stays accurate
+ * automatically: any new View page added under drop_suites* / drop_suites_lab*
+ * is picked up next test run.
+ */
+
+/**
+ * Crawls list-page action links and verifies they load.
+ *
+ * Self-contained — does not depend on DropCRMTestBase, because SimpleTest
+ * autoloads each .test file independently and cross-file class references
+ * fail. To extend coverage to a new entity-backed list view, add a row
+ * factory call in seedFixtures().
+ */
+class DropCRMLinksSmokeTest extends BackdropWebTestCase {
+
+  /** @var object User with every permission declared by enabled modules. */
+  protected $adminUser;
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop list-page link smoke test',
+      'description' => 'Discovers every drop/* page-display View and verifies its result-row links load without error.',
+      'group'       => 'DropCRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'dropcrm', 'dropcrm_membership');
+
+    // Force entity ids to start at 1000 so a single seeded row exercises the
+    // numeric-formatting class of bug (e.g. comma thousands-separator leaking
+    // into URL tokens). Catches the bug without bulk-seeding 1000 rows.
+    $this->raiseAutoIncrement('crm_contact', 1000);
+    $this->raiseAutoIncrement('crm_membership', 1000);
+
+    $this->seedFixtures();
+
+    $this->adminUser = $this->backdropCreateUser($this->allPermissions());
+    $this->backdropLogin($this->adminUser);
+  }
+
+  /**
+   * Seed at least one row per entity type that has a list view in drop/*.
+   * Add a factory call here when introducing a new entity-backed list page.
+   */
+  protected function seedFixtures() {
+    // Person — populates drop/crm/people.
+    $person = entity_create('crm_contact', array(
+      'type'   => 'crm_person',
+      'status' => 1,
+    ));
+    $person->field_crm_first_name[LANGUAGE_NONE][0]['value'] = 'Smoke';
+    $person->field_crm_last_name[LANGUAGE_NONE][0]['value']  = 'Test';
+    $person->save();
+
+    // Organization — populates drop/crm/organizations.
+    $org = entity_create('crm_contact', array(
+      'type'   => 'crm_organization',
+      'name'   => 'Smoke Test Org',
+      'status' => 1,
+    ));
+    $org->save();
+
+    // Activity — populates drop/crm/activities.
+    if (db_table_exists('crm_activity')) {
+      $activity = entity_create('crm_activity', array(
+        'subject'       => 'Smoke test activity',
+        'type'          => 'note',
+        'status'        => 'completed',
+        'activity_date' => REQUEST_TIME,
+      ));
+      $activity->save();
+    }
+  }
+
+  /**
+   * Visit every drop/* list page, follow each action link rendered in its
+   * results table, assert the linked page loads. Reports each broken link
+   * with a "list X / link Y → HTTP Z" failure message so regressions are
+   * pinpointable.
+   */
+  public function testEveryListLinkLoads() {
+    $paths = $this->discoverDropListPaths();
+    $this->assertTrue(count($paths) > 0, 'Discovered at least one drop/* list path.');
+
+    $links_followed = 0;
+    foreach ($paths as $path) {
+      $this->backdropGet($path);
+      $this->assertResponse(200, "List page /$path loads.");
+
+      $hrefs = $this->scrapeListLinks();
+      foreach ($hrefs as $href) {
+        // Skip the list page itself (pagers, sort links).
+        if ($href === $path) {
+          continue;
+        }
+        $this->backdropGet($href);
+        $this->assertResponse(200, "Link from /$path → /$href loads.");
+        $this->assertNoText('Page not found', "Link from /$path → /$href is not the 404 page.");
+        $this->assertNoText('Access denied', "Link from /$path → /$href is not the 403 page.");
+        $links_followed++;
+      }
+    }
+    $this->pass("Followed $links_followed action link(s) across " . count($paths) . ' list page(s).');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns drop/* page paths declared by Views configs in any drop_suites*
+   * module. Skips paths with wildcards (entity detail pages).
+   */
+  protected function discoverDropListPaths() {
+    $paths = array();
+    $roots = array(
+      BACKDROP_ROOT . '/modules/drop_suites',
+      BACKDROP_ROOT . '/modules/drop_suites_lab',
+    );
+    foreach ($roots as $root) {
+      if (!is_dir($root)) {
+        continue;
+      }
+      $files = file_scan_directory($root, '/^views\.view\..+\.json$/');
+      foreach ($files as $file) {
+        $json = @file_get_contents($file->uri);
+        $view = $json ? backdrop_json_decode($json) : NULL;
+        if (empty($view['display'])) {
+          continue;
+        }
+        foreach ($view['display'] as $disp) {
+          if (empty($disp['display_plugin']) || $disp['display_plugin'] !== 'page') {
+            continue;
+          }
+          $path = isset($disp['display_options']['path']) ? $disp['display_options']['path'] : '';
+          if (strpos($path, 'drop/') !== 0) {
+            continue;
+          }
+          // Wildcards (e.g. "drop/crm/contact/%") need a real arg — skip for
+          // this list-page smoke test.
+          if (strpos($path, '%') !== FALSE) {
+            continue;
+          }
+          $paths[$path] = $path;
+        }
+      }
+    }
+    ksort($paths);
+    return array_values($paths);
+  }
+
+  /**
+   * Returns drop/* hrefs found inside <table> elements on the current page.
+   * Strips host, query string, and fragment so we end up with bare paths.
+   */
+  protected function scrapeListLinks() {
+    $hrefs = array();
+    $attrs = $this->xpath('//table//a/@href');
+    if (!$attrs) {
+      return array();
+    }
+    foreach ($attrs as $attr) {
+      $h = (string) $attr;
+      $h = preg_replace('#^https?://[^/]+#', '', $h);
+      $h = preg_replace('/[?#].*$/', '', $h);
+      $h = ltrim($h, '/');
+      if (strpos($h, 'drop/') === 0) {
+        $hrefs[$h] = $h;
+      }
+    }
+    return array_values($hrefs);
+  }
+
+  /**
+   * Raises a table's AUTO_INCREMENT so the next insert lands at >= $start.
+   * Silently no-ops if the table doesn't exist (module not enabled).
+   */
+  protected function raiseAutoIncrement($table, $start) {
+    if (!db_table_exists($table)) {
+      return;
+    }
+    // ALTER TABLE doesn't accept placeholder-quoted values; cast to int and
+    // inline. $start is hard-coded by callers so injection isn't a concern.
+    $start = (int) $start;
+    db_query('ALTER TABLE {' . $table . "} AUTO_INCREMENT = $start");
+  }
+
+  /**
+   * Returns every permission declared by every enabled module — a single
+   * test user who can reach any list page without permission noise.
+   */
+  protected function allPermissions() {
+    $perms = array();
+    foreach (module_invoke_all('permission') as $name => $info) {
+      $perms[] = $name;
+    }
+    return $perms;
+  }
+}
