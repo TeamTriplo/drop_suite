@@ -1,0 +1,2467 @@
+<?php
+/**
+ * @file
+ * Drop Suite — shared utilities for DropCRM and DropTasks.
+ *
+ * Provides shared CSS variables and utility classes used across the Drop
+ * module family. Neither DropCRM nor DropTasks should duplicate these values —
+ * update here and both modules stay in sync.
+ */
+
+/**
+ * @defgroup drop_nav Drop navigation bar
+ *
+ * Provides a shared top navigation bar across all Drop admin pages.
+ *
+ * Any module can register itself by implementing hook_drop_nav_links(),
+ * returning an array of link definition arrays with keys:
+ *   - title: (string) Human-readable label.
+ *   - path: (string) Backdrop path for the link.
+ *   - permission: (string) Permission required to see the link.
+ *   - weight: (int) Sort order.
+ */
+
+/**
+ * Implements hook_preprocess_layout().
+ *
+ * On most Drop admin pages: suppresses Backdrop's hardcoded $action_links
+ * because modules render their own inline action bars. On report sub-tab
+ * pages: replaces action_links with a pin/unpin button.
+ */
+function drop_suite_preprocess_layout(&$variables) {
+  $path = current_path();
+
+  // Expose the configured narrow-page width as a CSS variable on every page
+  // so static CSS can cap the Section Nav and Page Tabs blocks to the same
+  // width on wide pages (keeps header elements in a stable position).
+  $narrow_width = (int) config_get('drop_suite.settings', 'narrow_page_width');
+  if ($narrow_width) {
+    backdrop_add_css(':root { --drop-narrow-page-width: ' . $narrow_width . 'px; }', 'inline');
+  }
+
+  // Narrow-page detection runs for ALL paths, since a few matched routes
+  // live outside drop/* (e.g. node/add/doc).
+  if (_drop_suite_is_narrow_page($path)) {
+    $variables['classes'][] = 'drop-narrow-page';
+    if ($narrow_width) {
+      backdrop_add_css('.drop-narrow-page .l-wrapper { max-width: ' . $narrow_width . 'px; margin: 0 auto; }', 'inline');
+    }
+  }
+
+  if ($path !== 'drop' && strpos($path, 'drop/') !== 0) {
+    return;
+  }
+
+  // If no sidebar regions have content, add a class so CSS can expand the
+  // main content column to full width.
+  $has_sidebar = FALSE;
+  foreach ($variables['content'] as $region_name => $region_content) {
+    if (strpos($region_name, 'sidebar') !== FALSE && !empty($region_content)) {
+      $has_sidebar = TRUE;
+      break;
+    }
+  }
+  if (!$has_sidebar) {
+    $variables['classes'][] = 'layout--no-sidebar';
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ *
+ * Ensures drop_suite_preprocess_page_components() runs *after*
+ * system_preprocess_page_components(), which sets $variables['messages']
+ * via theme('status_messages'). Without this re-ordering our preprocess
+ * would run first and then get overwritten.
+ */
+function drop_suite_theme_registry_alter(&$registry) {
+  if (!isset($registry['page_components']['preprocess functions'])) {
+    return;
+  }
+  $funcs = &$registry['page_components']['preprocess functions'];
+  $ours  = 'drop_suite_preprocess_page_components';
+  $funcs = array_values(array_diff($funcs, array($ours)));
+  $funcs[] = $ours;
+}
+
+/**
+ * Implements hook_preprocess_page_components().
+ *
+ * Prepends the dismissible site announcement banner to the messages
+ * page-components block. The banner text comes from
+ * dropbridge.settings:announcement_text (config kept in dropbridge for
+ * backwards compatibility — the admin form still lives there). Each message
+ * is hashed; dismissing sets a per-user state flag so the banner stays gone
+ * until the admin changes the text.
+ */
+function drop_suite_preprocess_page_components(&$variables) {
+  global $user;
+
+  if ($variables['child_delta'] !== 'messages') {
+    return;
+  }
+  if (!backdrop_is_html() || !$user->uid) {
+    return;
+  }
+
+  $text = (string) config_get('dropbridge.settings', 'announcement_text');
+  if (empty(trim($text))) {
+    return;
+  }
+
+  $hash = substr(md5($text), 0, 8);
+  $dismissed = state_get('drop_suite.announcement_dismissed_' . $user->uid, '');
+  if ($dismissed === $hash) {
+    return;
+  }
+
+  $dismiss_url = url('drop/announcement/dismiss', array(
+    'query' => array('h' => $hash, 'destination' => current_path()),
+  ));
+
+  $banner  = '<div class="drop-announcement" id="drop-announcement">';
+  $banner .= '<span class="drop-announcement-text">' . check_plain($text) . '</span>';
+  $banner .= '<a class="drop-announcement-dismiss" href="' . $dismiss_url . '" title="' . t('Dismiss') . '">&#x2715;</a>';
+  $banner .= '</div>';
+
+  backdrop_add_css(backdrop_get_path('module', 'drop_suite') . '/drop_suite.css');
+
+  $existing = isset($variables['messages']) ? $variables['messages'] : '';
+  $variables['messages'] = $banner . $existing;
+}
+
+/**
+ * Page callback: dismiss the current site announcement for the current user.
+ */
+function drop_suite_announcement_dismiss() {
+  global $user;
+
+  $hash = isset($_GET['h']) ? preg_replace('/[^a-f0-9]/', '', $_GET['h']) : '';
+  if ($hash && $user->uid) {
+    state_set('drop_suite.announcement_dismissed_' . $user->uid, $hash);
+  }
+
+  backdrop_goto(isset($_GET['destination']) ? $_GET['destination'] : 'drop');
+}
+
+/**
+ * Checks whether the current path should use the narrow page layout.
+ *
+ * Narrow pages are individual entity views — not lists or kanban boards.
+ *
+ * @param string $path
+ *   The current Backdrop path.
+ *
+ * @return bool
+ */
+function _drop_suite_is_narrow_page($path) {
+  $patterns = array(
+    // Individual ticket view and forms: drop/tickets/{tid}, add, edit.
+    '#^drop/tickets/\d+$#',
+    '#^drop/tickets/add$#',
+    '#^drop/tickets/\d+/edit$#',
+    // Comment edit form on a ticket: drop/tickets/{tid}/comment/{tcid}/edit.
+    '#^drop/tickets/\d+/comment/\d+/edit$#',
+    // CRM contact view: drop/crm/contact/{cid}
+    '#^drop/crm/contact/\d+$#',
+    // CRM activity view: drop/crm/activity/{aid}
+    '#^drop/crm/activity/\d+$#',
+    // CRM contact method view: drop/crm/contact-method/{cmid} (entity_ui path)
+    '#^drop/crm/contact-methods/\d+$#',
+    // Individual task view and forms: drop/tasks/{tid}, add, edit.
+    '#^drop/tasks/\d+$#',
+    '#^drop/tasks/add$#',
+    '#^drop/tasks/\d+/edit$#',
+    // Goals list, individual goal view, and forms.
+    '#^drop/goals$#',
+    '#^drop/goals/manage/\d+$#',
+    '#^drop/goals/manage/add$#',
+    '#^drop/goals/manage/\d+/edit$#',
+    // Time entry edit.
+    '#^drop/time/entry/\d+/edit$#',
+    // Docs list and add form. The canonical doc view path is node/{nid},
+    // which is handled by the dropdocs sidebar layout (not narrow).
+    '#^drop/docs$#',
+    '#^node/add/doc$#',
+    // Project view and forms: drop/projects/{pid}, add, edit.
+    '#^drop/projects/\d+$#',
+    '#^drop/projects/add$#',
+    '#^drop/projects/\d+/edit$#',
+    // CRM contact add/edit (entity_ui paths + alias path).
+    '#^drop/crm/contacts/manage/crm_\w+/add$#',
+    '#^drop/crm/contacts/manage/\d+/edit$#',
+    '#^drop/crm/contacts/\d+/edit$#',
+    // CRM activity add/edit (entity_ui paths).
+    '#^drop/crm/activities/manage/add$#',
+    '#^drop/crm/activities/manage/\d+/edit$#',
+    // Membership add/edit/renew/cancel and payment + term CRUD forms.
+    '#^drop/crm/memberships/add$#',
+    '#^drop/crm/memberships/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/renew$#',
+    '#^drop/crm/memberships/\d+/cancel$#',
+    '#^drop/crm/memberships/\d+/payment/add$#',
+    '#^drop/crm/memberships/\d+/payment/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/payment/\d+/delete$#',
+    '#^drop/crm/memberships/\d+/term/\d+/edit$#',
+    '#^drop/crm/memberships/\d+/term/\d+/delete$#',
+    // DropEvents: location view + forms, ticket type forms, registration form.
+    // Admin routes sit under drop/crm/* since Events is a CRM sub-section.
+    '#^drop/crm/locations/\d+$#',
+    '#^drop/crm/locations/add$#',
+    '#^drop/crm/locations/\d+/edit$#',
+    '#^drop/crm/locations/\d+/delete$#',
+    '#^drop/crm/events/node/\d+/ticket-types/add$#',
+    '#^drop/crm/events/ticket-types/\d+/edit$#',
+    '#^drop/crm/events/ticket-types/\d+/delete$#',
+    '#^events/register/\d+$#',
+    // File library: list, upload, view, replace.
+    '#^drop/files$#',
+    '#^drop/files/upload$#',
+    '#^drop/files/\d+/view$#',
+    '#^drop/files/\d+/edit$#',
+    '#^drop/files/\d+/replace$#',
+    '#^drop/files/\d+/delete$#',
+    // Team updates feed and forms.
+    '#^drop/updates$#',
+    '#^drop/updates/add$#',
+    '#^drop/updates/\d+/edit$#',
+    '#^drop/updates/\d+/delete$#',
+    // Meeting agenda.
+    '#^drop/meeting$#',
+    // Settings pages (main dashboard and per-module).
+    '#^drop/settings#',
+    '#^drop/tickets/settings#',
+    '#^drop/crm/settings#',
+    '#^drop/monitor/settings#',
+    '#^drop/docs/settings#',
+    '#^drop/time/settings#',
+    '#^drop/files/settings#',
+    // Drop Start setup wizard (overview + per-step pages).
+    '#^drop/start#',
+  );
+
+  foreach ($patterns as $pattern) {
+    if (preg_match($pattern, $path)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Page callback: 301 redirect from /drop/settings/home-nav to the wizard step.
+ *
+ * The home-page-navigation tool moved into the Drop Start wizard. Any
+ * bookmarks to the old path land here and get forwarded to the new home.
+ */
+function _drop_suite_home_nav_redirect() {
+  backdrop_goto('drop/start/step/home_page', array(), 301);
+}
+
+/**
+ * Implements hook_layout_load_by_router_item_alter().
+ *
+ * Injects the drop_pages layout for any non-admin router path under /drop,
+ * so Drop Suite pages use the drop_suite template while the rest of the
+ * site falls through to the regular default layout. Enumerating 300+
+ * concrete router paths in a layout's additional_paths is impractical;
+ * this hook is the cleaner alternative.
+ */
+function drop_suite_layout_load_by_router_item_alter(&$layouts, $router_item) {
+  $path = isset($router_item['path']) ? $router_item['path'] : '';
+  if ($path !== 'drop' && strpos($path, 'drop/') !== 0) {
+    return;
+  }
+  // /admin/* paths use admin_default; leave them alone.
+  if (path_is_admin($path)) {
+    return;
+  }
+  $drop_pages = layout_load('drop_pages');
+  if (!$drop_pages || !empty($drop_pages->disabled)) {
+    return;
+  }
+  // Prepend so drop_pages wins over the default layout.
+  $layouts = array('drop_pages' => $drop_pages) + $layouts;
+}
+
+/**
+ * Returns a renderable local-action entry for the pin/unpin button, or NULL.
+ *
+ * Used by hook_menu_local_tasks_alter() to inject the pin action into the
+ * Page Local Actions block on report pages. Returns NULL if the current path
+ * is not a known report, or the viewer lacks access.
+ *
+ * The render structure matches Backdrop's local-action conventions: a
+ * '#theme' => 'menu_local_action' wrapper with a '#link' array. When the
+ * user is at the pin limit, a non-link <li> is returned via '#markup'
+ * because there is no action to perform.
+ *
+ * @param string $path
+ *   The current page path.
+ *
+ * @return array|null
+ *   Render array suitable for $data['actions']['output'][], or NULL.
+ */
+function _drop_suite_report_pin_action_item($path) {
+  global $user;
+
+  // Pin Report is hidden until we have a coherent place to surface pinned
+  // reports. Helpers, state, and menu callback remain so existing pin data
+  // survives a future re-enable. See ticket linked in commit message.
+  if (!drop_suite_pin_reports_enabled()) {
+    return NULL;
+  }
+
+  $all_reports = drop_suite_get_all_reports();
+  if (empty($all_reports)) {
+    return NULL;
+  }
+
+  // Build a path → report_id lookup.
+  // For reports marked as the default sub-task, also map their parent path
+  // (e.g. drop/tickets/reports → droptickets_stale), since Backdrop
+  // renders the default sub-task at the parent URL without redirecting.
+  $report_by_path = array();
+  foreach ($all_reports as $id => $report) {
+    $report_by_path[$report['path']] = $id;
+    if (!empty($report['is_default_subtask'])) {
+      $parts  = explode('/', $report['path']);
+      $parent = implode('/', array_slice($parts, 0, count($parts) - 1));
+      if ($parent && !isset($report_by_path[$parent])) {
+        $report_by_path[$parent] = $id;
+      }
+    }
+  }
+  if (!isset($report_by_path[$path])) {
+    return NULL;
+  }
+
+  $report_id = $report_by_path[$path];
+  $report    = $all_reports[$report_id];
+
+  // Access check.
+  if (!empty($report['access callback'])) {
+    $args = !empty($report['access arguments']) ? $report['access arguments'] : array();
+    if (!call_user_func_array($report['access callback'], $args)) {
+      return NULL;
+    }
+  }
+
+  $pins      = drop_suite_get_pinned_reports($user->uid);
+  $is_pinned = in_array($report_id, $pins);
+  $at_limit  = (count($pins) >= 8);
+
+  // At-limit state has no action — render as a plain non-link <li>.
+  if (!$is_pinned && $at_limit) {
+    $icon = icon('push-pin', array('attributes' => array('width' => 14, 'height' => 14)));
+    return array(
+      '#markup' => '<li><span class="drop-pin-link drop-pin-disabled">' . $icon . t('Pin limit reached (8)') . '</span></li>',
+    );
+  }
+
+  if ($is_pinned) {
+    $icon  = icon('push-pin-slash', array('attributes' => array('width' => 14, 'height' => 14)));
+    $label = t('Unpin report');
+    $class = 'drop-pin-link drop-pin-active';
+  }
+  else {
+    $icon  = icon('push-pin', array('attributes' => array('width' => 14, 'height' => 14)));
+    $label = t('Pin report');
+    $class = 'drop-pin-link';
+  }
+
+  return array(
+    '#theme' => 'menu_local_action',
+    '#link' => array(
+      'title' => $icon . $label,
+      'href'  => 'drop-suite/pin-report/' . $report_id,
+      'localized_options' => array(
+        'html'       => TRUE,
+        'query'      => backdrop_get_destination(),
+        'attributes' => array('class' => array($class)),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ *
+ * Injects the report pin/unpin button into the Page Local Actions list on
+ * report pages. Replaces the deprecated drop_pin_action block — keeps the
+ * action co-located with other local actions like "+ New ticket" rather
+ * than occupying its own block slot in the layout.
+ */
+function drop_suite_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  $item = _drop_suite_report_pin_action_item(current_path());
+  if ($item) {
+    $data['actions']['output'][] = $item;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function drop_suite_theme() {
+  return array(
+    'drop_suite_navigation_form' => array(
+      'render element' => 'form',
+      'file' => 'drop_suite.nav_admin.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ *
+ * Exposes the Drop nav bar and section nav as placeable layout blocks.
+ */
+function drop_suite_block_info() {
+  $blocks['drop_nav'] = array(
+    'info'        => t('Drop Navigation'),
+    'description' => t('Primary navigation bar for the Drop module suite (CRM, Tasks, Tickets, Time, Goals).'),
+    'cache'       => BACKDROP_NO_CACHE,
+  );
+  $blocks['drop_section_nav'] = array(
+    'info'        => t('Drop Section Navigation'),
+    'description' => t('Secondary navigation bar for the current Drop Suite section (module-specific links). Replaces Backdrop tabs on Drop pages.'),
+    'cache'       => BACKDROP_NO_CACHE,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function drop_suite_block_view($delta = '') {
+  if ($delta === 'drop_nav') {
+    $nav_html = _drop_suite_render_nav();
+    if (!$nav_html) {
+      return array();
+    }
+    return array(
+      'subject' => NULL,
+      'content' => $nav_html,
+    );
+  }
+
+  if ($delta === 'drop_section_nav') {
+    $html = _drop_suite_section_nav_block();
+    if (!$html) {
+      return array();
+    }
+    return array(
+      'subject' => NULL,
+      'content' => $html,
+    );
+  }
+
+  return array();
+}
+
+/**
+ * Collects all hook_drop_nav_links() items, keyed by path.
+ *
+ * Results are raw (no permission filter, no overrides applied) so that the
+ * admin UI can show every module-declared item regardless of the viewing
+ * user's role, and so that the renderer has a stable list to reconcile
+ * against config overrides.
+ *
+ * The 'module' key is added so the admin UI can show which module each item
+ * came from.
+ *
+ * @return array
+ *   Associative array keyed by path; each value is the hook item plus a
+ *   'module' key.
+ */
+function _drop_suite_hook_nav_items() {
+  $items = &backdrop_static(__FUNCTION__);
+  if (isset($items)) {
+    return $items;
+  }
+  $items = array();
+  foreach (module_implements('drop_nav_links') as $module) {
+    $links = module_invoke($module, 'drop_nav_links');
+    if (!is_array($links)) {
+      continue;
+    }
+    foreach ($links as $link) {
+      if (empty($link['path'])) {
+        continue;
+      }
+      if (!isset($items[$link['path']])) {
+        $link['module'] = $module;
+        if (!isset($link['weight'])) {
+          $link['weight'] = 0;
+        }
+        $items[$link['path']] = $link;
+      }
+    }
+  }
+  return $items;
+}
+
+/**
+ * Builds and returns the Drop nav HTML, or FALSE if no links are available.
+ *
+ * Combines hook_drop_nav_links() results with the drop_suite.navigation config
+ * overrides and Site Architect shortcuts, then renders the bar.
+ *
+ * @return string|false
+ */
+function _drop_suite_render_nav() {
+  $path = current_path();
+
+  // Load hook items, overrides, and shortcuts.
+  $hook_items = _drop_suite_hook_nav_items();
+  $config = config('drop_suite.navigation');
+  $overrides = $config->get('overrides');
+  $shortcuts = $config->get('shortcuts');
+  $show_icons = $config->get('show_icons');
+  if ($show_icons === NULL) {
+    $show_icons = TRUE;
+  }
+  if (!is_array($overrides)) {
+    $overrides = array();
+  }
+  if (!is_array($shortcuts)) {
+    $shortcuts = array();
+  }
+
+  // Apply overrides to hook items. Runtime visibility flags from the hook
+  // still win (e.g. "Meeting" hidden when meeting_enabled is off).
+  $links = array();
+  foreach ($hook_items as $item_path => $link) {
+    if (isset($overrides[$item_path])) {
+      $override = $overrides[$item_path];
+      if (!empty($override['hidden'])) {
+        continue;
+      }
+      if (isset($override['title']) && $override['title'] !== '') {
+        $link['title'] = $override['title'];
+      }
+      if (isset($override['icon']) && $override['icon'] !== '') {
+        $link['icon'] = $override['icon'];
+      }
+      if (isset($override['weight'])) {
+        $link['weight'] = (int) $override['weight'];
+      }
+    }
+    $links[] = $link;
+  }
+
+  // Append shortcuts. Shortcuts are Site Architect-authored, so they have no
+  // module-declared permission — they're visible to everyone who can see the
+  // nav itself.
+  foreach ($shortcuts as $shortcut) {
+    if (!is_array($shortcut) || empty($shortcut['path'])) {
+      continue;
+    }
+    if (!empty($shortcut['hidden'])) {
+      continue;
+    }
+    $links[] = array(
+      'title'  => isset($shortcut['title']) && $shortcut['title'] !== '' ? $shortcut['title'] : $shortcut['path'],
+      'path'   => $shortcut['path'],
+      'icon'   => isset($shortcut['icon']) ? $shortcut['icon'] : NULL,
+      'weight' => isset($shortcut['weight']) ? (int) $shortcut['weight'] : 50,
+    );
+  }
+
+  // Filter by access + runtime visibility flags from the hook.
+  $links = array_filter($links, function($link) {
+    if (isset($link['visible']) && !$link['visible']) {
+      return FALSE;
+    }
+    if (!empty($link['hidden'])) {
+      return FALSE;
+    }
+    // Explicit permission declared by the hook entry.
+    if (!empty($link['permission']) && !user_access($link['permission'])) {
+      return FALSE;
+    }
+    // Auto-check via the menu router for paths Backdrop knows about — mirrors
+    // what _menu_link_translate() does for standard menu links. Custom shortcuts
+    // added via drop/settings/navigation never carry a permission, so without
+    // this check they'd show to everyone regardless of access to the target.
+    // External URLs and unknown paths fall through (router returns FALSE) and
+    // stay visible, matching the existing "no permission = show" default.
+    if (!empty($link['path'])) {
+      $router = menu_get_item($link['path']);
+      if (is_array($router) && isset($router['access']) && !$router['access']) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  });
+  if (empty($links)) {
+    return FALSE;
+  }
+  uasort($links, 'drupal_sort_weight');
+
+  // Render nav items, marking the active section.
+  $items_html = '';
+  foreach ($links as $link) {
+    if (!empty($link['separator'])) {
+      $items_html .= '<span class="drop-nav-separator"></span>';
+    }
+    $is_active = _drop_suite_nav_is_active($link['path'], $path);
+    $class = $is_active ? ' class="drop-nav-active"' : '';
+    $badge_html = '';
+    if (isset($link['badge']) && $link['badge'] !== '' && $link['badge'] !== 0) {
+      $badge_html = ' <span class="drop-nav-badge">' . check_plain((string) $link['badge']) . '</span>';
+    }
+    $icon_html = '';
+    if ($show_icons && !empty($link['icon']) && function_exists('icon')) {
+      $rendered = icon(strtolower($link['icon']), array(
+        'attributes' => array('width' => 16, 'height' => 16, 'class' => array('drop-nav-icon-svg')),
+      ));
+      if ($rendered) {
+        $icon_html = '<span class="drop-nav-icon">' . $rendered . '</span>';
+      }
+    }
+    $items_html .= '<a href="' . url($link['path']) . '"' . $class . '>' . $icon_html . check_plain($link['title']) . $badge_html . '</a>';
+  }
+
+  // Allow other modules to add content to the right side of the nav.
+  $extras = module_invoke_all('drop_nav_extras');
+  $extras_html = !empty($extras) ? '<span class="drop-nav-extras">' . implode('', $extras) . '</span>' : '';
+
+  return '<nav class="drop-nav">' . $items_html . $extras_html . '</nav>';
+}
+
+/**
+ * Determines whether a nav link's path matches the current page.
+ *
+ * @param string $link_path
+ * @param string $current_path
+ * @return bool
+ */
+function _drop_suite_nav_is_active($link_path, $current_path) {
+  // DropBridge dashboard lives at 'drop' exactly — don't treat it as a prefix match.
+  if ($link_path === 'drop') {
+    return $current_path === 'drop';
+  }
+  return $current_path === $link_path
+    || strpos($current_path, $link_path . '/') === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Section navigation (hook_drop_section_links)
+// ---------------------------------------------------------------------------
+
+/**
+ * @defgroup drop_section_nav Drop Suite section navigation
+ *
+ * Provides a per-module secondary navigation bar on Drop Suite pages.
+ *
+ * Any module can contribute links to a section by implementing
+ * hook_drop_section_links($section). The section is derived from the second
+ * path component (e.g. 'tickets' for drop/tickets/*).
+ *
+ * Each link is an associative array with:
+ *   - title: (string) Human-readable label.
+ *   - href: (string) Backdrop path for the link.
+ *   - weight: (int) Sort order (lower = further left).
+ *   - options: (array, optional) Options passed to l() — supports 'query',
+ *     'fragment', 'attributes', etc.
+ *   - badge: (int|string, optional) Short text rendered as a badge pill.
+ *   - admin_only: (bool, optional) Renders link de-emphasised; does not
+ *     enforce access — callers must check permissions before adding the link.
+ *   - active_paths: (string[], optional) Additional paths (exact or prefix)
+ *     that trigger the active state for this link.
+ *   - pinned: (bool, optional) Added automatically for pinned reports.
+ */
+
+/**
+ * Builds and returns the section nav HTML for the current page, or FALSE.
+ *
+ * Collects links via hook_drop_section_links(), injects any pinned reports
+ * the current user has for this section, sorts by weight, and renders.
+ *
+ * @return string|false
+ */
+function _drop_suite_section_nav_block() {
+  $section = _drop_suite_get_section();
+  if (!$section) {
+    return FALSE;
+  }
+
+  // Gather links from all modules.
+  $links = module_invoke_all('drop_section_links', $section);
+  backdrop_alter('drop_section_links', $links, $section);
+
+  // Inject pinned reports that belong to this section. Gated by feature
+  // flag — currently disabled until pinned reports have a clear UI home.
+  if (drop_suite_pin_reports_enabled()) {
+    global $user;
+    $pinned      = drop_suite_get_pinned_reports($user->uid);
+    $all_reports = drop_suite_get_all_reports();
+    $pin_weight  = 50;
+    foreach ($pinned as $report_id) {
+      if (!isset($all_reports[$report_id])) {
+        continue;
+      }
+      $report = $all_reports[$report_id];
+      if (!_drop_suite_report_in_section($report, $section)) {
+        continue;
+      }
+      if (!empty($report['access callback'])) {
+        $args = !empty($report['access arguments']) ? $report['access arguments'] : array();
+        if (!call_user_func_array($report['access callback'], $args)) {
+          continue;
+        }
+      }
+      $links['pinned_' . $report_id] = array(
+        'title'  => $report['title'],
+        'href'   => $report['path'],
+        'weight' => $pin_weight++,
+        'pinned' => TRUE,
+      );
+    }
+  }
+
+  if (empty($links)) {
+    return FALSE;
+  }
+
+  uasort($links, 'drupal_sort_weight');
+
+  // Allow modules to add extras (e.g. action buttons) to the right side of
+  // the section nav by implementing hook_drop_section_nav_extras($section).
+  $extras = module_invoke_all('drop_section_nav_extras', $section);
+
+  return _drop_suite_render_section_nav($links, $extras);
+}
+
+/**
+ * Returns the section identifier for the current path, or NULL.
+ *
+ * The section is the second path component for drop/* pages:
+ *   drop/tickets/* → 'tickets'
+ *   drop/crm/*     → 'crm'
+ *   drop           → NULL  (dashboard — no section nav)
+ *
+ * @return string|null
+ */
+function _drop_suite_get_section() {
+  $path = current_path();
+  // Settings sub-pages (drop/settings, drop/*/settings*) aren't working
+  // views — they're admin surfaces. Suppress the section nav there so the
+  // ticket/CRM/etc. working tabs don't spill into a settings context. See
+  // tid 570.
+  if ($path === 'drop/settings' || strpos($path, 'drop/settings/') === 0) {
+    return NULL;
+  }
+  if (preg_match('#^drop/[^/]+/settings(/|$)#', $path)) {
+    return NULL;
+  }
+  if (preg_match('#^drop/([^/]+)#', $path, $m)) {
+    return $m[1];
+  }
+  return NULL;
+}
+
+/**
+ * Checks whether a report belongs to a given section.
+ *
+ * @param array $report
+ *   A report definition from hook_drop_reports().
+ * @param string $section
+ *   The section identifier (e.g. 'tickets').
+ *
+ * @return bool
+ */
+function _drop_suite_report_in_section(array $report, $section) {
+  if (empty($report['root_path'])) {
+    return FALSE;
+  }
+  $prefix = 'drop/' . $section;
+  return $report['root_path'] === $prefix
+    || strpos($report['root_path'], $prefix . '/') === 0;
+}
+
+/**
+ * Renders a sorted array of section nav links as HTML.
+ *
+ * @param array $links
+ *   Sorted array of link definition arrays (see hook_drop_section_links).
+ * @param array $extras
+ *   Optional HTML strings to render flush-right in the nav bar.
+ *
+ * @return string|false
+ *   Rendered nav HTML, or FALSE if no items to display.
+ */
+function _drop_suite_render_section_nav(array $links, array $extras = array()) {
+  $current       = current_path();
+  $current_query = $_GET;
+  unset($current_query['q']);
+  $items = array();
+
+  // Collect all query fingerprints used by query-bearing links so that plain
+  // path links can exclude themselves when one of those fingerprints is active.
+  $query_link_fingerprints = array();
+  foreach ($links as $link) {
+    if (!empty($link['options']['query'])) {
+      $query_link_fingerprints[] = $link['options']['query'];
+    }
+  }
+
+  foreach ($links as $link) {
+    $href       = $link['href'];
+    $link_query = !empty($link['options']['query']) ? $link['options']['query'] : NULL;
+
+    if ($link_query) {
+      // Query-bearing link: active only when path and all query params match.
+      $path_match  = ($current === $href);
+      $query_match = !array_diff_assoc($link_query, $current_query);
+      $active = $path_match && $query_match;
+    }
+    else {
+      // Plain path link: active on path match, but NOT when the current query
+      // matches a query-bearing sibling link (e.g. ?status=discussions).
+      $active = ($current === $href);
+      if ($active) {
+        foreach ($query_link_fingerprints as $fp) {
+          if (!array_diff_assoc($fp, $current_query)) {
+            $active = FALSE;
+            break;
+          }
+        }
+      }
+      if (!$active && !empty($link['active_paths'])) {
+        foreach ($link['active_paths'] as $ap) {
+          if ($current === $ap || strpos($current, $ap . '/') === 0) {
+            $active = TRUE;
+            break;
+          }
+        }
+      }
+    }
+
+    $classes = array('drop-snav__item');
+    if ($active) {
+      $classes[] = 'is-active';
+    }
+    if (!empty($link['admin_only'])) {
+      $classes[] = 'drop-snav__item--admin';
+    }
+    if (!empty($link['pinned'])) {
+      $classes[] = 'drop-snav__item--pinned';
+    }
+
+    $badge = '';
+    if (!empty($link['badge'])) {
+      $badge = '<span class="drop-snav__badge">' . check_plain((string) $link['badge']) . '</span>';
+    }
+
+    $title_html  = check_plain($link['title']) . $badge;
+    $link_options = isset($link['options']) ? $link['options'] : array();
+    $link_options['html'] = TRUE;
+    $item_html  = l($title_html, $href, $link_options);
+    $items[]    = '<li class="' . implode(' ', $classes) . '">' . $item_html . '</li>';
+  }
+
+  if (empty($items)) {
+    return FALSE;
+  }
+
+  $extras_html = !empty($extras)
+    ? '<div class="drop-snav__extras">' . implode('', $extras) . '</div>'
+    : '';
+
+  return '<nav class="drop-snav" aria-label="' . t('Section navigation') . '">'
+    . '<ul class="drop-snav__list">' . implode('', $items) . '</ul>'
+    . $extras_html
+    . '</nav>';
+}
+
+/**
+ * Implements hook_library().
+ */
+function drop_suite_library() {
+  return array(
+    'drop_suite' => array(
+      'title'   => 'Drop Suite styles',
+      'website' => '',
+      'version' => '1.x',
+      'css'     => array(
+        backdrop_get_path('module', 'drop_suite') . '/drop_suite.css' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_page_build().
+ *
+ * Adds the shared CSS to every page so that DropCRM and DropTasks pages always
+ * have access to the shared variables and utility classes without each page
+ * callback needing to attach them individually.
+ */
+function drop_suite_init() {
+  backdrop_add_css(backdrop_get_path('module', 'drop_suite') . '/drop_suite.css');
+}
+
+/**
+ * Returns the shared priority label array.
+ *
+ * @return array
+ *   Keyed by integer priority value (0=none, 1=low, 2=normal, 3=high, 4=critical).
+ */
+function drop_suite_priority_labels() {
+  return array(
+    0 => t('None'),
+    1 => t('Low'),
+    2 => t('Normal'),
+    3 => t('High'),
+    4 => t('Critical'),
+  );
+}
+
+/**
+ * Returns a CSS class suffix for a priority value.
+ *
+ * @param int $priority
+ *   The priority integer value.
+ *
+ * @return string
+ *   One of 'critical', 'high', 'normal', 'low', or 'none'.
+ */
+function drop_suite_priority_class($priority) {
+  $map = array(0 => 'none', 1 => 'low', 2 => 'normal', 3 => 'high', 4 => 'critical');
+  return isset($map[$priority]) ? $map[$priority] : 'normal';
+}
+
+/**
+ * Sets the page title with a "Lab" badge appended.
+ *
+ * Modules in Drop Suites Lab can call this instead of backdrop_set_title()
+ * to visually flag their pages as experimental.
+ *
+ * @param string $title
+ *   The page title (plain text — will be escaped).
+ */
+function drop_suite_lab_title($title) {
+  backdrop_set_title(
+    check_plain($title) . ' <span class="drop-lab-badge">' . t('Lab') . '</span>',
+    PASS_THROUGH
+  );
+}
+
+/**
+ * Returns a section header markup string for use in render arrays.
+ *
+ * Renders a flex row with the section title on the left and an optional
+ * add-link (or group of add-links) on the right. Intended for entity view
+ * pages across the Drop module family.
+ *
+ * @param string $title
+ *   The section heading text (will be escaped).
+ * @param string|null $add_link
+ *   Optional already-rendered HTML to place on the right (e.g. from l() or a
+ *   <span> of links). Passed through unescaped — callers are responsible for
+ *   sanitising any user-derived values before passing them in.
+ *
+ * @return string
+ *   HTML string for the section header div.
+ */
+function drop_suite_section_header($title, $add_link = NULL) {
+  $html = '<div class="drop-section-header"><h2>' . check_plain($title) . '</h2>';
+  if ($add_link) {
+    $html .= $add_link;
+  }
+  $html .= '</div>';
+  return $html;
+}
+
+/**
+ * Returns a page-level action links bar for entity view pages.
+ *
+ * Renders all links as plain anchors inside .drop-page-actions. The CSS
+ * handles their appearance — callers must never add Backdrop button classes
+ * ('button', 'button-secondary', etc.) to these links.
+ *
+ * @param array $links
+ *   Array of already-rendered HTML strings produced by l() or equivalent.
+ *   Empty entries are filtered out automatically.
+ *
+ * @return string
+ *   HTML string for the action bar, or an empty string if no links provided.
+ */
+function drop_suite_page_actions(array $links) {
+  $links = array_filter($links);
+  if (empty($links)) {
+    return '';
+  }
+  return '<div class="drop-page-actions">' . implode('', $links) . '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// Project entity infrastructure
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function drop_suite_autoload_info() {
+  return array(
+    'DropProject'           => 'drop_suite.entity.inc',
+    'DropProjectController' => 'drop_suite.entity.inc',
+    'drop_suite_handler_field_project_name' => 'views/drop_suite_handler_field_project_name.inc',
+  );
+}
+
+/**
+ * Implements hook_views_data_alter().
+ *
+ * Swaps the project name field handler to one that supports linking to the
+ * project page.
+ */
+function drop_suite_views_data_alter(&$data) {
+  if (isset($data['drop_project']['name'])) {
+    $data['drop_project']['name']['field']['handler'] = 'drop_suite_handler_field_project_name';
+  }
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ *
+ * Exposes hard-coded project properties to the Field UI "Manage display" and
+ * "Manage form" interfaces so they can be reordered and toggled.
+ */
+function drop_suite_field_extra_fields() {
+  $extra = array();
+
+  // Form pseudo-fields.
+  $extra['drop_project']['drop_project']['form']['name'] = array(
+    'label' => t('Project name'),
+    'description' => t('The project name (required).'),
+    'weight' => -10,
+  );
+  $extra['drop_project']['drop_project']['form']['site_url'] = array(
+    'label' => t('Website URL'),
+    'description' => t('Primary URL for the project.'),
+    'weight' => 0,
+  );
+  $extra['drop_project']['drop_project']['form']['active'] = array(
+    'label' => t('Active'),
+    'description' => t('Whether the project is active or archived.'),
+    'weight' => 5,
+  );
+
+  // Display pseudo-fields.
+  $extra['drop_project']['drop_project']['display']['prefix'] = array(
+    'label' => t('Ticket prefix'),
+    'description' => t('The ticket numbering prefix.'),
+    'weight' => -5,
+  );
+  $extra['drop_project']['drop_project']['display']['contact'] = array(
+    'label' => t('Contact'),
+    'description' => t('Linked CRM contact (when CRM is enabled).'),
+    'weight' => 0,
+  );
+  $extra['drop_project']['drop_project']['display']['site_url'] = array(
+    'label' => t('Website URL'),
+    'description' => t('Project website link.'),
+    'weight' => 5,
+  );
+  $extra['drop_project']['drop_project']['display']['status'] = array(
+    'label' => t('Status'),
+    'description' => t('Active or archived status.'),
+    'weight' => 10,
+  );
+  $extra['drop_project']['drop_project']['display']['tickets'] = array(
+    'label' => t('Tickets'),
+    'description' => t('Ticket list for this project (when DropTickets is enabled).'),
+    'weight' => 20,
+  );
+  // 'platform' display entry added by dropmonitor via
+  // hook_field_extra_fields_alter when that module is enabled.
+  $extra['drop_project']['drop_project']['display']['site_health'] = array(
+    'label' => t('Site health'),
+    'description' => t('Server monitoring health card (when Drop Monitor is linked).'),
+    'weight' => 7,
+  );
+  $extra['drop_project']['drop_project']['display']['uptime'] = array(
+    'label' => t('Uptime'),
+    'description' => t('Uptime summary and link to detail (when site URL is set).'),
+    'weight' => 9,
+  );
+
+  return $extra;
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function drop_suite_entity_property_info() {
+  $info = array();
+  $project = &$info['drop_project']['properties'];
+
+  $project['pid'] = array(
+    'label'           => t('Project ID'),
+    'type'            => 'integer',
+    'description'     => t('The unique project ID.'),
+    'schema field'    => 'pid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $project['name'] = array(
+    'label'           => t('Name'),
+    'type'            => 'text',
+    'description'     => t('The project name.'),
+    'schema field'    => 'name',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['color'] = array(
+    'label'           => t('Color'),
+    'type'            => 'text',
+    'description'     => t('Display color as a CSS hex value.'),
+    'schema field'    => 'color',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['active'] = array(
+    'label'           => t('Active'),
+    'type'            => 'boolean',
+    'description'     => t('Whether the project is active.'),
+    'schema field'    => 'active',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['cid'] = array(
+    'label'           => t('Contact'),
+    'type'            => 'integer',
+    'description'     => t('Linked CRM contact ID (optional).'),
+    'schema field'    => 'cid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['prefix'] = array(
+    'label'           => t('Ticket prefix'),
+    'type'            => 'text',
+    'description'     => t('Short prefix for ticket numbers.'),
+    'schema field'    => 'prefix',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['ticket_counter'] = array(
+    'label'           => t('Ticket counter'),
+    'type'            => 'integer',
+    'description'     => t('Auto-incrementing counter for ticket labels.'),
+    'schema field'    => 'ticket_counter',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  // platform property declared by dropmonitor via
+  // hook_entity_property_info_alter — only appears when that module is
+  // enabled, which matches where the column actually exists.
+  $project['site_url'] = array(
+    'label'           => t('Website URL'),
+    'type'            => 'uri',
+    'description'     => t('Primary URL for the project.'),
+    'schema field'    => 'site_url',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['uid'] = array(
+    'label'           => t('Owner'),
+    'type'            => 'user',
+    'description'     => t('The user who created this project.'),
+    'schema field'    => 'uid',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+    'setter callback' => 'entity_plus_property_verbatim_set',
+  );
+  $project['created'] = array(
+    'label'           => t('Date created'),
+    'type'            => 'date',
+    'description'     => t('When the project was created.'),
+    'schema field'    => 'created',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+  $project['changed'] = array(
+    'label'           => t('Date modified'),
+    'type'            => 'date',
+    'description'     => t('When the project was last modified.'),
+    'schema field'    => 'changed',
+    'getter callback' => 'entity_plus_property_verbatim_get',
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function drop_suite_entity_info() {
+  $info = array();
+
+  $info['drop_project'] = array(
+    'label'            => t('Project'),
+    'plural label'     => t('Projects'),
+    'description'      => t('A project used for tickets, time tracking, and monitoring.'),
+    'entity class'     => 'DropProject',
+    'controller class' => 'DropProjectController',
+    'base table'       => 'drop_project',
+    'fieldable'        => TRUE,
+    'entity keys'      => array(
+      'id'    => 'pid',
+      'label' => 'name',
+    ),
+    'uri callback'    => 'entity_class_uri',
+    'access callback' => 'drop_suite_project_access',
+    'module'          => 'drop_suite',
+    'bundles'         => array(
+      'drop_project' => array(
+        'label' => t('Project'),
+        'admin' => array(
+          'path'             => 'drop/projects/manage',
+          'access arguments' => array('administer drop entities'),
+        ),
+      ),
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Loads a single project entity by pid.
+ *
+ * Used as a menu wildcard loader for %drop_project.
+ */
+function drop_project_load($pid) {
+  $projects = entity_load('drop_project', array((int) $pid));
+  return $projects ? reset($projects) : FALSE;
+}
+
+/**
+ * Title callback for project view pages.
+ */
+function drop_suite_project_title($project) {
+  return $project->name;
+}
+
+/**
+ * View access callback for project listing pages.
+ */
+function drop_suite_project_view_access() {
+  return user_access('administer projects')
+    || user_access('access projects');
+}
+
+/**
+ * Access callback for drop_project entities.
+ */
+function drop_suite_project_access($op, $project = NULL, $account = NULL) {
+  global $user;
+  if (!$account) {
+    $account = $user;
+  }
+
+  if (user_access('administer projects', $account)) {
+    return TRUE;
+  }
+
+  // View access.
+  if ($op === 'view') {
+    return user_access('access projects', $account);
+  }
+
+  if (!user_access('access projects', $account)) {
+    return FALSE;
+  }
+
+  // Create access for anyone with project access.
+  if ($op === 'create') {
+    return TRUE;
+  }
+
+  // Update/delete: owner or admin only.
+  return $project && $project->uid == $account->uid;
+}
+
+/**
+ * Returns active projects as pid => name options array.
+ *
+ * @param int $uid
+ *   Optional user ID to filter by owner. Pass 0 for all projects.
+ *
+ * @return array
+ */
+function drop_suite_project_options($uid = 0) {
+  $query = db_select('drop_project', 'p')
+    ->fields('p', array('pid', 'name'))
+    ->condition('p.active', 1)
+    ->orderBy('p.name', 'ASC');
+  if ($uid) {
+    $query->condition('p.uid', $uid);
+  }
+  return $query->execute()->fetchAllKeyed();
+}
+
+/**
+ * Returns available project color options.
+ *
+ * @return array
+ *   Hex value => label pairs.
+ */
+function drop_suite_color_options() {
+  return array(
+    '#1565c0' => t('Blue'),
+    '#2e7d32' => t('Green'),
+    '#e65100' => t('Orange'),
+    '#7b1fa2' => t('Purple'),
+    '#c62828' => t('Red'),
+    '#00838f' => t('Teal'),
+    '#f57c00' => t('Amber'),
+    '#37474f' => t('Slate'),
+    '#558b2f' => t('Olive'),
+    '#ad1457' => t('Pink'),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_suite_menu() {
+  // --- Projects ---
+  // List page at drop/projects is provided by the drop_projects view.
+  $items['drop/projects/add'] = array(
+    'title'            => 'Add project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_suite_project_form'),
+    'access callback'  => 'drop_suite_project_access',
+    'access arguments' => array('create'),
+    'file'             => 'drop_suite.admin.inc',
+    'type'             => MENU_LOCAL_ACTION,
+  );
+  $items['drop/projects/manage'] = array(
+    'title'            => 'Project settings',
+    'page callback'    => 'drop_suite_project_manage_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop entities'),
+    'file'             => 'drop_suite.admin.inc',
+  );
+  $items['drop/projects/%drop_project'] = array(
+    'title callback'   => 'drop_suite_project_title',
+    'title arguments'  => array(2),
+    'page callback'    => 'drop_suite_project_view',
+    'page arguments'   => array(2),
+    'access callback'  => 'drop_suite_project_access',
+    'access arguments' => array('view', 2),
+    'file'             => 'drop_suite.admin.inc',
+  );
+  $items['drop/projects/%drop_project/edit'] = array(
+    'title'            => 'Edit project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_suite_project_form', 2),
+    'access callback'  => 'drop_suite_project_access',
+    'access arguments' => array('update', 2),
+    'file'             => 'drop_suite.admin.inc',
+  );
+  $items['drop/projects/%drop_project/delete'] = array(
+    'title'            => 'Delete project',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_suite_project_delete_form', 2),
+    'access callback'  => 'drop_suite_project_access',
+    'access arguments' => array('delete', 2),
+    'file'             => 'drop_suite.admin.inc',
+  );
+
+  // --- Team ---
+  $items['drop/team'] = array(
+    'title'            => 'Team',
+    'page callback'    => 'drop_suite_team_page',
+    'access arguments' => array('access drop team'),
+    'type'             => MENU_NORMAL_ITEM,
+  );
+
+  // Settings dashboard.
+  $items['drop/settings'] = array(
+    'title'            => 'Settings',
+    'page callback'    => 'drop_suite_settings_dashboard',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_suite.pages.inc',
+  );
+
+  // Drop Suite admin hub — visible in the Backdrop Configuration menu.
+  $items['admin/drop'] = array(
+    'title'            => 'Drop Suite',
+    'description'      => t('Configure and administer Drop Suite modules (DropTickets, DropCRM, DropTasks, and more).'),
+    'page callback'    => 'system_admin_menu_block_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'system.admin.inc',
+    'file path'        => backdrop_get_path('module', 'system'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 50,
+  );
+
+  // Permissions — filtered view showing only Drop Suite module permissions.
+  $items['admin/drop/permissions'] = array(
+    'title'            => 'Drop Suite permissions',
+    'description'      => t('Configure who can access DropTickets, DropCRM, DropTasks, and other Drop Suite modules.'),
+    'page callback'    => 'drop_suite_permissions_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer permissions'),
+    'type'             => MENU_NORMAL_ITEM,
+    'weight'           => 0,
+  );
+
+  // --- Drop Suite settings ---
+  $items['drop/settings/base'] = array(
+    'title'            => 'Drop Suite',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_suite_settings_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_suite.admin.inc',
+  );
+
+  // --- Primary navigation customization ---
+  $items['drop/settings/navigation'] = array(
+    'title'            => 'Primary navigation',
+    'description'      => 'Reorder, rename, hide, and add shortcuts to the Drop Suite nav bar.',
+    'page callback'    => 'drop_suite_navigation_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file'             => 'drop_suite.nav_admin.inc',
+  );
+
+  // --- Home page navigation (moved to Drop Start wizard; 301 redirect) ---
+  $items['drop/settings/home-nav'] = array(
+    'title'            => 'Home page navigation',
+    'page callback'    => '_drop_suite_home_nav_redirect',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // --- Drop Suite modules (scoped enable/disable page) ---
+  $items['drop/settings/modules'] = array(
+    'title'            => 'Drop Suite modules',
+    'description'      => 'Enable or disable Drop Suite modules.',
+    'page callback'    => 'drop_suite_modules_page',
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer drop suite modules'),
+  );
+
+  // --- Meeting agenda ---
+  $items['drop/meeting'] = array(
+    'title'            => 'Meeting',
+    'page callback'    => 'drop_suite_meeting_page',
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_suite.pages.inc',
+  );
+  $items['drop/meeting/remove-tag/%'] = array(
+    'title'            => 'Remove meeting tag',
+    'page callback'    => 'drop_suite_meeting_remove_tag',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_suite.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+  $items['drop/meeting/postpone/%'] = array(
+    'title'            => 'Postpone meeting item',
+    'page callback'    => 'drop_suite_meeting_postpone',
+    'page arguments'   => array(3),
+    'access callback'  => 'user_is_logged_in',
+    'file'             => 'drop_suite.pages.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Pin/unpin report toggle endpoint.
+  $items['drop-suite/pin-report/%'] = array(
+    'page callback'   => 'drop_suite_pin_report_toggle',
+    'page arguments'  => array(2),
+    'access callback' => 'user_is_logged_in',
+    'type'            => MENU_CALLBACK,
+  );
+
+  // Dismiss site announcement (per-user).
+  $items['drop/announcement/dismiss'] = array(
+    'page callback'   => 'drop_suite_announcement_dismiss',
+    'access callback' => 'user_is_logged_in',
+    'type'            => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+// ---------------------------------------------------------------------------
+// Report registry
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all reports declared via hook_drop_reports() by enabled modules.
+ *
+ * Each module implementing this hook returns an associative array keyed by
+ * a flat report ID (e.g. 'droptickets_stale'). Each value is an array with:
+ *   - title: (string) Human-readable label.
+ *   - path: (string) Backdrop path to the report page.
+ *   - root_path: (string) Module root path where pinned tabs are injected.
+ *   - module: (string) Module machine name (for display grouping).
+ *   - default_pin: (bool) Whether to pin for new users with no saved preferences.
+ *   - access callback: (string, optional) Access callback (default: open to all).
+ *   - access arguments: (array, optional) Arguments for the access callback.
+ *
+ * @return array
+ */
+function drop_suite_get_all_reports() {
+  $reports = &backdrop_static(__FUNCTION__);
+  if (!isset($reports)) {
+    $reports = module_invoke_all('drop_reports');
+  }
+  return $reports;
+}
+
+/**
+ * Whether the Pin Report UI is currently exposed.
+ *
+ * Returning FALSE hides the pin/unpin local action and keeps pinned reports
+ * out of the section nav. Helpers, state, and the toggle endpoint remain
+ * functional so saved pins survive when this flips back on.
+ *
+ * Flip to TRUE (or wire to a config flag) once pinned reports have a clear
+ * UI home.
+ */
+function drop_suite_pin_reports_enabled() {
+  return FALSE;
+}
+
+/**
+ * Returns the pinned report IDs for a user.
+ *
+ * For users with no saved preferences, applies module-declared defaults
+ * (up to the 8-pin limit). Once preferences are saved for a user, defaults
+ * no longer apply.
+ *
+ * @param int $uid
+ *
+ * @return array
+ *   Ordered array of report ID strings.
+ */
+function drop_suite_get_pinned_reports($uid) {
+  $all_prefs = state_get('drop_suite.pinned_reports', array());
+  if (!array_key_exists($uid, $all_prefs)) {
+    // First visit: apply module-declared defaults.
+    $all  = drop_suite_get_all_reports();
+    $pins = array();
+    foreach ($all as $id => $report) {
+      if (!empty($report['default_pin'])) {
+        $pins[] = $id;
+        if (count($pins) >= 8) {
+          break;
+        }
+      }
+    }
+    return $pins;
+  }
+  return is_array($all_prefs[$uid]) ? $all_prefs[$uid] : array();
+}
+
+/**
+ * Pins or unpins a report for a user.
+ *
+ * @param int $uid
+ * @param string $report_id
+ * @param bool $pinned
+ *   TRUE to pin, FALSE to unpin.
+ *
+ * @return bool
+ *   FALSE if the pin limit (8) was reached and the report could not be pinned.
+ */
+function drop_suite_set_pinned_report($uid, $report_id, $pinned) {
+  $all_prefs = state_get('drop_suite.pinned_reports', array());
+  $pins = array_key_exists($uid, $all_prefs) ? $all_prefs[$uid] : drop_suite_get_pinned_reports($uid);
+  if ($pinned) {
+    if (!in_array($report_id, $pins)) {
+      if (count($pins) >= 8) {
+        return FALSE;
+      }
+      $pins[] = $report_id;
+    }
+  }
+  else {
+    $pins = array_values(array_filter($pins, function ($id) use ($report_id) {
+      return $id !== $report_id;
+    }));
+  }
+  $all_prefs[$uid] = $pins;
+  state_set('drop_suite.pinned_reports', $all_prefs);
+  return TRUE;
+}
+
+/**
+ * Page callback: Toggle a report pin for the current user.
+ *
+ * @param string $report_id
+ */
+function drop_suite_pin_report_toggle($report_id) {
+  global $user;
+
+  $all = drop_suite_get_all_reports();
+  if (!isset($all[$report_id])) {
+    backdrop_access_denied();
+    return;
+  }
+
+  $report    = $all[$report_id];
+  $pins      = drop_suite_get_pinned_reports($user->uid);
+  $is_pinned = in_array($report_id, $pins);
+
+  if ($is_pinned) {
+    drop_suite_set_pinned_report($user->uid, $report_id, FALSE);
+    backdrop_set_message(t('!link unpinned from your tab bar.', array('!link' => l($report['title'], $report['path']))));
+  }
+  else {
+    $result = drop_suite_set_pinned_report($user->uid, $report_id, TRUE);
+    if ($result) {
+      backdrop_set_message(t('!link pinned to your tab bar.', array('!link' => l($report['title'], $report['path']))));
+    }
+    else {
+      backdrop_set_message(t('You already have 3 pinned reports. Unpin one before adding another.'), 'warning');
+    }
+  }
+
+  $destination = isset($_GET['destination']) ? $_GET['destination'] : $report['path'];
+  backdrop_goto($destination);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function drop_suite_permission() {
+  return array(
+    'access projects' => array(
+      'title'       => t('Access projects'),
+      'description' => t('View the project list and individual project pages.'),
+    ),
+    'administer drop entities' => array(
+      'title'       => t('Manage Drop Suite entities'),
+      'description' => t('Manage fields and display settings for Drop Suite entity types (projects, tickets, contacts, etc.).'),
+      'restrict access' => TRUE,
+    ),
+    'administer projects' => array(
+      'title'       => t('Administer projects'),
+      'description' => t('Full administrative access to all projects.'),
+      'restrict access' => TRUE,
+    ),
+    'access drop team' => array(
+      'title'       => t('Access team directory'),
+      'description' => t('View the team directory showing team members and last online time.'),
+    ),
+    'administer drop suite modules' => array(
+      'title'       => t('Administer Drop Suite modules'),
+      'description' => t('Enable and disable Drop Suite modules at <em>drop/settings/modules</em>. Does not grant access to other modules or the main admin toolbar.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function drop_suite_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Projects'),
+      'path'       => 'drop/projects',
+      'permission' => 'access projects',
+      'weight'     => 15,
+      'icon'       => 'folders',
+    ),
+    array(
+      'title'      => t('Meeting'),
+      'path'       => 'drop/meeting',
+      'weight'     => 80,
+      'separator'  => TRUE,
+      'hidden'     => !config_get('drop_suite.settings', 'meeting_enabled'),
+      'icon'       => 'users-three',
+    ),
+    array(
+      'title'      => t('Team'),
+      'path'       => 'drop/team',
+      'permission' => 'access drop team',
+      'weight'     => 90,
+      'icon'       => 'users',
+    ),
+    array(
+      'title'      => t('Settings'),
+      'path'       => 'drop/settings',
+      'permission' => 'administer site configuration',
+      'weight'     => 100,
+      'icon'       => 'gear',
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function drop_suite_drop_settings_info() {
+  return array(
+    'drop_suite' => array(
+      'title' => t('Drop Suite'),
+      'description' => t('Page width and other base settings.'),
+      'path' => 'drop/settings/base',
+      'permission' => 'administer site configuration',
+      'weight' => 0,
+    ),
+    'drop_modules' => array(
+      'title' => t('Drop Suite modules'),
+      'description' => t('Enable or disable Drop Suite modules.'),
+      'path' => 'drop/settings/modules',
+      'permission' => 'administer drop suite modules',
+      'weight' => -10,
+    ),
+    'drop_navigation' => array(
+      'title' => t('Primary navigation'),
+      'description' => t('Reorder, rename, hide, and add shortcuts to the Drop Suite nav bar.'),
+      'path' => 'drop/settings/navigation',
+      'permission' => 'administer site configuration',
+      'weight' => 3,
+    ),
+  );
+}
+
+/**
+ * Implements hook_layout_info().
+ *
+ * Registers the Drop Suite layout so it ships with the module and doesn't
+ * need to be installed separately.
+ */
+function drop_suite_layout_info() {
+  $layouts['drop_suite'] = array(
+    'title' => t('Drop Suite'),
+    'path' => 'layouts/drop_suite',
+    'regions' => array(
+      'header'     => t('Header'),
+      'navigation' => t('Navigation'),
+      'messages'   => t('Messages'),
+      'top'        => t('Top'),
+      'content'    => t('Content'),
+      'sidebar'    => t('Sidebar'),
+      'bottom'     => t('Bottom'),
+      'footer'     => t('Footer'),
+    ),
+    'default region' => 'content',
+    'preview' => 'drop_suite.png',
+    'stylesheets' => array(
+      'all' => array('drop_suite.css'),
+    ),
+    'template' => 'layout--drop-suite',
+    'libraries' => array('bootstrap4-gs'),
+  );
+  return $layouts;
+}
+
+/**
+ * Returns the effective health check URL for a project.
+ *
+ * If health_url is set, returns it directly. Otherwise calculates a
+ * platform-appropriate URL from site_url that bypasses caching.
+ *
+ * @param object $project
+ *   A project entity with site_url, platform, and health_url properties.
+ *
+ * @return string
+ *   The URL to check, or empty string if no site_url is set.
+ */
+function drop_suite_project_health_url($project) {
+  // Manual override takes precedence.
+  if (!empty($project->health_url)) {
+    return $project->health_url;
+  }
+
+  if (empty($project->site_url)) {
+    return '';
+  }
+
+  $base = rtrim($project->site_url, '/');
+  $platform = isset($project->platform) ? $project->platform : '';
+
+  switch ($platform) {
+    case 'backdrop':
+    case 'drupal':
+      return $base . '/user/login';
+
+    case 'wordpress':
+      return $base . '/wp-login.php';
+
+    default:
+      // Cache-busting query parameter for unknown platforms.
+      return $base . '?_monitor=' . time();
+  }
+}
+
+/**
+ * Returns platform options for select lists.
+ *
+ * @return array
+ */
+function drop_suite_platform_options() {
+  return array(
+    ''          => t('— Select —'),
+    'backdrop'  => t('Backdrop CMS'),
+    'drupal'    => t('Drupal'),
+    'wordpress' => t('WordPress'),
+    'other'     => t('Other'),
+  );
+}
+
+/**
+ * Page callback: Team directory.
+ *
+ * Displays all active team members with their last-seen time.
+ */
+function drop_suite_team_page() {
+  backdrop_set_title(t('Team'));
+
+  $build = array();
+
+  if (user_access('administer users')) {
+    $icon = icon('user-plus', array('attributes' => array('width' => 18, 'height' => 18)));
+    $links = array(
+      l($icon . ' ' . t('Add Person'), 'admin/people/create', array(
+        'html' => TRUE,
+        'query' => array('destination' => 'drop/team'),
+        'attributes' => array('class' => array('button')),
+      )),
+    );
+    $build['actions'] = array('#markup' => drop_suite_page_actions($links));
+  }
+
+  $uids = db_select('users', 'u')
+    ->fields('u', array('uid'))
+    ->condition('u.status', 1)
+    ->condition('u.uid', 0, '>')
+    ->orderBy('u.access', 'DESC')
+    ->execute()
+    ->fetchCol();
+
+  $accounts = $uids ? user_load_multiple($uids) : array();
+  $ordered = array();
+  foreach ($uids as $uid) {
+    if (isset($accounts[$uid])) {
+      $ordered[$uid] = $accounts[$uid];
+    }
+  }
+
+  $role_labels = user_roles();
+  $can_see_tickets = module_exists('droptickets') && user_access('access droptickets');
+  $can_see_users   = user_access('access user profiles');
+  $has_crm_link    = module_exists('dropcrm_user');
+
+  $rows = array();
+  foreach ($ordered as $account) {
+    $last_seen = $account->access
+      ? t('@time ago', array('@time' => format_interval(REQUEST_TIME - $account->access)))
+      : t('Never');
+
+    // Name links to user profile when available, otherwise plain.
+    $name = $can_see_users
+      ? l($account->name, 'user/' . $account->uid)
+      : check_plain($account->name);
+
+    $user_role_labels = array();
+    $account_roles = !empty($account->roles) ? $account->roles : array();
+    foreach ($account_roles as $role_name) {
+      if ($role_name === BACKDROP_AUTHENTICATED_ROLE || $role_name === BACKDROP_ANONYMOUS_ROLE) {
+        continue;
+      }
+      if (isset($role_labels[$role_name])) {
+        $user_role_labels[] = check_plain($role_labels[$role_name]);
+      }
+    }
+    $roles_display = $user_role_labels ? implode(', ', $user_role_labels) : '—';
+
+    // Contextual links: Tickets + Contact (if each is available).
+    $links = array();
+    if ($can_see_tickets) {
+      $links[] = l(t('Tickets'), 'drop/tickets/member/' . $account->uid);
+    }
+    if ($has_crm_link) {
+      $contact = dropcrm_user_get_contact($account->uid);
+      if ($contact) {
+        $links[] = l(t('Contact'), 'drop/crm/contact/' . $contact->cid);
+      }
+    }
+    $links_display = $links ? implode(' · ', $links) : '—';
+
+    $rows[] = array($name, $roles_display, $last_seen, $links_display);
+  }
+
+  $build['table'] = array(
+    '#theme'  => 'table',
+    '#header' => array(t('Name'), t('Roles'), t('Last online'), t('Links')),
+    '#rows'   => $rows,
+    '#attributes' => array('class' => array('drop-team-table')),
+  );
+
+  return $build;
+}
+
+// ---------------------------------------------------------------------------
+// Drop Suite permissions page
+// ---------------------------------------------------------------------------
+
+/**
+ * Page callback: filtered permissions form showing only Drop Suite modules.
+ */
+function drop_suite_permissions_page() {
+  module_load_include('inc', 'user', 'user.admin');
+  return backdrop_get_form('user_admin_permissions');
+}
+
+/**
+ * Grants all of a module's permissions to the site's administrator role.
+ *
+ * Call from a Drop module's hook_install() so that fresh sites don't require
+ * a manual visit to the permissions page to unlock new permissions. Idempotent.
+ *
+ * @param string $module_name
+ *   Machine name of the module whose permissions should be granted.
+ */
+function drop_suite_grant_admin_permissions($module_name) {
+  $admin_role = config_get('system.core', 'user_admin_role');
+  if (!$admin_role || $admin_role === 'anonymous') {
+    return;
+  }
+  $perms = module_invoke($module_name, 'permission');
+  if (empty($perms)) {
+    return;
+  }
+  user_role_grant_permissions($admin_role, array_keys($perms));
+}
+
+/**
+ * Returns per-user display preferences merged with defaults.
+ *
+ * Prefs live in $account->data['drop_display'] so no schema change is needed.
+ *
+ * @param object|null $account
+ *   The user account, or NULL to use the logged-in user.
+ *
+ * @return array
+ *   Array with keys: page_width, kanban_col_width.
+ */
+function drop_suite_get_user_display_prefs($account = NULL) {
+  if ($account === NULL) {
+    global $user;
+    $account = $user;
+  }
+  $defaults = array(
+    'page_width' => 'standard',
+    'kanban_col_width' => 'standard',
+  );
+  if (empty($account->uid)) {
+    return $defaults;
+  }
+  $saved = array();
+  if (!empty($account->data) && is_array($account->data) && !empty($account->data['drop_display']) && is_array($account->data['drop_display'])) {
+    $saved = $account->data['drop_display'];
+  }
+  return $saved + $defaults;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Adds body classes reflecting the current user's display preferences so that
+ * CSS custom properties can cascade per-user without page-specific code.
+ * Backdrop adds body classes in template_preprocess_page(), not _html().
+ */
+function drop_suite_preprocess_page(&$variables) {
+  $prefs = drop_suite_get_user_display_prefs();
+  if ($prefs['page_width'] !== 'standard') {
+    $variables['classes'][] = 'drop-page-width-' . $prefs['page_width'];
+  }
+  if ($prefs['kanban_col_width'] !== 'standard') {
+    $variables['classes'][] = 'drop-kanban-col-' . $prefs['kanban_col_width'];
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for user_profile_form.
+ *
+ * Adds a Display preferences fieldset to the user edit form.
+ */
+function drop_suite_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+  $account = isset($form['#user']) ? $form['#user'] : NULL;
+  $prefs = drop_suite_get_user_display_prefs($account);
+
+  $form['drop_display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Display preferences'),
+    '#description' => t('Controls how Drop Suite pages are laid out for you. Other people see their own preferences.'),
+    '#weight' => 5,
+    '#tree' => TRUE,
+  );
+  $form['drop_display']['page_width'] = array(
+    '#type' => 'select',
+    '#title' => t('Page width'),
+    '#description' => t('Maximum content width on Drop Suite pages.'),
+    '#default_value' => $prefs['page_width'],
+    '#options' => array(
+      'narrow' => t('Narrow (1200px)'),
+      'standard' => t('Standard (1600px)'),
+      'wide' => t('Wide (1920px)'),
+      'full' => t('Full (95% of viewport)'),
+    ),
+  );
+  $form['drop_display']['kanban_col_width'] = array(
+    '#type' => 'select',
+    '#title' => t('Kanban column width'),
+    '#description' => t('Width of columns on the Kanban board.'),
+    '#default_value' => $prefs['kanban_col_width'],
+    '#options' => array(
+      'xcompact' => t('Extra compact (180px)'),
+      'compact' => t('Compact (200px)'),
+      'standard' => t('Standard (240px)'),
+      'comfortable' => t('Comfortable (280px)'),
+      'wide' => t('Wide (320px)'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_user_presave().
+ *
+ * Moves display preferences from the form-value property on the account into
+ * the serialized {users}.data column.
+ */
+function drop_suite_user_presave($account) {
+  if (isset($account->drop_display) && is_array($account->drop_display)) {
+    if (empty($account->data) || !is_array($account->data)) {
+      $account->data = array();
+    }
+    $account->data['drop_display'] = $account->drop_display;
+    unset($account->drop_display);
+  }
+}
+
+/**
+ * Returns the package names recognized as Drop Suite modules.
+ */
+function drop_suite_get_drop_package_names() {
+  return array('Drop Suites', 'Drop Suites Lab');
+}
+
+/**
+ * Returns the machine names of all modules in a Drop Suite package.
+ *
+ * Scanned dynamically from each module's .info file so new Drop modules are
+ * picked up automatically without updating a hardcoded list.
+ *
+ * @return array
+ *   Array of module machine names keyed by machine name (values are TRUE).
+ */
+function drop_suite_get_drop_module_names() {
+  $names = &backdrop_static(__FUNCTION__);
+  if (isset($names)) {
+    return $names;
+  }
+  $names = array();
+  $packages = array_flip(drop_suite_get_drop_package_names());
+  $all = system_rebuild_module_data();
+  foreach ($all as $machine_name => $data) {
+    if (!empty($data->info['package']) && isset($packages[$data->info['package']])) {
+      $names[$machine_name] = TRUE;
+    }
+  }
+  return $names;
+}
+
+/**
+ * Page callback: Drop Suite scoped modules form.
+ */
+function drop_suite_modules_page() {
+  module_load_include('inc', 'system', 'system.admin');
+  return backdrop_get_form('system_modules');
+}
+
+/**
+ * Implements hook_form_system_modules_alter().
+ *
+ * When rendering at drop/settings/modules, strips all non-Drop packages and
+ * blocks enabling any Drop module whose non-Drop dependencies are not met.
+ */
+function drop_suite_form_system_modules_alter(&$form, &$form_state, $form_id) {
+  if (current_path() !== 'drop/settings/modules') {
+    return;
+  }
+
+  backdrop_set_title(t('Drop Suite modules'));
+
+  // Post the form back to our scoped path so users holding only
+  // "administer drop suite modules" can submit it. Core's default action
+  // points at admin/modules/list/confirm, which requires "administer modules".
+  $form['#action'] = url('drop/settings/modules');
+
+  // Hide the core filter reset link's path to stay within our scope.
+  if (isset($form['filter']['reset']['#path'])) {
+    $form['filter']['reset']['#path'] = 'drop/settings/modules';
+  }
+
+  $drop_modules  = drop_suite_get_drop_module_names();
+  $drop_packages = drop_suite_get_drop_package_names();
+  $all           = system_rebuild_module_data();
+
+  // Strip every package fieldset except our Drop packages.
+  foreach (element_children($form['modules']) as $package) {
+    if (!in_array($package, $drop_packages, TRUE)) {
+      unset($form['modules'][$package]);
+    }
+  }
+
+  // For each Drop module (across all Drop packages), disable the checkbox if
+  // any non-Drop dependency is not currently enabled. We do not auto-enable
+  // non-Drop modules — doing so would silently widen the
+  // "administer drop suite modules" permission.
+  foreach ($drop_packages as $package) {
+    if (!isset($form['modules'][$package])) {
+      continue;
+    }
+    foreach (element_children($form['modules'][$package]) as $module_name) {
+      if (empty($all[$module_name]) || empty($all[$module_name]->requires)) {
+        continue;
+      }
+      $missing = array();
+      foreach ($all[$module_name]->requires as $dep => $v) {
+        if (isset($drop_modules[$dep])) {
+          continue;
+        }
+        if (empty($all[$dep]) || empty($all[$dep]->status)) {
+          $dep_label = !empty($all[$dep]->info['name']) ? $all[$dep]->info['name'] : $dep;
+          $missing[] = $dep_label;
+        }
+      }
+      if (!empty($missing)) {
+        $row = &$form['modules'][$package][$module_name];
+        if (isset($row['enable']['#type']) && $row['enable']['#type'] === 'checkbox') {
+          $row['enable']['#disabled'] = TRUE;
+        }
+        $row['description']['#markup'] .= '<div class="admin-missing">' . t('Requires: @deps (not enabled). Ask a site administrator to enable these first.', array(
+          '@deps' => implode(', ', $missing),
+        )) . '</div>';
+        unset($row);
+      }
+    }
+  }
+
+  // Defensive validate: refuse to enable anything not in the Drop package.
+  $form['#validate'][] = 'drop_suite_modules_form_validate';
+}
+
+/**
+ * Form validation for the scoped modules form.
+ *
+ * Belt-and-suspenders — the form already strips non-Drop packages, but if a
+ * user crafts a POST targeting a non-Drop module we reject it here rather than
+ * hand it to system_modules_submit().
+ */
+function drop_suite_modules_form_validate($form, &$form_state) {
+  if (empty($form_state['values']['modules']) || !is_array($form_state['values']['modules'])) {
+    return;
+  }
+  $drop_modules  = drop_suite_get_drop_module_names();
+  $drop_packages = array_flip(drop_suite_get_drop_package_names());
+  foreach ($form_state['values']['modules'] as $package => $rows) {
+    if (!isset($drop_packages[$package])) {
+      form_set_error('modules', t('You do not have permission to modify modules outside the Drop Suite packages.'));
+      return;
+    }
+    foreach ($rows as $module_name => $row) {
+      if (!isset($drop_modules[$module_name])) {
+        form_set_error('modules', t('You do not have permission to modify %module.', array('%module' => $module_name)));
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_user_admin_permissions_alter().
+ *
+ * When rendering at admin/drop/permissions, strips all non-Drop-Suite
+ * permissions so only Drop module rows remain.
+ */
+function drop_suite_form_user_admin_permissions_alter(&$form, &$form_state, $form_id) {
+  if (current_path() !== 'admin/drop/permissions') {
+    return;
+  }
+
+  $drop_modules = array(
+    'drop_suite',
+    'drop_start',
+    'dropbridge',
+    'dropcrm',
+    'dropdocs',
+    'dropemail',
+    'dropfiles',
+    'dropgoals',
+    'dropmonitor',
+    'dropnewsletter',
+    'dropstrategic',
+    'droptasks',
+    'droptickets',
+    'droptime',
+  );
+
+  // Collect all permission keys that belong to Drop Suite modules.
+  $drop_perms = array();
+  foreach ($drop_modules as $module) {
+    if (module_exists($module)) {
+      $perms = module_invoke($module, 'permission');
+      if ($perms) {
+        foreach (array_keys($perms) as $perm_key) {
+          $drop_perms[$perm_key] = TRUE;
+        }
+      }
+    }
+  }
+
+  // Remove non-Drop rows from the permission list (module headers and perms).
+  foreach (array_keys($form['permission']) as $key) {
+    if (is_numeric($key)) {
+      // Module header row — keep only Drop Suite module headers.
+      if (!in_array($form['permission'][$key]['#id'], $drop_modules)) {
+        unset($form['permission'][$key]);
+      }
+    }
+    elseif (!isset($drop_perms[$key])) {
+      // Permission row not in Drop Suite — remove it.
+      unset($form['permission'][$key]);
+    }
+  }
+
+  // Filter checkbox options to only Drop Suite permissions.
+  foreach (array_keys($form['checkboxes']) as $role_name) {
+    $form['checkboxes'][$role_name]['#options'] = array_intersect_key(
+      $form['checkboxes'][$role_name]['#options'],
+      $drop_perms
+    );
+    $form['checkboxes'][$role_name]['#default_value'] = array_values(array_intersect(
+      $form['checkboxes'][$role_name]['#default_value'],
+      array_keys($drop_perms)
+    ));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Review mode helpers (shared across modules)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the IDs a user has marked as reviewed in a given namespace.
+ *
+ * @param string $namespace
+ *   A module-specific key, e.g. 'tickets', 'organizations'.
+ * @param int $uid
+ *   The user ID.
+ *
+ * @return array
+ *   Flat array of integer entity IDs.
+ */
+function drop_suite_review_get($namespace, $uid) {
+  $all = state_get('drop_review.' . $namespace, array());
+  return isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+}
+
+/**
+ * Toggles the reviewed state of an entity for a user.
+ *
+ * @param string $namespace
+ *   A module-specific key.
+ * @param int $uid
+ *   The user ID.
+ * @param int $id
+ *   The entity ID to toggle.
+ *
+ * @return bool
+ *   TRUE if the entity is now reviewed, FALSE if it was unmarked.
+ */
+function drop_suite_review_toggle($namespace, $uid, $id) {
+  $state_key = 'drop_review.' . $namespace;
+  $all  = state_get($state_key, array());
+  $ids  = isset($all[$uid]) && is_array($all[$uid]) ? $all[$uid] : array();
+  if (in_array($id, $ids)) {
+    $ids = array_values(array_diff($ids, array($id)));
+    $reviewed = FALSE;
+  }
+  else {
+    $ids[]    = $id;
+    $reviewed = TRUE;
+  }
+  $all[$uid] = $ids;
+  state_set($state_key, $all);
+  return $reviewed;
+}
+
+/**
+ * Clears all reviewed flags for a user in a given namespace.
+ *
+ * @param string $namespace
+ *   A module-specific key.
+ * @param int $uid
+ *   The user ID.
+ */
+function drop_suite_review_clear($namespace, $uid) {
+  $state_key = 'drop_review.' . $namespace;
+  $all = state_get($state_key, array());
+  unset($all[$uid]);
+  state_set($state_key, $all);
+}
+
+/**
+ * Implements hook_form_field_ui_field_overview_form_alter().
+ *
+ * Attaches Drop Suite admin CSS to the Field UI manage fields page when it is
+ * displayed under a Drop entity admin path.
+ */
+function drop_suite_form_field_ui_field_overview_form_alter(&$form, &$form_state) {
+  // Only attach on Drop admin pages (paths starting with drop/).
+  if (strpos(current_path(), 'drop/') === 0) {
+    $form['#attached']['css'][] = backdrop_get_path('module', 'drop_suite') . '/drop_suite.admin.css';
+  }
+}
+
+/**
+ * Implements hook_form_field_ui_display_overview_form_alter().
+ *
+ * Attaches Drop Suite admin CSS to the Field UI manage display page when it is
+ * displayed under a Drop entity admin path.
+ */
+function drop_suite_form_field_ui_display_overview_form_alter(&$form, &$form_state) {
+  if (strpos(current_path(), 'drop/') === 0) {
+    $form['#attached']['css'][] = backdrop_get_path('module', 'drop_suite') . '/drop_suite.admin.css';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared emoji reactions (consumed by droptickets, dropupdates, etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the canonical reaction palette as code => emoji character.
+ *
+ * Codes are ASCII-safe and stored in consumer tables. Characters are display
+ * only. All Drop Suite modules that support reactions should call this so the
+ * palette stays consistent.
+ */
+function drop_suite_reaction_emojis() {
+  return array(
+    'thumbsup' => '👍',
+    'heart'    => '❤️',
+    'tada'     => '🎉',
+    'eyes'     => '👀',
+  );
+}
+
+/**
+ * Renders a reaction button bar.
+ *
+ * Returns an HTML string: a `.drop-reactions` container with one `.react-btn`
+ * per emoji in the palette. Empty buttons get the `react-btn--empty` class so
+ * the CSS can hide them until the host element is hovered.
+ *
+ * @param array $reactions
+ *   Reactions keyed by emoji code, each value an array of uids who reacted
+ *   (consumer-provided).
+ * @param array $accounts
+ *   Optional uid => account lookup for building tooltip names.
+ * @param array $options
+ *   - react_url: (required) AJAX endpoint to POST {emoji: code} to.
+ *   - data: optional associative array of extra data-* attributes for the bar.
+ *
+ * @return string
+ */
+function drop_suite_render_reactions(array $reactions, array $accounts = array(), array $options = array()) {
+  global $user;
+  $emojis   = drop_suite_reaction_emojis();
+  $react_url = isset($options['react_url']) ? $options['react_url'] : '';
+
+  $data_attrs = ' data-react-url="' . check_plain($react_url) . '"';
+  if (!empty($options['data']) && is_array($options['data'])) {
+    foreach ($options['data'] as $key => $val) {
+      $data_attrs .= ' data-' . check_plain($key) . '="' . check_plain((string) $val) . '"';
+    }
+  }
+
+  $html = '<div class="drop-reactions"' . $data_attrs . '>';
+  foreach ($emojis as $code => $char) {
+    $uids   = isset($reactions[$code]) ? $reactions[$code] : array();
+    $count  = count($uids);
+    $active = in_array((int) $user->uid, $uids) ? ' is-active' : '';
+    $empty  = $count === 0 ? ' react-btn--empty' : '';
+    $label  = $count > 0 ? $char . ' ' . $count : $char;
+
+    $names = array();
+    foreach ($uids as $uid) {
+      if ($uid == $user->uid) {
+        $names[] = t('You');
+      }
+      elseif (isset($accounts[$uid])) {
+        $names[] = check_plain($accounts[$uid]->name);
+      }
+    }
+    $title = $names ? $char . ' ' . implode(' · ', $names) : $char;
+
+    $html .= '<button type="button" class="react-btn' . $active . $empty . '"'
+      . ' data-emoji="' . check_plain($code) . '"'
+      . ' data-char="' . check_plain($char) . '"'
+      . ' title="' . check_plain($title) . '">' . $label . '</button>';
+  }
+  $html .= '</div>';
+  return $html;
+}
+
+/**
+ * Formats a reactions payload for the AJAX response.
+ *
+ * Consumers call this from their react AJAX handler after loading the fresh
+ * reaction state from their own table. Returns the normalised shape the
+ * shared JS behavior expects: { code: { count, user_reacted, names } }.
+ */
+function drop_suite_format_reactions_response(array $reactions, $current_uid) {
+  $all_uids = array();
+  foreach ($reactions as $uids) {
+    $all_uids = array_merge($all_uids, $uids);
+  }
+  $accounts = $all_uids ? user_load_multiple(array_unique($all_uids)) : array();
+
+  $result = array();
+  foreach ($reactions as $code => $uids) {
+    $names = array();
+    foreach ($uids as $uid) {
+      if ($uid == $current_uid) {
+        $names[] = t('You');
+      }
+      elseif (isset($accounts[$uid])) {
+        $names[] = check_plain($accounts[$uid]->name);
+      }
+    }
+    $result[$code] = array(
+      'count'        => count($uids),
+      'user_reacted' => in_array((int) $current_uid, $uids),
+      'names'        => $names,
+    );
+  }
+  return $result;
+}
+
+/**
+ * Returns the #attached assets for a page that renders a reaction bar.
+ *
+ * Modules using drop_suite_render_reactions() should merge this into their
+ * page's #attached so the shared CSS/JS load.
+ */
+function drop_suite_reactions_attached() {
+  $path = backdrop_get_path('module', 'drop_suite');
+  return array(
+    'css' => array($path . '/drop_suite.reactions.css'),
+    'js'  => array($path . '/drop_suite.reactions.js'),
+  );
+}

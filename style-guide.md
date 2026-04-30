@@ -7,9 +7,9 @@ Design decisions to remember across the Drop Suite modules.
 Drop Suite is **theme-agnostic**. All styling lives in the modules themselves,
 not in a dedicated theme.
 
-- **Shared styles** go in `drop_base.css` — nav, priority colors, section headers,
+- **Shared styles** go in `drop_suite.css` — nav, priority colors, section headers,
   page actions, settings cards, CSS custom properties. This file is loaded on
-  every page where drop_base is active.
+  every page where drop_suite is active.
 - **Module-specific styles** go in each module's own CSS file (e.g.
   `droptickets.css`, `dropcrm.admin.css`) and are loaded via `#attached` only
   on that module's pages.
@@ -20,7 +20,7 @@ not in a dedicated theme.
 
 **Where to put new CSS:**
 - If it applies to multiple modules (e.g. a new utility class, a shared
-  component) → `drop_base.css`.
+  component) → `drop_suite.css`.
 - If it only applies to one module's pages → that module's CSS file.
 - Never in a theme. Drop Suite should work with any well-built Backdrop theme.
 
@@ -68,7 +68,7 @@ packed into one tight row per nav item, narrow column widths for the
 checkbox and icon fields, zero margin on form-items, and a short bullet
 list above the table instead of a prose intro. When building a similar
 management UI, open that page first and mirror its density.
-See `modules/drop_suites/drop_base/drop_base.nav_admin.inc`.
+See `modules/drop_suites/drop_suite/drop_suite.nav_admin.inc`.
 
 ## Navigation
 
@@ -81,14 +81,14 @@ Four layered surfaces, no breadcrumbs. Order from site-wide to page-specific:
 
 Each surface sits directly below the next broader one in the layout (primary → section → tabs → action bar → page title → content).
 
-**Primary nav** (`drop-nav` block from drop_base):
+**Primary nav** (`drop-nav` block from drop_suite):
 - Modules register links via `hook_drop_nav_links()` returning `title`, `path`,
   `permission`, `weight`, and optional `separator`.
 - Right-side extras (e.g. notification bell) via `hook_drop_nav_extras()`.
 - Rendered as `<nav class="drop-nav">` with flex layout, centered anchors.
 - Active link gets `drop-nav-active` class.
 
-**Section nav** (`drop_section_nav` block from drop_base):
+**Section nav** (`drop_section_nav` block from drop_suite):
 - Per-module sub-navigation based on the second URL segment (e.g. `drop/tickets/*`).
 - Modules register links via `hook_drop_section_links($section)` returning
   `title`, `href`, `weight`, optional `badge`, `admin_only`, `active_paths`, `pinned`.
@@ -101,7 +101,7 @@ Each surface sits directly below the next broader one in the layout (primary →
 - Use for standard Backdrop **View / Edit / Delete** tabs on entity view pages, and for admin sub-pages (Settings, Field UI, etc.) under a section root.
 - A local task is an alternate **view** of the current thing — a different rendering of the same subject.
 - Do NOT use `MENU_LOCAL_TASK` for verbs or actions (Renew, Cancel, Record payment, Send email, Extend due date). Those go in the **Action Bar**.
-- The tabs bar renders directly below Section nav, above the page title. This positioning is seeded by `drop_base_install` and maintained by `drop_base_update_1204`.
+- The tabs bar renders directly below Section nav, above the page title. This positioning is seeded by `drop_suite_install` and maintained by `drop_suite_update_1204`.
 - Use Backdrop's conventions. Content editors coming from other Backdrop sites should recognise the View/Edit tab pattern immediately.
 
 **Local Actions** (`MENU_LOCAL_ACTION`):
@@ -114,7 +114,7 @@ URL namespace (e.g. `drop/crm/events/*` for DropEvents since Events appears
 in CRM's section sub-nav; `drop/crm/memberships/*` for dropcrm_membership as
 a submodule of DropCRM). This keeps section detection aligned with the user's
 mental model — the parent submenu persists across sub-section pages
-automatically, no special-casing needed in `_drop_base_get_section()`.
+automatically, no special-casing needed in `_drop_suite_get_section()`.
 Public-facing routes for the same module are exempt and go wherever they read
 best (e.g. `/events/{title}` for public event nodes).
 
@@ -122,7 +122,7 @@ best (e.g. `/events/{title}` for public event nodes).
 
 Per-entity verbs — things you *do to* the entity, not alternate views of it. Examples: Renew a membership, Record a payment, Send an email, Extend a due date, Cancel an order.
 
-**Rendering** — call `drop_base_page_actions(array $links)` near the top of the entity view page's render output. Returns a `<div class="drop-page-actions">` containing pill-styled links. Placed at the very start of `$output`, above the first section heading.
+**Rendering** — call `drop_suite_page_actions(array $links)` near the top of the entity view page's render output. Returns a `<div class="drop-page-actions">` containing pill-styled links. Placed at the very start of `$output`, above the first section heading.
 
 ```php
 $actions = array();
@@ -134,7 +134,7 @@ if (user_access('cancel dropcrm_membership')) {
   $actions[] = l(t('Cancel'), 'drop/crm/memberships/' . $membership->mid . '/cancel');
 }
 $output['actions'] = array(
-  '#markup' => drop_base_page_actions($actions),
+  '#markup' => drop_suite_page_actions($actions),
   '#weight' => -100,
 );
 ```
@@ -143,7 +143,7 @@ $output['actions'] = array(
 
 **Variants:**
 - **Person contacts in DropCRM** embed the action bar inside a richer "hero" block (`_dropcrm_contact_hero`) that also renders name, rating, tags, and job title. That's a decorative wrapper — the action bar below the hero still uses the same pill styling.
-- **Org / household contacts** use a plain `drop_base_page_actions()` call with Edit and Delete links.
+- **Org / household contacts** use a plain `drop_suite_page_actions()` call with Edit and Delete links.
 
 **When NOT to use the action bar:**
 - Alternate views of the entity (→ Local Tasks).
@@ -156,7 +156,7 @@ $output['actions'] = array(
 
 - Build tables with `'#theme' => 'table'` render arrays, not raw HTML.
 - Striped rows via `tbody tr:nth-child(even)` with light background (`#f7f8fa`).
-- Priority row classes from drop_base: `tr.drop-priority-critical` (red tint),
+- Priority row classes from drop_suite: `tr.drop-priority-critical` (red tint),
   `tr.drop-row-overdue` (red), `tr.drop-row-due-soon` (orange).
 - Priority cell classes: `td.drop-priority-critical` through `td.drop-priority-none`
   with centered bold text and colored backgrounds.
@@ -235,7 +235,7 @@ The section nav block (placed in the layout) provides sub-page links automatical
 - **Narrow pages**: Entity view pages (ticket, task, contact, goal, doc, settings)
   get the `drop-narrow-page` class, which applies a configurable max-width
   (set at `drop/settings/base`). This keeps reading-focused pages comfortable.
-  Detected by `_drop_base_is_narrow_page()`.
+  Detected by `_drop_suite_is_narrow_page()`.
 - **Kanban-wide mode**: The kanban board gets `layout-kanban-wide` class, expanding
   to `max-width: 95vw` so columns have room to spread.
 - **Header region**: The `.l-header-inner` wrapper follows the Backdrop core layout
@@ -246,7 +246,7 @@ The section nav block (placed in the layout) provides sub-page links automatical
 
 ## Use of Color
 
-All colors defined as CSS custom properties in `drop_base.css`.
+All colors defined as CSS custom properties in `drop_suite.css`.
 
 **Base palette:**
 - `--drop-primary`: #1565c0 (blue)
@@ -276,7 +276,7 @@ All colors defined as CSS custom properties in `drop_base.css`.
 - Theme link hover: #bd0073 (magenta)
 
 **Rule:** Use the CSS custom properties, not raw hex values, so the theme
-can override them. Only define new properties in `drop_base.css`.
+can override them. Only define new properties in `drop_suite.css`.
 
 ## Entity Edit Forms
 
@@ -286,7 +286,7 @@ activities, projects, goals, time entries, docs).
 ### Page setup
 
 1. **Narrow page width** — all entity add/edit pages are registered in
-   `_drop_base_is_narrow_page()` so they get the `drop-narrow-page` class.
+   `_drop_suite_is_narrow_page()` so they get the `drop-narrow-page` class.
 
 2. **Breadcrumbs** — every entity form sets breadcrumbs. Pattern:
    - Add: `Home > Drop Suite > Section`
@@ -322,7 +322,7 @@ $form['layout']['sidebar'] = array(
 - Use `#type => 'container'` (not fieldsets, not `#prefix`/`#suffix` divs).
   Containers do not nest `$form_state['values']` — values stay at the top level.
 - Shared CSS classes (`drop-form-layout`, `drop-form-main`, `drop-form-sidebar`)
-  defined in `drop_base.css` so all modules get the same flex layout and
+  defined in `drop_suite.css` so all modules get the same flex layout and
   responsive breakpoint.
 
 **Single-column layout** (for simple forms — goals, time entries):
@@ -395,7 +395,7 @@ Rules:
 | Organization    | dropcrm      | No          | Single     | Yes (99)        | No     | No           |
 | Household       | dropcrm      | No          | Single     | Yes (99)        | No     | No           |
 | Activity        | dropcrm      | No          | Single     | Needs fix       | No     | No           |
-| Project         | drop_base    | No          | Single     | Needs fix       | Yes    | No           |
+| Project         | drop_suite    | No          | Single     | Needs fix       | Yes    | No           |
 
 ## Settings Pages
 
@@ -419,7 +419,7 @@ Two patterns, chosen by *scope of ownership*:
   (`drop/settings/base`), primary nav customization
   (`drop/settings/navigation`).
 
-**Drop Base is a special case.** Because drop_base provides platform-wide
+**Drop Suite is a special case.** Because drop_suite provides platform-wide
 surfaces (page widths, primary nav), its settings use the centralized
 path shape: `drop/settings/base`, `drop/settings/navigation` — not
 `drop/base/settings/*`. (The home-nav tool historically lived at
@@ -521,7 +521,7 @@ function mysubmodule_form_parentmodule_settings_form_alter(&$form, &$form_state)
 
 | Module       | Path                      | Follows guide? | Notes                          |
 |--------------|---------------------------|----------------|--------------------------------|
-| drop_base    | drop/settings/base        | Yes            |                                |
+| drop_suite    | drop/settings/base        | Yes            |                                |
 | dropcrm      | drop/crm/settings         | Yes            |                                |
 | dropbridge   | drop/settings/bridge      | Yes            |                                |
 | dropbridge   | drop/settings/inbound     | Yes            |                                |
@@ -533,7 +533,7 @@ function mysubmodule_form_parentmodule_settings_form_alter(&$form, &$form_state)
 ## Collapsible Details
 
 Use native `<details>`/`<summary>` elements for content that should be
-scannable but not always visible. Shared CSS classes live in `drop_base.css`.
+scannable but not always visible. Shared CSS classes live in `drop_suite.css`.
 
 ### Standard pattern
 
@@ -623,7 +623,7 @@ hook_update_NNNN()          → import the view config for existing sites
 
 | Entity          | Module      | Fieldable | Extra fields | Properties | Views listing |
 |-----------------|-------------|-----------|--------------|------------|---------------|
-| Project         | drop_base   | Yes       | Yes          | Yes        | Yes           |
+| Project         | drop_suite   | Yes       | Yes          | Yes        | Yes           |
 | Person          | dropcrm     | Yes       | Yes          | Yes        | Yes           |
 | Organization    | dropcrm     | Yes       | Yes          | Yes        | Yes           |
 | Household       | dropcrm     | Yes       | Yes          | Yes        | Yes           |

@@ -1,0 +1,355 @@
+<?php
+/**
+ * @file
+ * Tests for the DropDocs module (post Book-module refactor).
+ */
+
+/**
+ * Shared base class: helpers for creating book-enabled doc nodes.
+ */
+abstract class DropDocsTestBase extends BackdropWebTestCase {
+
+  /** @var object User with full admin access to docs. */
+  protected $adminUser;
+
+  /** @var object User who can view and create docs. */
+  protected $editorUser;
+
+  /** @var object User who can only view docs. */
+  protected $viewerUser;
+
+  /**
+   * Creates and saves a doc node, optionally enrolled in a book.
+   *
+   * If $parent is NULL, the doc becomes its own book root. If $parent is a
+   * loaded doc node that has $node->book set, the new doc is added as a child
+   * of that parent within the same book.
+   *
+   * @param string      $title
+   * @param object|null $parent  Parent doc node (with book) or NULL for a new book root.
+   * @param string      $body    Body text.
+   * @param int|null    $uid     Author UID (defaults to adminUser).
+   *
+   * @return object  Saved node with $node->book populated.
+   */
+  protected function createTestDoc($title, $parent = NULL, $body = 'Test content.', $uid = NULL) {
+    $node         = new Node();
+    $node->type   = 'doc';
+    $node->title  = $title;
+    $node->status = 1;
+    $node->uid    = $uid ?: $this->adminUser->uid;
+    $node->body[LANGUAGE_NONE][0] = array(
+      'value'  => $body,
+      'format' => filter_default_format(),
+    );
+
+    module_load_include('module', 'book');
+    $node->book = _book_link_defaults('new');
+    if ($parent && !empty($parent->book['bid'])) {
+      $node->book['bid']  = $parent->book['bid'];
+      $node->book['plid'] = $parent->book['mlid'];
+    }
+    else {
+      $node->book['bid'] = 'new';
+    }
+    node_save($node);
+    return $node;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Access control tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that DropDocs pages respect the access dropdocs and administer
+ * dropdocs permissions.
+ */
+class DropDocsAccessTest extends DropDocsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropDocs Access Control',
+      'description' => 'Verifies that permissions gate the docs index and view pages.',
+      'group'       => 'DropDocs',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'book', 'dropdocs');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+      'administer dropdocs',
+      'create doc content',
+      'edit any doc content',
+      'delete any doc content',
+      'add content to books',
+      'administer book outlines',
+    ));
+    $this->editorUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+      'create doc content',
+      'edit own doc content',
+      'add content to books',
+    ));
+    $this->viewerUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+    ));
+  }
+
+  /**
+   * Anonymous users cannot access the docs index.
+   */
+  public function testAnonymousCannotAccessIndex() {
+    $this->backdropGet('drop/docs');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user without 'access dropdocs' is denied the index.
+   */
+  public function testUserWithoutPermissionDeniedIndex() {
+    $noAccess = $this->backdropCreateUser(array());
+    $this->backdropLogin($noAccess);
+    $this->backdropGet('drop/docs');
+    $this->assertResponse(403);
+  }
+
+  /**
+   * A user with 'access dropdocs' can view the index.
+   */
+  public function testViewerCanAccessIndex() {
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user with 'access dropdocs' can view a doc node.
+   */
+  public function testViewerCanViewDoc() {
+    $doc = $this->createTestDoc('Viewer Doc Test');
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('node/' . $doc->nid);
+    $this->assertResponse(200);
+    $this->assertText('Viewer Doc Test');
+  }
+
+  /**
+   * The settings page requires 'administer dropdocs'.
+   */
+  public function testSettingsRequiresAdminPermission() {
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs/settings');
+    $this->assertResponse(403);
+
+    $this->backdropLogin($this->adminUser);
+    $this->backdropGet('drop/docs/settings');
+    $this->assertResponse(200);
+  }
+
+  /**
+   * A user with 'create doc content' sees the Add doc action button.
+   */
+  public function testEditorSeesAddButton() {
+    $this->backdropLogin($this->editorUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('Add doc');
+  }
+
+  /**
+   * A user without 'create doc content' does not see the Add doc button.
+   */
+  public function testViewerDoesNotSeeAddButton() {
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertNoText('Add doc');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Book integration tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests that DropDocs correctly integrates with the core Book module.
+ */
+class DropDocsBookIntegrationTest extends DropDocsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropDocs Book Integration',
+      'description' => 'Verifies doc nodes are book-enabled, render with the book sidebar, and preserve book ancestry.',
+      'group'       => 'DropDocs',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'book', 'dropdocs');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+      'administer dropdocs',
+      'create doc content',
+      'edit any doc content',
+      'delete any doc content',
+      'add content to books',
+      'administer book outlines',
+    ));
+    $this->viewerUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+    ));
+  }
+
+  /**
+   * hook_install registers 'doc' in book.settings.book_allowed_types.
+   */
+  public function testDocIsRegisteredAsBookAllowedType() {
+    $allowed = config_get('book.settings', 'book_allowed_types');
+    $this->assertTrue(is_array($allowed), 'book_allowed_types is an array.');
+    $this->assertTrue(in_array('doc', $allowed), "'doc' is registered as a book-allowed type.");
+  }
+
+  /**
+   * A newly-created doc becomes its own book when bid is 'new'.
+   */
+  public function testNewDocBecomesOwnBook() {
+    $doc = $this->createTestDoc('Standalone Doc');
+    $this->assertTrue(!empty($doc->book['bid']), 'Doc has a book bid after save.');
+    $this->assertEqual($doc->nid, $doc->book['bid'], 'Standalone doc is its own book root.');
+  }
+
+  /**
+   * A child doc is enrolled in its parent's book with the parent as plid.
+   */
+  public function testChildDocJoinsParentBook() {
+    $parent = $this->createTestDoc('Book Parent');
+    $child  = $this->createTestDoc('Book Child', $parent);
+
+    $this->assertEqual($parent->book['bid'], $child->book['bid'], 'Child shares parent bid.');
+    $this->assertEqual($parent->book['mlid'], $child->book['plid'], 'Child plid matches parent mlid.');
+  }
+
+  /**
+   * The docs index page lists the titles of top-level doc books.
+   */
+  public function testIndexListsDocBooks() {
+    $this->createTestDoc('First Book');
+    $this->createTestDoc('Second Book');
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('First Book');
+    $this->assertText('Second Book');
+  }
+
+  /**
+   * Children in a book appear nested under their parent on the index.
+   */
+  public function testChildDocsShowUnderParentOnIndex() {
+    $parent = $this->createTestDoc('Parent Section');
+    $this->createTestDoc('Nested Child', $parent);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+
+    $content = $this->backdropGetContent();
+    $parent_pos = strpos($content, 'Parent Section');
+    $child_pos  = strpos($content, 'Nested Child');
+    $this->assertTrue($parent_pos !== FALSE, 'Parent appears on index.');
+    $this->assertTrue($child_pos !== FALSE, 'Child appears on index.');
+    $this->assertTrue($parent_pos < $child_pos, 'Parent renders before child.');
+  }
+
+  /**
+   * A doc view page shows the book navigation with other entries in the book.
+   *
+   * The dropdocs layout ships a book:navigation sidebar block that renders
+   * on node/% for any book or doc bundle. The ancestor's title should be
+   * visible in the rendered page (via the sidebar tree and/or breadcrumb).
+   */
+  public function testDocViewRendersBookSidebar() {
+    $root  = $this->createTestDoc('Sidebar Root');
+    $child = $this->createTestDoc('Sidebar Child', $root);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('node/' . $child->nid);
+    $this->assertResponse(200);
+    $this->assertText('Sidebar Root');
+    $this->assertText('Sidebar Child');
+  }
+
+  /**
+   * The breadcrumb on a nested doc view page links to its ancestor doc.
+   */
+  public function testChildDocBreadcrumbIncludesAncestor() {
+    $root  = $this->createTestDoc('Breadcrumb Root');
+    $child = $this->createTestDoc('Breadcrumb Child', $root);
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('node/' . $child->nid);
+    $this->assertResponse(200);
+    $this->assertLinkByHref(url('node/' . $root->nid));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Display name + empty state tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests the configurable display_name setting and empty-state messaging.
+ */
+class DropDocsDisplayNameTest extends DropDocsTestBase {
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'DropDocs Display Name',
+      'description' => 'Verifies the display_name config changes nav, empty state, and sidebar heading.',
+      'group'       => 'DropDocs',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'book', 'dropdocs');
+
+    $this->adminUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+      'administer dropdocs',
+      'create doc content',
+      'edit any doc content',
+      'add content to books',
+    ));
+    $this->viewerUser = $this->backdropCreateUser(array(
+      'access dropdocs',
+    ));
+  }
+
+  /**
+   * The index shows the default empty message when no docs exist.
+   */
+  public function testIndexShowsEmptyMessage() {
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('No docs yet.');
+  }
+
+  /**
+   * Changing display_name changes the empty message and sidebar heading.
+   */
+  public function testDisplayNameConfig() {
+    $config = config('dropdocs.settings');
+    $config->set('display_name', 'Knowledge Base');
+    $config->save();
+
+    $this->backdropLogin($this->viewerUser);
+    $this->backdropGet('drop/docs');
+    $this->assertText('No knowledge base yet.');
+
+    $doc = $this->createTestDoc('KB Article');
+    $this->backdropGet('node/' . $doc->nid);
+    $this->assertText('Knowledge Base');
+  }
+}
