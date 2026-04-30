@@ -180,7 +180,7 @@ function _drop_suite_is_narrow_page($path) {
     // Time entry edit.
     '#^drop/time/entry/\d+/edit$#',
     // Docs list and add form. The canonical doc view path is node/{nid},
-    // which is handled by the dropdocs sidebar layout (not narrow).
+    // which is handled by the drop_docs sidebar layout (not narrow).
     '#^drop/docs$#',
     '#^node/add/doc$#',
     // Project view and forms: drop/projects/{pid}, add, edit.
@@ -2198,9 +2198,9 @@ function drop_suite_form_user_admin_permissions_alter(&$form, &$form_state, $for
     'drop_start',
     'dropbridge',
     'drop_crm',
-    'dropdocs',
+    'drop_docs',
     'dropemail',
-    'dropfiles',
+    'drop_files',
     'dropgoals',
     'dropmonitor',
     'dropnewsletter',

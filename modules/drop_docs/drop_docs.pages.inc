@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Page callbacks for DropDocs.
+ * Page callbacks for Drop Docs.
  */
 
 /**
@@ -13,8 +13,8 @@
  *
  * @return array  Backdrop render array.
  */
-function dropdocs_index_page() {
-  backdrop_set_title(dropdocs_display_name());
+function drop_docs_index_page() {
+  backdrop_set_title(drop_docs_display_name());
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
@@ -26,16 +26,16 @@ function dropdocs_index_page() {
   if (node_access('create', 'doc')) {
     $output['actions'] = array(
       '#markup' => drop_suite_page_actions(array(
-        l(t('Add @name', array('@name' => strtolower(dropdocs_display_name('singular')))), 'node/add/doc', array('attributes' => array('class' => array('button', 'button-primary')))),
+        l(t('Add @name', array('@name' => strtolower(drop_docs_display_name('singular')))), 'node/add/doc', array('attributes' => array('class' => array('button', 'button-primary')))),
       )),
     );
   }
 
-  $doc_books = _dropdocs_get_doc_books();
+  $doc_books = _drop_docs_get_doc_books();
 
   if (empty($doc_books)) {
     $output['empty'] = array(
-      '#markup' => '<p class="dropdocs-empty">' . t('No @name yet.', array('@name' => strtolower(dropdocs_display_name()))) . '</p>',
+      '#markup' => '<p class="drop-docs-empty">' . t('No @name yet.', array('@name' => strtolower(drop_docs_display_name()))) . '</p>',
     );
     return $output;
   }
@@ -43,13 +43,13 @@ function dropdocs_index_page() {
   $markup = '';
   foreach ($doc_books as $bid => $book) {
     $tree = menu_tree_all_data($book['menu_name']);
-    $markup .= _dropdocs_render_book_tree($tree);
+    $markup .= _drop_docs_render_book_tree($tree);
   }
 
   $output['tree'] = array(
-    '#markup'   => '<div class="dropdocs-index-tree">' . $markup . '</div>',
+    '#markup'   => '<div class="drop-docs-index-tree">' . $markup . '</div>',
     '#attached' => array(
-      'css' => array(backdrop_get_path('module', 'dropdocs') . '/dropdocs.css'),
+      'css' => array(backdrop_get_path('module', 'drop_docs') . '/drop_docs.css'),
     ),
   );
 
@@ -71,11 +71,11 @@ function dropdocs_index_page() {
  *
  * @return string  HTML markup (empty string if $tree is empty).
  */
-function _dropdocs_render_book_tree(array $tree) {
+function _drop_docs_render_book_tree(array $tree) {
   if (empty($tree)) {
     return '';
   }
-  $output = '<ul class="dropdocs-tree">';
+  $output = '<ul class="drop-docs-tree">';
   foreach ($tree as $data) {
     if (empty($data['link']) || !empty($data['link']['hidden'])) {
       continue;
@@ -86,11 +86,11 @@ function _dropdocs_render_book_tree(array $tree) {
     }
     $nid          = (int) $m[1];
     $has_children = !empty($data['below']);
-    $class_attr   = $has_children ? ' class="dropdocs-has-children"' : '';
+    $class_attr   = $has_children ? ' class="drop-docs-has-children"' : '';
     $output .= '<li' . $class_attr . ' data-nid="' . $nid . '">';
     $output .= l($link['link_title'], 'node/' . $nid);
     if ($has_children) {
-      $output .= _dropdocs_render_book_tree($data['below']);
+      $output .= _drop_docs_render_book_tree($data['below']);
     }
     $output .= '</li>';
   }
@@ -103,7 +103,7 @@ function _dropdocs_render_book_tree(array $tree) {
  *
  * @return array
  */
-function _dropdocs_get_doc_books() {
+function _drop_docs_get_doc_books() {
   $doc_books = array();
   foreach (book_get_books() as $bid => $book) {
     $root = node_load($book['nid']);
@@ -119,17 +119,17 @@ function _dropdocs_get_doc_books() {
 // ---------------------------------------------------------------------------
 
 /**
- * Settings form for DropDocs.
+ * Settings form for Drop Docs.
  */
-function dropdocs_settings_form($form, &$form_state) {
+function drop_docs_settings_form($form, &$form_state) {
   backdrop_set_title(t('Settings'));
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropdocs_display_name(), 'drop/docs'),
+    l(drop_docs_display_name(), 'drop/docs'),
   ));
 
-  $config = config('dropdocs.settings');
+  $config = config('drop_docs.settings');
 
   $form['display'] = array(
     '#type' => 'fieldset',
@@ -163,8 +163,8 @@ function dropdocs_settings_form($form, &$form_state) {
 /**
  * Settings form submit.
  */
-function dropdocs_settings_form_submit($form, &$form_state) {
-  $config = config('dropdocs.settings');
+function drop_docs_settings_form_submit($form, &$form_state) {
+  $config = config('drop_docs.settings');
   $config->set('display_name', $form_state['values']['display_name']);
   $config->save();
   backdrop_set_message(t('Settings saved.'));

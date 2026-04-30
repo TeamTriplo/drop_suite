@@ -17,7 +17,7 @@ over time.
 | [drop_suite](drop_suite/) | Shared CSS, helpers, nav bar, team directory | — | *none* |
 | [DropBridge](dropbridge/) | Unified daily dashboard, Slack DMs, inbound email | `drop/` | drop_suite |
 | [Drop CRM](drop_crm/) | Contacts, activities, projects, contact methods | `drop/crm` | drop_suite, entity_plus, entity_ui, entityreference |
-| [DropDocs](dropdocs/) | Hierarchical team wiki / documentation | `drop/docs` | drop_suite |
+| [Drop Docs](drop_docs/) | Hierarchical team wiki / documentation | `drop/docs` | drop_suite |
 | [DropEmail](dropemail/) | Outbound email from contacts & tickets, activity logging | — | drop_crm |
 | [DropGoals](dropgoals/) | Daily habit / goal tracking with flexible frequency | `drop/goals` | drop_suite |
 | [DropNewsletter](dropnewsletter/) | Newsletter subscriptions on CRM contacts | — | drop_crm, simplenews |
@@ -32,7 +32,7 @@ over time.
 - **Drop CRM** is the core data module. It defines contacts, activities, contact methods, and the `drop_project` entity used by DropTickets and DropTime.
 - **DropBridge** is the integration hub. It pulls from Drop CRM, DropTasks, DropGoals, DropTickets, and DropTime via `module_exists()` checks — all are optional.
 - **DropEmail**, **DropNewsletter**, and **DropTime** extend Drop CRM with email, newsletter, and time tracking capabilities.
-- **DropTasks**, **DropGoals**, **DropDocs**, and **DropStrategic** are standalone modules that depend only on drop_suite (and entity_plus where needed).
+- **DropTasks**, **DropGoals**, **Drop Docs**, and **DropStrategic** are standalone modules that depend only on drop_suite (and entity_plus where needed).
 
 ## Requirements
 
@@ -60,7 +60,7 @@ For a full team productivity suite:
 - Enable: `drop_suite`, `drop_crm`, `droptickets`, `droptime`, `droptasks`, `dropgoals`, `dropbridge`
 
 For documentation and strategic planning:
-- Add: `dropdocs`, `dropstrategic`
+- Add: `drop_docs`, `dropstrategic`
 
 ## Permissions overview
 

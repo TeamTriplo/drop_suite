@@ -20,23 +20,23 @@
   /**
    * Behavior: collapsible upload dropzone toggle.
    */
-  Backdrop.behaviors.dropfilesUploadToggle = {
+  Backdrop.behaviors.drop_filesUploadToggle = {
     attach: function (context) {
-      var toggle = document.getElementById('dropfiles-upload-toggle');
-      var wrapper = document.getElementById('dropfiles-dropzone-wrapper');
+      var toggle = document.getElementById('drop-files-upload-toggle');
+      var wrapper = document.getElementById('drop-files-dropzone-wrapper');
       if (!toggle || !wrapper || toggle.dataset.initialized) {
         return;
       }
       toggle.dataset.initialized = '1';
 
       toggle.addEventListener('click', function () {
-        var isVisible = wrapper.classList.contains('dropfiles-dropzone-wrapper--visible');
+        var isVisible = wrapper.classList.contains('drop-files-dropzone-wrapper--visible');
         if (isVisible) {
-          wrapper.classList.remove('dropfiles-dropzone-wrapper--visible');
-          toggle.classList.remove('dropfiles-upload-toggle--active');
+          wrapper.classList.remove('drop-files-dropzone-wrapper--visible');
+          toggle.classList.remove('drop-files-upload-toggle--active');
           // After transition, hide fully.
           setTimeout(function () {
-            if (!wrapper.classList.contains('dropfiles-dropzone-wrapper--visible')) {
+            if (!wrapper.classList.contains('drop-files-dropzone-wrapper--visible')) {
               wrapper.style.display = 'none';
             }
           }, 300);
@@ -45,8 +45,8 @@
           wrapper.style.display = 'block';
           // Force reflow before adding class for transition.
           wrapper.offsetHeight;
-          wrapper.classList.add('dropfiles-dropzone-wrapper--visible');
-          toggle.classList.add('dropfiles-upload-toggle--active');
+          wrapper.classList.add('drop-files-dropzone-wrapper--visible');
+          toggle.classList.add('drop-files-upload-toggle--active');
         }
       });
     }
@@ -55,11 +55,11 @@
   /**
    * Behavior: grid/list view toggle with localStorage persistence.
    */
-  Backdrop.behaviors.dropfilesViewToggle = {
+  Backdrop.behaviors.drop_filesViewToggle = {
     attach: function (context) {
-      var btns = document.querySelectorAll('.dropfiles-view-btn');
-      var listView = document.querySelector('.dropfiles-list-view');
-      var gridView = document.querySelector('.dropfiles-grid-view');
+      var btns = document.querySelectorAll('.drop-files-view-btn');
+      var listView = document.querySelector('.drop-files-list-view');
+      var gridView = document.querySelector('.drop-files-grid-view');
       if (!btns.length || !listView || !gridView) {
         return;
       }
@@ -81,14 +81,14 @@
         // Update active button.
         for (var i = 0; i < btns.length; i++) {
           if (btns[i].getAttribute('data-view') === mode) {
-            btns[i].classList.add('dropfiles-view-btn--active');
+            btns[i].classList.add('drop-files-view-btn--active');
           }
           else {
-            btns[i].classList.remove('dropfiles-view-btn--active');
+            btns[i].classList.remove('drop-files-view-btn--active');
           }
         }
         try {
-          localStorage.setItem('dropfiles_view', mode);
+          localStorage.setItem('drop_files_view', mode);
         }
         catch (e) {
           // localStorage unavailable; silently ignore.
@@ -98,7 +98,7 @@
       // Restore preference from localStorage.
       var saved = null;
       try {
-        saved = localStorage.getItem('dropfiles_view');
+        saved = localStorage.getItem('drop_files_view');
       }
       catch (e) {
         // Ignore.
@@ -119,16 +119,16 @@
     }
   };
 
-  Backdrop.behaviors.dropfilesUpload = {
+  Backdrop.behaviors.drop_filesUpload = {
     attach: function (context) {
-      var dropzone = document.getElementById('dropfiles-dropzone');
-      var fileInput = document.getElementById('dropfiles-file-input');
+      var dropzone = document.getElementById('drop-files-dropzone');
+      var fileInput = document.getElementById('drop-files-file-input');
       if (!dropzone || !fileInput || dropzone.dataset.initialized) {
         return;
       }
       dropzone.dataset.initialized = '1';
 
-      var settings = Backdrop.settings.dropfilesUpload || {};
+      var settings = Backdrop.settings.drop_filesUpload || {};
       var uploadUrl = settings.uploadUrl;
       var token = settings.token;
 
@@ -147,45 +147,45 @@
       // Drag and drop events.
       dropzone.addEventListener('dragover', function (e) {
         e.preventDefault();
-        dropzone.classList.add('dropfiles-dropzone--active');
+        dropzone.classList.add('drop-files-dropzone--active');
       });
       dropzone.addEventListener('dragleave', function () {
-        dropzone.classList.remove('dropfiles-dropzone--active');
+        dropzone.classList.remove('drop-files-dropzone--active');
       });
       dropzone.addEventListener('drop', function (e) {
         e.preventDefault();
-        dropzone.classList.remove('dropfiles-dropzone--active');
+        dropzone.classList.remove('drop-files-dropzone--active');
         if (e.dataTransfer.files.length > 0) {
           uploadFiles(e.dataTransfer.files);
         }
       });
 
       function showUploadError(msg) {
-        var inner = dropzone.querySelector('.dropfiles-dropzone-inner');
-        var progress = dropzone.querySelector('.dropfiles-upload-progress');
-        var progressText = dropzone.querySelector('.dropfiles-progress-text');
-        var progressBarFill = dropzone.querySelector('.dropfiles-progress-bar-fill');
-        var progressDetail = dropzone.querySelector('.dropfiles-progress-detail');
+        var inner = dropzone.querySelector('.drop-files-dropzone-inner');
+        var progress = dropzone.querySelector('.drop-files-upload-progress');
+        var progressText = dropzone.querySelector('.drop-files-progress-text');
+        var progressBarFill = dropzone.querySelector('.drop-files-progress-bar-fill');
+        var progressDetail = dropzone.querySelector('.drop-files-progress-detail');
 
         progressText.textContent = Backdrop.t('Error: @msg', {'@msg': msg});
         progressBarFill.style.width = '100%';
-        progressBarFill.classList.add('dropfiles-progress-bar-fill--error');
-        progressDetail.innerHTML = '<a href="#" class="dropfiles-dismiss-error">'
+        progressBarFill.classList.add('drop-files-progress-bar-fill--error');
+        progressDetail.innerHTML = '<a href="#" class="drop-files-dismiss-error">'
           + Backdrop.t('Dismiss') + '</a>';
-        progressDetail.querySelector('.dropfiles-dismiss-error').addEventListener('click', function (e) {
+        progressDetail.querySelector('.drop-files-dismiss-error').addEventListener('click', function (e) {
           e.preventDefault();
           inner.style.display = '';
           progress.style.display = 'none';
-          progressBarFill.classList.remove('dropfiles-progress-bar-fill--error');
+          progressBarFill.classList.remove('drop-files-progress-bar-fill--error');
         });
       }
 
       function uploadFiles(files) {
-        var inner = dropzone.querySelector('.dropfiles-dropzone-inner');
-        var progress = dropzone.querySelector('.dropfiles-upload-progress');
-        var progressText = dropzone.querySelector('.dropfiles-progress-text');
-        var progressBarFill = dropzone.querySelector('.dropfiles-progress-bar-fill');
-        var progressDetail = dropzone.querySelector('.dropfiles-progress-detail');
+        var inner = dropzone.querySelector('.drop-files-dropzone-inner');
+        var progress = dropzone.querySelector('.drop-files-upload-progress');
+        var progressText = dropzone.querySelector('.drop-files-progress-text');
+        var progressBarFill = dropzone.querySelector('.drop-files-progress-bar-fill');
+        var progressDetail = dropzone.querySelector('.drop-files-progress-detail');
         var queue = Array.prototype.slice.call(files);
         var total = queue.length;
         var completed = 0;

@@ -1,4 +1,4 @@
-# DropDocs
+# Drop Docs
 
 Internal team documentation and wiki for the Drop Suite. Provides a
 hierarchical document system with tree navigation, tagging, and reordering.
@@ -29,6 +29,6 @@ hierarchical document system with tree navigation, tagging, and reordering.
 
 ## Permissions
 
-- `access dropdocs` — view documentation pages
-- `administer dropdocs` — reorder documents and manage hierarchy
+- `access drop_docs` — view documentation pages
+- `administer drop_docs` — reorder documents and manage hierarchy
 - Standard node permissions apply for creating and editing doc content

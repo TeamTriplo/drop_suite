@@ -443,8 +443,8 @@ function drop_start_available_modules() {
   if (module_exists('droptime')) {
     $modules['droptime'] = t('Time entries');
   }
-  if (module_exists('dropdocs')) {
-    $modules['dropdocs'] = t('Docs');
+  if (module_exists('drop_docs')) {
+    $modules['drop_docs'] = t('Docs');
   }
   return $modules;
 }

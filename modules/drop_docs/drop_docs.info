@@ -1,4 +1,4 @@
-name = DropDocs
+name = Drop Docs
 description = Internal team documentation and wiki for the Drop Suite.
 type = module
 backdrop = 1.x

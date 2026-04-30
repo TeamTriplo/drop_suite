@@ -271,7 +271,7 @@ function drop_start_generate_form_submit($form, &$form_state) {
     _drop_start_generate_time_entries($uid, $project_ids);
   }
 
-  if (!empty($selected['dropdocs'])) {
+  if (!empty($selected['drop_docs'])) {
     _drop_start_generate_docs($uid);
   }
 
@@ -1011,7 +1011,7 @@ function _drop_start_create_doc($title, $body, $uid, $parent_nid = NULL) {
     'format' => 'filtered_html',
   );
   // Attach children to the parent's book outline. Top-level docs (no parent)
-  // fall through to dropdocs_node_presave, which auto-roots them as new books.
+  // fall through to drop_docs_node_presave, which auto-roots them as new books.
   if ($parent_nid) {
     $parent = node_load($parent_nid);
     if ($parent && !empty($parent->book['bid']) && !empty($parent->book['mlid'])) {

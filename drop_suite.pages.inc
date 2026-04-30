@@ -115,7 +115,7 @@ function drop_suite_settings_dashboard() {
  */
 function _drop_suite_fieldable_entity_types() {
   $all_info = entity_get_info();
-  $drop_modules = array('drop_suite', 'drop_crm', 'droptickets', 'droptasks', 'dropgoals', 'droptime', 'dropdocs');
+  $drop_modules = array('drop_suite', 'drop_crm', 'droptickets', 'droptasks', 'dropgoals', 'droptime', 'drop_docs');
 
   $types = array();
   foreach ($all_info as $entity_type => $info) {

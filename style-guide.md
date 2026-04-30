@@ -227,7 +227,7 @@ The section nav block (placed in the layout) provides sub-page links automatical
 | droptasks   | drop/tasks      | Filter tabs + themed task list         |
 | droptime    | drop/time       | Date nav + timer + daily entry list    |
 | dropgoals   | drop/goals      | Goal cards with completion rates       |
-| dropdocs    | drop/docs       | Document list                          |
+| drop_docs    | drop/docs       | Document list                          |
 
 ## Page Width
 
@@ -528,7 +528,7 @@ function mysubmodule_form_parentmodule_settings_form_alter(&$form, &$form_state)
 | dropemail    | drop/email/settings       | Yes            |                                |
 | dropmonitor  | drop/monitor/settings     | Yes            |                                |
 | droptickets  | drop/tickets/settings     | Mostly         | Status link is raw markup      |
-| dropdocs     | drop/docs/settings        | Yes            |                                |
+| drop_docs     | drop/docs/settings        | Yes            |                                |
 
 ## Collapsible Details
 

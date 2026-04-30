@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Install, update, and uninstall hooks for DropDocs.
+ * Install, update, and uninstall hooks for Drop Docs.
  */
 
 /**
@@ -11,12 +11,12 @@
  * registers doc as a book-allowed content type so the core Book module
  * handles navigation and ordering.
  */
-function dropdocs_install() {
+function drop_docs_install() {
   // Create doc_tags vocabulary.
   $vocabulary = new TaxonomyVocabulary(array(
     'name'         => t('Doc Tags'),
     'machine_name' => 'doc_tags',
-    'description'  => t('Tags for DropDocs documentation pages.'),
+    'description'  => t('Tags for Drop Docs documentation pages.'),
   ));
   taxonomy_vocabulary_save($vocabulary);
 
@@ -74,12 +74,12 @@ function dropdocs_install() {
   ));
 
   // Register 'doc' as a book-allowed content type.
-  _dropdocs_register_book_type();
+  _drop_docs_register_book_type();
 
   // Install the node/% doc layout with book navigation sidebar.
-  _dropdocs_install_layout();
+  _drop_docs_install_layout();
 
-  drop_suite_grant_admin_permissions('dropdocs');
+  drop_suite_grant_admin_permissions('drop_docs');
 
   // Grant the book-content view permission to authenticated users so the
   // default policy is "logged-in users can read docs; anonymous cannot".
@@ -89,18 +89,18 @@ function dropdocs_install() {
 }
 
 /**
- * Helper: install the dropdocs layout config from the module's config dir.
+ * Helper: install the drop_docs layout config from the module's config dir.
  *
- * Copies config/layout.layout.dropdocs.json into active config if it isn't
+ * Copies config/layout.layout.drop_docs.json into active config if it isn't
  * already present. Idempotent and safe to call from both hook_install and
  * update hooks for existing installs.
  */
-function _dropdocs_install_layout() {
-  $config = config('layout.layout.dropdocs');
+function _drop_docs_install_layout() {
+  $config = config('layout.layout.drop_docs');
   if (!$config->isNew()) {
     return;
   }
-  $source = backdrop_get_path('module', 'dropdocs') . '/config/layout.layout.dropdocs.json';
+  $source = backdrop_get_path('module', 'drop_docs') . '/config/layout.layout.drop_docs.json';
   if (!file_exists($source)) {
     return;
   }
@@ -121,7 +121,7 @@ function _dropdocs_install_layout() {
 /**
  * Helper: add 'doc' to book.settings.book_allowed_types if not already there.
  */
-function _dropdocs_register_book_type() {
+function _drop_docs_register_book_type() {
   $book_config = config('book.settings');
   $allowed = $book_config->get('book_allowed_types');
   if (!is_array($allowed)) {
@@ -135,15 +135,15 @@ function _dropdocs_register_book_type() {
 }
 
 /**
- * Create the dropdocs_weight table for existing installs (legacy).
+ * Create the drop_docs_weight table for existing installs (legacy).
  *
- * Superseded by dropdocs_update_1002 which drops the table after migrating
+ * Superseded by drop_docs_update_1002 which drops the table after migrating
  * weights into the book outline. Kept in place so existing sites that only
  * ran 1001 before upgrading still get a valid migration path through 1002.
  */
-function dropdocs_update_1001() {
-  if (!db_table_exists('dropdocs_weight')) {
-    db_create_table('dropdocs_weight', array(
+function drop_docs_update_1001() {
+  if (!db_table_exists('drop_docs_weight')) {
+    db_create_table('drop_docs_weight', array(
       'description' => 'Per-sibling display weight for doc nodes.',
       'fields' => array(
         'nid'    => array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE),
@@ -155,19 +155,19 @@ function dropdocs_update_1001() {
 }
 
 /**
- * Migrate DropDocs to the core Book module.
+ * Migrate Drop Docs to the core Book module.
  *
  * Enables book, registers 'doc' as a book-allowed type, creates a synthetic
  * "Documentation" root node, enrols every existing doc as a first-level child
- * ordered by the legacy dropdocs_weight table, then drops the legacy
- * field_doc_parent field and dropdocs_weight table.
+ * ordered by the legacy drop_docs_weight table, then drops the legacy
+ * field_doc_parent field and drop_docs_weight table.
  */
-function dropdocs_update_1002() {
+function drop_docs_update_1002() {
   if (!module_exists('book')) {
     module_enable(array('book'));
   }
 
-  _dropdocs_register_book_type();
+  _drop_docs_register_book_type();
 
   // Collect all existing doc nids. Use a stable order: legacy parent first
   // (so top-level docs come before former children), then legacy weight,
@@ -179,7 +179,7 @@ function dropdocs_update_1002() {
     FROM {node} n
     LEFT JOIN {field_data_field_doc_parent} p
       ON p.entity_id = n.nid AND p.entity_type = 'node'
-    LEFT JOIN {dropdocs_weight} w ON w.nid = n.nid
+    LEFT JOIN {drop_docs_weight} w ON w.nid = n.nid
     WHERE n.type = 'doc'
     ORDER BY parent_nid ASC, legacy_weight ASC, n.title ASC
   ")->fetchAll();
@@ -213,10 +213,10 @@ function dropdocs_update_1002() {
       $node->book['weight'] = $weight++;
       node_save($node);
     }
-    $message = t('DropDocs migrated @count existing docs into a "Documentation" book.', array('@count' => count($results)));
+    $message = t('Drop Docs migrated @count existing docs into a "Documentation" book.', array('@count' => count($results)));
   }
   else {
-    $message = t('DropDocs migration: no existing docs to move.');
+    $message = t('Drop Docs migration: no existing docs to move.');
   }
 
   // Drop the legacy field and table.
@@ -229,8 +229,8 @@ function dropdocs_update_1002() {
   }
   field_purge_batch(100);
 
-  if (db_table_exists('dropdocs_weight')) {
-    db_drop_table('dropdocs_weight');
+  if (db_table_exists('drop_docs_weight')) {
+    db_drop_table('drop_docs_weight');
   }
 
   return $message;
@@ -239,9 +239,9 @@ function dropdocs_update_1002() {
 /**
  * Install the node/% doc layout with book navigation sidebar.
  */
-function dropdocs_update_1003() {
-  _dropdocs_install_layout();
-  return t('DropDocs layout installed.');
+function drop_docs_update_1003() {
+  _drop_docs_install_layout();
+  return t('Drop Docs layout installed.');
 }
 
 /**
@@ -249,10 +249,10 @@ function dropdocs_update_1003() {
  * authenticated roles so existing sites aren't suddenly locked out of their
  * own docs when the hook_node_access() deny takes effect.
  */
-function dropdocs_update_1004() {
-  drop_suite_grant_admin_permissions('dropdocs');
+function drop_docs_update_1004() {
+  drop_suite_grant_admin_permissions('drop_docs');
   user_role_grant_permissions('authenticated', array('view drop docs book content'));
-  return t('DropDocs: book-content view permission granted to admin and authenticated roles.');
+  return t('Drop Docs: book-content view permission granted to admin and authenticated roles.');
 }
 
 /**
@@ -263,7 +263,7 @@ function dropdocs_update_1004() {
  * without selecting "Create a new book", etc.) were invisible on the docs
  * index page. This retroactively promotes each orphan to its own book root.
  */
-function dropdocs_update_1005() {
+function drop_docs_update_1005() {
   $orphans = db_query("
     SELECT n.nid
     FROM {node} n
@@ -283,15 +283,15 @@ function dropdocs_update_1005() {
     $count++;
   }
 
-  return t('DropDocs: promoted @n orphan doc(s) to their own books.', array('@n' => $count));
+  return t('Drop Docs: promoted @n orphan doc(s) to their own books.', array('@n' => $count));
 }
 
 /**
  * Implements hook_uninstall().
  */
-function dropdocs_uninstall() {
+function drop_docs_uninstall() {
   // Remove the shipped layout from active config.
-  $layout_config = config('layout.layout.dropdocs');
+  $layout_config = config('layout.layout.drop_docs');
   if (!$layout_config->isNew()) {
     $layout_config->delete();
     if (function_exists('layout_reset_caches')) {

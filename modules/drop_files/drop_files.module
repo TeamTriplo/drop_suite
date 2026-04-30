@@ -13,8 +13,8 @@
  * @return string
  *   The display name.
  */
-function dropfiles_display_name($variant = 'plural') {
-  $name = config_get('dropfiles.settings', 'display_name');
+function drop_files_display_name($variant = 'plural') {
+  $name = config_get('drop_files.settings', 'display_name');
   if (empty($name)) {
     $name = 'Files';
   }
@@ -33,15 +33,15 @@ function dropfiles_display_name($variant = 'plural') {
 /**
  * Implements hook_permission().
  */
-function dropfiles_permission() {
+function drop_files_permission() {
   return array(
-    'access dropfiles' => array(
+    'access drop_files' => array(
       'title' => t('View the file library'),
     ),
-    'upload dropfiles' => array(
+    'upload drop_files' => array(
       'title' => t('Upload and manage files'),
     ),
-    'administer dropfiles' => array(
+    'administer drop_files' => array(
       'title' => t('Manage file library settings'),
     ),
   );
@@ -50,88 +50,88 @@ function dropfiles_permission() {
 /**
  * Implements hook_menu().
  */
-function dropfiles_menu() {
+function drop_files_menu() {
   $items = array();
 
   $items['drop/files'] = array(
     'title' => 'Files',
-    'title callback' => 'dropfiles_display_name',
-    'page callback' => 'dropfiles_library_page',
+    'title callback' => 'drop_files_display_name',
+    'page callback' => 'drop_files_library_page',
     'access callback' => 'user_access',
-    'access arguments' => array('access dropfiles'),
-    'file' => 'dropfiles.pages.inc',
+    'access arguments' => array('access drop_files'),
+    'file' => 'drop_files.pages.inc',
   );
 
   $items['drop/files/upload'] = array(
     'title' => 'Upload',
     'page callback' => 'backdrop_get_form',
-    'page arguments' => array('dropfiles_upload_form'),
+    'page arguments' => array('drop_files_upload_form'),
     'access callback' => 'user_access',
-    'access arguments' => array('upload dropfiles'),
-    'file' => 'dropfiles.pages.inc',
+    'access arguments' => array('upload drop_files'),
+    'file' => 'drop_files.pages.inc',
   );
 
   $items['drop/files/%file/view'] = array(
     'title' => 'File details',
-    'page callback' => 'dropfiles_file_view_page',
+    'page callback' => 'drop_files_file_view_page',
     'page arguments' => array(2),
-    'access callback' => 'dropfiles_library_file_access',
+    'access callback' => 'drop_files_library_file_access',
     'access arguments' => array(2),
-    'file' => 'dropfiles.pages.inc',
+    'file' => 'drop_files.pages.inc',
   );
 
   $items['drop/files/%file/edit'] = array(
     'title' => 'Edit file',
     'page callback' => 'backdrop_get_form',
-    'page arguments' => array('dropfiles_edit_form', 2),
-    'access callback' => 'dropfiles_library_file_access',
+    'page arguments' => array('drop_files_edit_form', 2),
+    'access callback' => 'drop_files_library_file_access',
     'access arguments' => array(2),
-    'file' => 'dropfiles.pages.inc',
+    'file' => 'drop_files.pages.inc',
   );
 
   $items['drop/files/%file/replace'] = array(
     'title' => 'Replace file',
     'page callback' => 'backdrop_get_form',
-    'page arguments' => array('dropfiles_replace_form', 2),
-    'access callback' => 'dropfiles_library_file_access',
+    'page arguments' => array('drop_files_replace_form', 2),
+    'access callback' => 'drop_files_library_file_access',
     'access arguments' => array(2),
-    'file' => 'dropfiles.pages.inc',
+    'file' => 'drop_files.pages.inc',
   );
 
   $items['drop/files/%file/delete'] = array(
     'title' => 'Delete file',
     'page callback' => 'backdrop_get_form',
-    'page arguments' => array('dropfiles_delete_form', 2),
-    'access callback' => 'dropfiles_library_file_access',
+    'page arguments' => array('drop_files_delete_form', 2),
+    'access callback' => 'drop_files_library_file_access',
     'access arguments' => array(2),
-    'file' => 'dropfiles.pages.inc',
+    'file' => 'drop_files.pages.inc',
   );
 
   // AJAX upload endpoint for drag-and-drop.
   $items['drop/files/ajax-upload'] = array(
-    'page callback' => 'dropfiles_ajax_upload',
+    'page callback' => 'drop_files_ajax_upload',
     'access callback' => 'user_access',
-    'access arguments' => array('upload dropfiles'),
-    'file' => 'dropfiles.pages.inc',
+    'access arguments' => array('upload drop_files'),
+    'file' => 'drop_files.pages.inc',
     'type' => MENU_CALLBACK,
   );
 
   // Autocomplete callback for searching library files.
   $items['drop/files/autocomplete'] = array(
-    'page callback' => 'dropfiles_autocomplete',
+    'page callback' => 'drop_files_autocomplete',
     'access callback' => 'user_access',
-    'access arguments' => array('access dropfiles'),
-    'file' => 'dropfiles.pages.inc',
+    'access arguments' => array('access drop_files'),
+    'file' => 'drop_files.pages.inc',
     'type' => MENU_CALLBACK,
   );
 
   $items['drop/files/settings'] = array(
     'title' => 'Settings',
     'page callback' => 'backdrop_get_form',
-    'page arguments' => array('dropfiles_settings_form'),
+    'page arguments' => array('drop_files_settings_form'),
     'access callback' => 'user_access',
-    'access arguments' => array('administer dropfiles'),
-    'file' => 'dropfiles.pages.inc',
+    'access arguments' => array('administer drop_files'),
+    'file' => 'drop_files.pages.inc',
   );
 
   return $items;
@@ -140,8 +140,8 @@ function dropfiles_menu() {
 /**
  * Access callback for library file operations.
  *
- * Checks that the current user has the 'upload dropfiles' permission and
- * that the file belongs to the dropfiles library (tracked via file_usage).
+ * Checks that the current user has the 'upload drop_files' permission and
+ * that the file belongs to the drop_files library (tracked via file_usage).
  *
  * @param object $file
  *   The file object loaded from the menu wildcard.
@@ -149,16 +149,16 @@ function dropfiles_menu() {
  * @return bool
  *   TRUE if the user has access, FALSE otherwise.
  */
-function dropfiles_library_file_access($file) {
-  if (!user_access('upload dropfiles')) {
+function drop_files_library_file_access($file) {
+  if (!user_access('upload drop_files')) {
     return FALSE;
   }
 
-  // Verify the file is in the dropfiles library.
+  // Verify the file is in the drop_files library.
   $usage = db_select('file_usage', 'fu')
     ->fields('fu', array('fid'))
     ->condition('fu.fid', $file->fid)
-    ->condition('fu.module', 'dropfiles')
+    ->condition('fu.module', 'drop_files')
     ->condition('fu.type', 'library')
     ->range(0, 1)
     ->execute()
@@ -170,12 +170,12 @@ function dropfiles_library_file_access($file) {
 /**
  * Implements hook_drop_nav_links().
  */
-function dropfiles_drop_nav_links() {
+function drop_files_drop_nav_links() {
   return array(
     array(
       'title'      => t('Files'),
       'path'       => 'drop/files',
-      'permission' => 'access dropfiles',
+      'permission' => 'access drop_files',
       'weight'     => 45,
       'icon'       => 'paperclip',
     ),
@@ -185,7 +185,7 @@ function dropfiles_drop_nav_links() {
 /**
  * Implements hook_drop_section_links().
  */
-function dropfiles_drop_section_links($section) {
+function drop_files_drop_section_links($section) {
   if ($section !== 'files') {
     return array();
   }
@@ -203,7 +203,7 @@ function dropfiles_drop_section_links($section) {
     'title' => t('Upload'),
     'href' => 'drop/files/upload',
     'weight' => 0,
-    'permission' => 'upload dropfiles',
+    'permission' => 'upload drop_files',
   );
 
   return $links;
@@ -212,13 +212,13 @@ function dropfiles_drop_section_links($section) {
 /**
  * Implements hook_drop_settings_info().
  */
-function dropfiles_drop_settings_info() {
+function drop_files_drop_settings_info() {
   return array(
-    'dropfiles' => array(
-      'title' => t('DropFiles'),
+    'drop_files' => array(
+      'title' => t('Drop Files'),
       'description' => t('File library settings.'),
       'path' => 'drop/files/settings',
-      'permission' => 'administer dropfiles',
+      'permission' => 'administer drop_files',
       'weight' => 45,
     ),
   );
@@ -233,7 +233,7 @@ function dropfiles_drop_settings_info() {
  * @return array
  *   Array of term objects with tid and name properties.
  */
-function dropfiles_get_file_tags($fid) {
+function drop_files_get_file_tags($fid) {
   $file = file_load($fid);
   if (!$file || empty($file->field_file_tags[LANGUAGE_NONE])) {
     return array();
@@ -257,7 +257,7 @@ function dropfiles_get_file_tags($fid) {
  * @param array $tag_names
  *   Array of tag name strings.
  */
-function dropfiles_save_file_tags($fid, array $tag_names) {
+function drop_files_save_file_tags($fid, array $tag_names) {
   $file = file_load($fid);
   if (!$file) {
     return;
@@ -316,24 +316,24 @@ function dropfiles_save_file_tags($fid, array $tag_names) {
  * @return string
  *   HTML for the thumbnail or icon.
  */
-function dropfiles_file_thumbnail($file, $size = 40, $image_style = 'thumbnail') {
+function drop_files_file_thumbnail($file, $size = 40, $image_style = 'thumbnail') {
   // Image files: use core image style.
   if (strpos($file->filemime, 'image/') === 0) {
     $url = image_style_url($image_style, $file->uri);
-    return '<img src="' . check_url($url) . '" alt="" class="dropfiles-thumb" style="max-width:' . $size . 'px">';
+    return '<img src="' . check_url($url) . '" alt="" class="drop-files-thumb" style="max-width:' . $size . 'px">';
   }
 
   // PDF files: check for generated thumbnail.
   if ($file->filemime === 'application/pdf') {
-    $thumb_uri = dropfiles_pdf_thumbnail_uri($file->fid);
+    $thumb_uri = drop_files_pdf_thumbnail_uri($file->fid);
     if (file_exists($thumb_uri)) {
       $url = file_create_url($thumb_uri);
-      return '<img src="' . check_url($url) . '" alt="" class="dropfiles-thumb" style="max-width:' . $size . 'px">';
+      return '<img src="' . check_url($url) . '" alt="" class="drop-files-thumb" style="max-width:' . $size . 'px">';
     }
   }
 
   // Fallback to Phosphor icon.
-  $icon_name = dropfiles_file_icon($file->filemime);
+  $icon_name = drop_files_file_icon($file->filemime);
   return icon($icon_name, array('attributes' => array('width' => $size, 'height' => $size)));
 }
 
@@ -344,10 +344,10 @@ function dropfiles_file_thumbnail($file, $size = 40, $image_style = 'thumbnail')
  *   The file ID.
  *
  * @return string
- *   A stream wrapper URI like public://dropfiles_thumbs/123.png.
+ *   A stream wrapper URI like public://drop_files_thumbs/123.png.
  */
-function dropfiles_pdf_thumbnail_uri($fid) {
-  return 'public://dropfiles_thumbs/' . $fid . '.png';
+function drop_files_pdf_thumbnail_uri($fid) {
+  return 'public://drop_files_thumbs/' . $fid . '.png';
 }
 
 /**
@@ -361,7 +361,7 @@ function dropfiles_pdf_thumbnail_uri($fid) {
  * @return bool
  *   TRUE if the thumbnail was generated, FALSE otherwise.
  */
-function dropfiles_generate_pdf_thumbnail($file) {
+function drop_files_generate_pdf_thumbnail($file) {
   if ($file->filemime !== 'application/pdf') {
     return FALSE;
   }
@@ -380,11 +380,11 @@ function dropfiles_generate_pdf_thumbnail($file) {
     return FALSE;
   }
 
-  $thumb_dir = 'public://dropfiles_thumbs';
+  $thumb_dir = 'public://drop_files_thumbs';
   file_prepare_directory($thumb_dir, FILE_CREATE_DIRECTORY);
   $dest_dir = backdrop_realpath($thumb_dir);
   if (!$dest_dir || !is_writable($dest_dir)) {
-    watchdog('dropfiles', 'PDF thumbnail directory not writable: @dir', array(
+    watchdog('drop_files', 'PDF thumbnail directory not writable: @dir', array(
       '@dir' => $thumb_dir,
     ), WATCHDOG_WARNING);
     return FALSE;
@@ -403,7 +403,7 @@ function dropfiles_generate_pdf_thumbnail($file) {
   exec($cmd . ' 2>&1', $output, $return_code);
 
   if ($return_code !== 0) {
-    watchdog('dropfiles', 'PDF thumbnail generation failed for fid @fid: @output', array(
+    watchdog('drop_files', 'PDF thumbnail generation failed for fid @fid: @output', array(
       '@fid' => $file->fid,
       '@output' => implode("\n", $output),
     ), WATCHDOG_WARNING);
@@ -424,7 +424,7 @@ function dropfiles_generate_pdf_thumbnail($file) {
  * @return string
  *   A human-readable type string, e.g. "PDF Document".
  */
-function dropfiles_human_type($filemime, $filename = '') {
+function drop_files_human_type($filemime, $filename = '') {
   $map = array(
     'application/pdf' => 'PDF Document',
     'application/msword' => 'Word Document',
@@ -470,7 +470,7 @@ function dropfiles_human_type($filemime, $filename = '') {
  * @return string
  *   A Phosphor icon name.
  */
-function dropfiles_file_icon($filemime) {
+function drop_files_file_icon($filemime) {
   if ($filemime === 'application/pdf') {
     return 'file-pdf';
   }
@@ -509,9 +509,9 @@ function dropfiles_file_icon($filemime) {
  * Implements hook_form_FORM_ID_alter() for droptickets_ticket_form.
  *
  * Adds a "Attach from file library" autocomplete field so users can select
- * existing files from the DropFiles library to attach to a ticket.
+ * existing files from the Drop Files library to attach to a ticket.
  */
-function dropfiles_form_droptickets_ticket_form_alter(&$form, &$form_state) {
+function drop_files_form_droptickets_ticket_form_alter(&$form, &$form_state) {
   // Place in the main column, just after field_ticket_files (weight 20).
   $form['layout']['main']['library_files'] = array(
     '#type' => 'textfield',
@@ -523,7 +523,7 @@ function dropfiles_form_droptickets_ticket_form_alter(&$form, &$form_state) {
 
   // Add our submit handler after the main one to attach library files
   // post-save (avoids conflicts with the file widget's internal state).
-  $form['#submit'][] = 'dropfiles_ticket_library_submit';
+  $form['#submit'][] = 'drop_files_ticket_library_submit';
 }
 
 /**
@@ -532,7 +532,7 @@ function dropfiles_form_droptickets_ticket_form_alter(&$form, &$form_state) {
  * Parses the autocomplete values (format: "filename [fid:123]"), loads the
  * just-saved ticket, appends the library files, and re-saves.
  */
-function dropfiles_ticket_library_submit($form, &$form_state) {
+function drop_files_ticket_library_submit($form, &$form_state) {
   $raw = trim($form_state['values']['library_files']);
   if (empty($raw)) {
     return;

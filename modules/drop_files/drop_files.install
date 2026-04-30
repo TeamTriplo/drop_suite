@@ -1,14 +1,14 @@
 <?php
 /**
  * @file
- * Install, update, and uninstall functions for the DropFiles module.
+ * Install, update, and uninstall functions for the Drop Files module.
  */
 
 /**
  * Implements hook_schema().
  */
-function dropfiles_schema() {
-  // The dropfiles_tags join table was removed in update 1100 in favor of the
+function drop_files_schema() {
+  // The drop_files_tags join table was removed in update 1100 in favor of the
   // Field API field_file_tags taxonomy reference field.
   return array();
 }
@@ -16,7 +16,7 @@ function dropfiles_schema() {
 /**
  * Implements hook_install().
  */
-function dropfiles_install() {
+function drop_files_install() {
   // Create the file_tags taxonomy vocabulary if it doesn't exist.
   $existing = taxonomy_vocabulary_load('file_tags');
   if (!$existing) {
@@ -29,9 +29,9 @@ function dropfiles_install() {
   }
 
   // Create the field_file_tags taxonomy reference field and instances.
-  _dropfiles_ensure_file_tags_field();
+  _drop_files_ensure_file_tags_field();
 
-  drop_suite_grant_admin_permissions('dropfiles');
+  drop_suite_grant_admin_permissions('drop_files');
 }
 
 /**
@@ -39,7 +39,7 @@ function dropfiles_install() {
  *
  * Safe to call multiple times; skips creation if field/instances exist.
  */
-function _dropfiles_ensure_file_tags_field() {
+function _drop_files_ensure_file_tags_field() {
   // Create the field if it doesn't exist yet.
   if (!field_info_field('field_file_tags')) {
     $field = array(
@@ -79,8 +79,8 @@ function _dropfiles_ensure_file_tags_field() {
 /**
  * Add .md to allowed file extensions.
  */
-function dropfiles_update_1000() {
-  $config = config('dropfiles.settings');
+function drop_files_update_1000() {
+  $config = config('drop_files.settings');
   $extensions = $config->get('allowed_extensions');
   if (strpos($extensions, ' md ') === FALSE && !preg_match('/ md$/', $extensions)) {
     $config->set('allowed_extensions', $extensions . ' md');
@@ -91,7 +91,7 @@ function dropfiles_update_1000() {
 /**
  * Migrate file tags from custom join table to Field API taxonomy reference.
  */
-function dropfiles_update_1100() {
+function drop_files_update_1100() {
   // Ensure the file_tags vocabulary exists.
   $existing = taxonomy_vocabulary_load('file_tags');
   if (!$existing) {
@@ -104,11 +104,11 @@ function dropfiles_update_1100() {
   }
 
   // Create the field and instances.
-  _dropfiles_ensure_file_tags_field();
+  _drop_files_ensure_file_tags_field();
 
-  // Migrate data from the old dropfiles_tags table.
-  if (db_table_exists('dropfiles_tags')) {
-    $rows = db_select('dropfiles_tags', 'dt')
+  // Migrate data from the old drop_files_tags table.
+  if (db_table_exists('drop_files_tags')) {
+    $rows = db_select('drop_files_tags', 'dt')
       ->fields('dt', array('fid', 'tid'))
       ->execute()
       ->fetchAll();
@@ -132,14 +132,14 @@ function dropfiles_update_1100() {
     }
 
     // Drop the old table.
-    db_drop_table('dropfiles_tags');
+    db_drop_table('drop_files_tags');
   }
 }
 
 /**
  * Implements hook_requirements().
  */
-function dropfiles_requirements($phase) {
+function drop_files_requirements($phase) {
   $requirements = array();
 
   if ($phase === 'runtime') {
@@ -158,8 +158,8 @@ function dropfiles_requirements($phase) {
 
     if ($has_imagemagick && $has_gs) {
       // Test an actual PDF-to-PNG conversion to catch security policy blocks.
-      $test_pdf = tempnam(sys_get_temp_dir(), 'dropfiles_test_') . '.pdf';
-      $test_png = tempnam(sys_get_temp_dir(), 'dropfiles_test_') . '.png';
+      $test_pdf = tempnam(sys_get_temp_dir(), 'drop_files_test_') . '.pdf';
+      $test_png = tempnam(sys_get_temp_dir(), 'drop_files_test_') . '.png';
       // Minimal valid PDF.
       file_put_contents($test_pdf, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF");
       $test_cmd = escapeshellcmd($convert) . ' -density 72 ' . escapeshellarg($test_pdf . '[0]') . ' ' . escapeshellarg($test_png) . ' 2>&1';
@@ -169,16 +169,16 @@ function dropfiles_requirements($phase) {
       @unlink($test_png);
 
       if ($test_success) {
-        $requirements['dropfiles_imagemagick'] = array(
-          'title' => t('DropFiles: PDF thumbnails'),
+        $requirements['drop_files_imagemagick'] = array(
+          'title' => t('Drop Files: PDF thumbnails'),
           'value' => t('Available'),
           'description' => t('ImageMagick and Ghostscript are installed and PDF conversion is working.'),
           'severity' => REQUIREMENT_OK,
         );
       }
       else {
-        $requirements['dropfiles_imagemagick'] = array(
-          'title' => t('DropFiles: PDF thumbnails'),
+        $requirements['drop_files_imagemagick'] = array(
+          'title' => t('Drop Files: PDF thumbnails'),
           'value' => t('PDF conversion blocked'),
           'description' => t('ImageMagick and Ghostscript are installed but PDF conversion failed. This is usually caused by an ImageMagick security policy blocking PDF reads. Check /etc/ImageMagick-*/policy.xml. Error: @error', array(
             '@error' => implode(' ', $test_output),
@@ -188,16 +188,16 @@ function dropfiles_requirements($phase) {
       }
     }
     elseif ($has_imagemagick && !$has_gs) {
-      $requirements['dropfiles_imagemagick'] = array(
-        'title' => t('DropFiles: PDF thumbnails'),
+      $requirements['drop_files_imagemagick'] = array(
+        'title' => t('Drop Files: PDF thumbnails'),
         'value' => t('Ghostscript not found'),
         'description' => t('ImageMagick is installed but Ghostscript is missing. PDF thumbnail generation requires both. Install Ghostscript to enable PDF previews.'),
         'severity' => REQUIREMENT_WARNING,
       );
     }
     else {
-      $requirements['dropfiles_imagemagick'] = array(
-        'title' => t('DropFiles: PDF thumbnails'),
+      $requirements['drop_files_imagemagick'] = array(
+        'title' => t('Drop Files: PDF thumbnails'),
         'value' => t('ImageMagick not found'),
         'description' => t('ImageMagick and Ghostscript are required for PDF thumbnail generation. Without them, PDF files will display a generic icon instead of a preview.'),
         'severity' => REQUIREMENT_WARNING,
@@ -211,10 +211,10 @@ function dropfiles_requirements($phase) {
 /**
  * Implements hook_uninstall().
  *
- * The dropfiles_tags table is dropped automatically via hook_schema().
+ * The drop_files_tags table is dropped automatically via hook_schema().
  * We intentionally do NOT delete the taxonomy vocabulary, its terms,
  * or any managed files — that would risk destroying user content.
  */
-function dropfiles_uninstall() {
+function drop_files_uninstall() {
   // Nothing extra needed. Schema-defined tables are dropped automatically.
 }

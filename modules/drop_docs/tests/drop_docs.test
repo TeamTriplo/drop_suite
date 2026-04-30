@@ -1,13 +1,13 @@
 <?php
 /**
  * @file
- * Tests for the DropDocs module (post Book-module refactor).
+ * Tests for the Drop Docs module (post Book-module refactor).
  */
 
 /**
  * Shared base class: helpers for creating book-enabled doc nodes.
  */
-abstract class DropDocsTestBase extends BackdropWebTestCase {
+abstract class Drop DocsTestBase extends BackdropWebTestCase {
 
   /** @var object User with full admin access to docs. */
   protected $adminUser;
@@ -62,25 +62,25 @@ abstract class DropDocsTestBase extends BackdropWebTestCase {
 // ---------------------------------------------------------------------------
 
 /**
- * Tests that DropDocs pages respect the access dropdocs and administer
- * dropdocs permissions.
+ * Tests that Drop Docs pages respect the access drop_docs and administer
+ * drop_docs permissions.
  */
-class DropDocsAccessTest extends DropDocsTestBase {
+class Drop DocsAccessTest extends Drop DocsTestBase {
 
   public static function getInfo() {
     return array(
-      'name'        => 'DropDocs Access Control',
+      'name'        => 'Drop Docs Access Control',
       'description' => 'Verifies that permissions gate the docs index and view pages.',
-      'group'       => 'DropDocs',
+      'group'       => 'Drop Docs',
     );
   }
 
   public function setUp() {
-    parent::setUp('drop_suite', 'book', 'dropdocs');
+    parent::setUp('drop_suite', 'book', 'drop_docs');
 
     $this->adminUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'administer dropdocs',
+      'access drop_docs',
+      'administer drop_docs',
       'create doc content',
       'edit any doc content',
       'delete any doc content',
@@ -88,13 +88,13 @@ class DropDocsAccessTest extends DropDocsTestBase {
       'administer book outlines',
     ));
     $this->editorUser = $this->backdropCreateUser(array(
-      'access dropdocs',
+      'access drop_docs',
       'create doc content',
       'edit own doc content',
       'add content to books',
     ));
     $this->viewerUser = $this->backdropCreateUser(array(
-      'access dropdocs',
+      'access drop_docs',
     ));
   }
 
@@ -107,7 +107,7 @@ class DropDocsAccessTest extends DropDocsTestBase {
   }
 
   /**
-   * A user without 'access dropdocs' is denied the index.
+   * A user without 'access drop_docs' is denied the index.
    */
   public function testUserWithoutPermissionDeniedIndex() {
     $noAccess = $this->backdropCreateUser(array());
@@ -117,7 +117,7 @@ class DropDocsAccessTest extends DropDocsTestBase {
   }
 
   /**
-   * A user with 'access dropdocs' can view the index.
+   * A user with 'access drop_docs' can view the index.
    */
   public function testViewerCanAccessIndex() {
     $this->backdropLogin($this->viewerUser);
@@ -126,7 +126,7 @@ class DropDocsAccessTest extends DropDocsTestBase {
   }
 
   /**
-   * A user with 'access dropdocs' can view a doc node.
+   * A user with 'access drop_docs' can view a doc node.
    */
   public function testViewerCanViewDoc() {
     $doc = $this->createTestDoc('Viewer Doc Test');
@@ -138,7 +138,7 @@ class DropDocsAccessTest extends DropDocsTestBase {
   }
 
   /**
-   * The settings page requires 'administer dropdocs'.
+   * The settings page requires 'administer drop_docs'.
    */
   public function testSettingsRequiresAdminPermission() {
     $this->backdropLogin($this->viewerUser);
@@ -174,24 +174,24 @@ class DropDocsAccessTest extends DropDocsTestBase {
 // ---------------------------------------------------------------------------
 
 /**
- * Tests that DropDocs correctly integrates with the core Book module.
+ * Tests that Drop Docs correctly integrates with the core Book module.
  */
-class DropDocsBookIntegrationTest extends DropDocsTestBase {
+class Drop DocsBookIntegrationTest extends Drop DocsTestBase {
 
   public static function getInfo() {
     return array(
-      'name'        => 'DropDocs Book Integration',
+      'name'        => 'Drop Docs Book Integration',
       'description' => 'Verifies doc nodes are book-enabled, render with the book sidebar, and preserve book ancestry.',
-      'group'       => 'DropDocs',
+      'group'       => 'Drop Docs',
     );
   }
 
   public function setUp() {
-    parent::setUp('drop_suite', 'book', 'dropdocs');
+    parent::setUp('drop_suite', 'book', 'drop_docs');
 
     $this->adminUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'administer dropdocs',
+      'access drop_docs',
+      'administer drop_docs',
       'create doc content',
       'edit any doc content',
       'delete any doc content',
@@ -199,7 +199,7 @@ class DropDocsBookIntegrationTest extends DropDocsTestBase {
       'administer book outlines',
     ));
     $this->viewerUser = $this->backdropCreateUser(array(
-      'access dropdocs',
+      'access drop_docs',
     ));
   }
 
@@ -266,7 +266,7 @@ class DropDocsBookIntegrationTest extends DropDocsTestBase {
   /**
    * A doc view page shows the book navigation with other entries in the book.
    *
-   * The dropdocs layout ships a book:navigation sidebar block that renders
+   * The drop_docs layout ships a book:navigation sidebar block that renders
    * on node/% for any book or doc bundle. The ancestor's title should be
    * visible in the rendered page (via the sidebar tree and/or breadcrumb).
    */
@@ -302,28 +302,28 @@ class DropDocsBookIntegrationTest extends DropDocsTestBase {
 /**
  * Tests the configurable display_name setting and empty-state messaging.
  */
-class DropDocsDisplayNameTest extends DropDocsTestBase {
+class Drop DocsDisplayNameTest extends Drop DocsTestBase {
 
   public static function getInfo() {
     return array(
-      'name'        => 'DropDocs Display Name',
+      'name'        => 'Drop Docs Display Name',
       'description' => 'Verifies the display_name config changes nav, empty state, and sidebar heading.',
-      'group'       => 'DropDocs',
+      'group'       => 'Drop Docs',
     );
   }
 
   public function setUp() {
-    parent::setUp('drop_suite', 'book', 'dropdocs');
+    parent::setUp('drop_suite', 'book', 'drop_docs');
 
     $this->adminUser = $this->backdropCreateUser(array(
-      'access dropdocs',
-      'administer dropdocs',
+      'access drop_docs',
+      'administer drop_docs',
       'create doc content',
       'edit any doc content',
       'add content to books',
     ));
     $this->viewerUser = $this->backdropCreateUser(array(
-      'access dropdocs',
+      'access drop_docs',
     ));
   }
 
@@ -340,7 +340,7 @@ class DropDocsDisplayNameTest extends DropDocsTestBase {
    * Changing display_name changes the empty message and sidebar heading.
    */
   public function testDisplayNameConfig() {
-    $config = config('dropdocs.settings');
+    $config = config('drop_docs.settings');
     $config->set('display_name', 'Knowledge Base');
     $config->save();
 

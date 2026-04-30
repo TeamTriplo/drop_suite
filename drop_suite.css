@@ -242,7 +242,7 @@ a.drop-section-add {
 /* The primary nav block escapes whatever page-width wrapper it's in so the
  * bar stays a consistent wide width regardless of the per-user page width
  * preference, one-off narrow form wrappers, or alternative layout templates
- * (e.g. the DropDocs moscone-based layout). Inner items remain centered via
+ * (e.g. the Drop Docs moscone-based layout). Inner items remain centered via
  * flex justify-content; the hard cap of 1920px keeps the bar from spanning
  * ultra-wide displays. */
 .block-drop-suite-drop-nav {

@@ -1,6 +1,6 @@
 /**
  * @file
- * DropDocs — collapsible tree navigation.
+ * Drop Docs — collapsible tree navigation.
  *
  * Parent items in the doc tree can be toggled open or closed. The collapsed
  * state is persisted in localStorage. The path to the currently active item
@@ -9,7 +9,7 @@
 (function ($) {
   'use strict';
 
-  var STORAGE_KEY = 'dropdocs_expanded';
+  var STORAGE_KEY = 'drop_docs_expanded';
 
   /**
    * Returns the set of nids the person has manually expanded.
@@ -49,20 +49,20 @@
    */
   function activeAncestorNids() {
     var nids = [];
-    $('.dropdocs-tree-active').parents('li.dropdocs-has-children').each(function () {
+    $('.drop-docs-tree-active').parents('li.drop-docs-has-children').each(function () {
       nids.push($(this).data('nid'));
     });
     // When viewing a parent doc, the active <li> has both classes.
     // .parents() doesn't include the element itself, so add it explicitly.
-    $('li.dropdocs-has-children.dropdocs-tree-active').each(function () {
+    $('li.drop-docs-has-children.drop-docs-tree-active').each(function () {
       nids.push($(this).data('nid'));
     });
     return nids;
   }
 
-  Backdrop.behaviors.dropdocsTree = {
+  Backdrop.behaviors.drop_docsTree = {
     attach: function (context) {
-      var $items = $('li.dropdocs-has-children', context);
+      var $items = $('li.drop-docs-has-children', context);
       if (!$items.length) {
         return;
       }
@@ -75,9 +75,9 @@
       $items.each(function () {
         var $li  = $(this);
         var nid  = $li.data('nid');
-        var $btn = $li.find('> .dropdocs-tree-item > .dropdocs-toggle');
+        var $btn = $li.find('> .drop-docs-tree-item > .drop-docs-toggle');
         if (ancestors.indexOf(nid) !== -1 || expanded.indexOf(nid) !== -1) {
-          $li.addClass('dropdocs-open');
+          $li.addClass('drop-docs-open');
           $btn.attr('aria-expanded', 'true');
         }
         else {
@@ -88,19 +88,19 @@
       // Shared toggle logic — called by both the caret button and the label.
       function toggleItem($li) {
         var nid   = $li.data('nid');
-        var $btn  = $li.find('> .dropdocs-tree-item > .dropdocs-toggle');
+        var $btn  = $li.find('> .drop-docs-tree-item > .drop-docs-toggle');
         var saved = loadExpanded();
         var idx   = saved.indexOf(nid);
 
-        if ($li.hasClass('dropdocs-open')) {
-          $li.removeClass('dropdocs-open');
+        if ($li.hasClass('drop-docs-open')) {
+          $li.removeClass('drop-docs-open');
           $btn.attr('aria-expanded', 'false');
           if (idx !== -1) {
             saved.splice(idx, 1);
           }
         }
         else {
-          $li.addClass('dropdocs-open');
+          $li.addClass('drop-docs-open');
           $btn.attr('aria-expanded', 'true');
           if (idx === -1) {
             saved.push(nid);
@@ -111,20 +111,20 @@
       }
 
       // Caret button.
-      $items.find('> .dropdocs-tree-item > .dropdocs-toggle')
-        .once('dropdocs-toggle')
+      $items.find('> .drop-docs-tree-item > .drop-docs-toggle')
+        .once('drop-docs-toggle')
         .on('click', function () {
-          toggleItem($(this).closest('li.dropdocs-has-children'));
+          toggleItem($(this).closest('li.drop-docs-has-children'));
         });
 
       // Label click: first click on a collapsed parent expands it (without
       // navigating); once already expanded a click navigates to the doc page.
       // This gives a clear two-step: reveal children, then go to the page.
-      $items.find('> .dropdocs-tree-item > a')
-        .once('dropdocs-label-click')
+      $items.find('> .drop-docs-tree-item > a')
+        .once('drop-docs-label-click')
         .on('click', function (e) {
-          var $li = $(this).closest('li.dropdocs-has-children');
-          if (!$li.hasClass('dropdocs-open')) {
+          var $li = $(this).closest('li.drop-docs-has-children');
+          if (!$li.hasClass('drop-docs-open')) {
             e.preventDefault();
             toggleItem($li);
           }

@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Page callbacks for DropFiles.
+ * Page callbacks for Drop Files.
  */
 
 /**
@@ -10,26 +10,26 @@
  * @return array
  *   A render array.
  */
-function dropfiles_library_page() {
-  backdrop_set_title(dropfiles_display_name());
+function drop_files_library_page() {
+  backdrop_set_title(drop_files_display_name());
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
+  $module_path = backdrop_get_path('module', 'drop_files');
 
   $output = array(
     '#attached' => array(
-      'css' => array($module_path . '/dropfiles.css'),
-      'js' => array($module_path . '/dropfiles.js'),
+      'css' => array($module_path . '/drop_files.css'),
+      'js' => array($module_path . '/drop_files.js'),
     ),
   );
 
   // Page actions: upload toggle button (replaces the old "Upload file" link).
-  if (user_access('upload dropfiles')) {
-    $upload_toggle = '<button type="button" id="dropfiles-upload-toggle" class="dropfiles-upload-toggle">'
+  if (user_access('upload drop_files')) {
+    $upload_toggle = '<button type="button" id="drop-files-upload-toggle" class="drop-files-upload-toggle">'
       . icon('upload-simple', array('attributes' => array('width' => 16, 'height' => 16)))
       . ' ' . t('Upload files')
       . '</button>';
@@ -40,34 +40,34 @@ function dropfiles_library_page() {
     );
 
     // Drag-and-drop upload zone (hidden by default, toggled via JS).
-    $config = config('dropfiles.settings');
+    $config = config('drop_files.settings');
     $extensions = $config->get('allowed_extensions');
     $max_size = format_size(file_upload_max_size());
 
     $output['#attached']['js'][] = array(
       'type' => 'setting',
       'data' => array(
-        'dropfilesUpload' => array(
+        'drop_filesUpload' => array(
           'uploadUrl' => url('drop/files/ajax-upload'),
-          'token' => backdrop_get_token('dropfiles_ajax_upload'),
+          'token' => backdrop_get_token('drop_files_ajax_upload'),
         ),
       ),
     );
 
     $output['dropzone'] = array(
-      '#markup' => '<div id="dropfiles-dropzone-wrapper" class="dropfiles-dropzone-wrapper" style="display:none">'
-        . '<div id="dropfiles-dropzone" class="dropfiles-dropzone">'
-        . '<div class="dropfiles-dropzone-inner">'
+      '#markup' => '<div id="drop-files-dropzone-wrapper" class="drop-files-dropzone-wrapper" style="display:none">'
+        . '<div id="drop-files-dropzone" class="drop-files-dropzone">'
+        . '<div class="drop-files-dropzone-inner">'
         . icon('upload-simple', array('attributes' => array('width' => 32, 'height' => 32)))
         . '<p>' . t('Drag and drop files here to upload') . '</p>'
-        . '<p class="dropfiles-dropzone-hint">' . t('or click to select files') . '</p>'
-        . '<p class="dropfiles-dropzone-hint">' . t('Allowed types: @ext. Max size: @size', array('@ext' => $extensions, '@size' => $max_size)) . '</p>'
-        . '<input type="file" id="dropfiles-file-input" multiple style="display:none">'
+        . '<p class="drop-files-dropzone-hint">' . t('or click to select files') . '</p>'
+        . '<p class="drop-files-dropzone-hint">' . t('Allowed types: @ext. Max size: @size', array('@ext' => $extensions, '@size' => $max_size)) . '</p>'
+        . '<input type="file" id="drop-files-file-input" multiple style="display:none">'
         . '</div>'
-        . '<div class="dropfiles-upload-progress" style="display:none">'
-        . '<div class="dropfiles-progress-text"></div>'
-        . '<div class="dropfiles-progress-bar"><div class="dropfiles-progress-bar-fill"></div></div>'
-        . '<div class="dropfiles-progress-detail"></div>'
+        . '<div class="drop-files-upload-progress" style="display:none">'
+        . '<div class="drop-files-progress-text"></div>'
+        . '<div class="drop-files-progress-bar"><div class="drop-files-progress-bar-fill"></div></div>'
+        . '<div class="drop-files-progress-detail"></div>'
         . '</div>'
         . '</div>'
         . '</div>',
@@ -91,8 +91,8 @@ function dropfiles_library_page() {
   }
 
   // Assemble filter form (GET-based, raw HTML) with view toggle.
-  $filter_form = '<div class="dropfiles-toolbar">';
-  $filter_form .= '<form method="get" action="' . url('drop/files') . '" class="dropfiles-filter-form">';
+  $filter_form = '<div class="drop-files-toolbar">';
+  $filter_form .= '<form method="get" action="' . url('drop/files') . '" class="drop-files-filter-form">';
   $filter_form .= '<select name="tag" onchange="this.form.submit()">';
   $filter_form .= '<option value="">' . t('— All tags —') . '</option>';
   foreach ($tag_options as $tid => $name) {
@@ -105,11 +105,11 @@ function dropfiles_library_page() {
   $filter_form .= '</form>';
 
   // View toggle buttons.
-  $filter_form .= '<div class="dropfiles-view-toggle">';
-  $filter_form .= '<button type="button" class="dropfiles-view-btn" data-view="list" title="' . t('List view') . '">'
+  $filter_form .= '<div class="drop-files-view-toggle">';
+  $filter_form .= '<button type="button" class="drop-files-view-btn" data-view="list" title="' . t('List view') . '">'
     . icon('list', array('attributes' => array('width' => 18, 'height' => 18)))
     . '</button>';
-  $filter_form .= '<button type="button" class="dropfiles-view-btn dropfiles-view-btn--active" data-view="grid" title="' . t('Grid view') . '">'
+  $filter_form .= '<button type="button" class="drop-files-view-btn drop-files-view-btn--active" data-view="grid" title="' . t('Grid view') . '">'
     . icon('squares-four', array('attributes' => array('width' => 18, 'height' => 18)))
     . '</button>';
   $filter_form .= '</div>';
@@ -124,7 +124,7 @@ function dropfiles_library_page() {
   $query = db_select('file_managed', 'f')
     ->fields('f', array('fid', 'filename', 'uri', 'filesize', 'filemime', 'timestamp', 'uid'))
     ->condition('f.status', 1);
-  $query->innerJoin('file_usage', 'fu', 'fu.fid = f.fid AND fu.module = :mod AND fu.type = :type', array(':mod' => 'dropfiles', ':type' => 'library'));
+  $query->innerJoin('file_usage', 'fu', 'fu.fid = f.fid AND fu.module = :mod AND fu.type = :type', array(':mod' => 'drop_files', ':type' => 'library'));
 
   if ($tag_filter) {
     $query->innerJoin('field_data_field_file_tags', 'ft', 'ft.entity_id = f.fid AND ft.entity_type = :etype', array(':etype' => 'file'));
@@ -142,14 +142,14 @@ function dropfiles_library_page() {
 
   if (empty($results)) {
     $output['empty'] = array(
-      '#markup' => '<p class="dropfiles-empty">' . t('No files found.') . '</p>',
+      '#markup' => '<p class="drop-files-empty">' . t('No files found.') . '</p>',
     );
     return $output;
   }
 
   // Build table (list view).
   $header = array(
-    array('data' => '', 'class' => array('dropfiles-icon-cell')),
+    array('data' => '', 'class' => array('drop-files-icon-cell')),
     t('File'),
     t('Tags'),
     t('Size'),
@@ -157,18 +157,18 @@ function dropfiles_library_page() {
     t('Actions'),
   );
 
-  $can_edit = user_access('upload dropfiles');
+  $can_edit = user_access('upload drop_files');
   $rows = array();
   $grid_cards = '';
   foreach ($results as $file) {
-    $thumb = dropfiles_file_thumbnail($file, 32);
-    $thumb_large = dropfiles_file_thumbnail($file, 120);
+    $thumb = drop_files_file_thumbnail($file, 32);
+    $thumb_large = drop_files_file_thumbnail($file, 120);
 
     // Tags.
-    $tags = dropfiles_get_file_tags($file->fid);
+    $tags = drop_files_get_file_tags($file->fid);
     $tag_html = '';
     foreach ($tags as $tag) {
-      $tag_html .= '<span class="dropfiles-tag">' . check_plain($tag->name) . '</span>';
+      $tag_html .= '<span class="drop-files-tag">' . check_plain($tag->name) . '</span>';
     }
 
     // Actions.
@@ -182,43 +182,43 @@ function dropfiles_library_page() {
 
     // Table row — file name links directly to the file (opens in browser).
     $rows[] = array(
-      array('data' => $thumb, 'class' => array('dropfiles-icon-cell')),
+      array('data' => $thumb, 'class' => array('drop-files-icon-cell')),
       l($file->filename, $file_url, array('attributes' => array('target' => '_blank'))),
       $tag_html,
       format_size($file->filesize),
       format_date($file->timestamp, 'short'),
-      array('data' => $actions, 'class' => array('dropfiles-actions-cell')),
+      array('data' => $actions, 'class' => array('drop-files-actions-cell')),
     );
 
     // Grid card — links open the file directly in the browser.
-    $grid_cards .= '<div class="dropfiles-grid-card">';
-    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="dropfiles-grid-card-thumb">';
+    $grid_cards .= '<div class="drop-files-grid-card">';
+    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="drop-files-grid-card-thumb">';
     $grid_cards .= $thumb_large;
     $grid_cards .= '</a>';
-    $grid_cards .= '<div class="dropfiles-grid-card-info">';
-    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="dropfiles-grid-card-name" title="' . check_plain($file->filename) . '">'
+    $grid_cards .= '<div class="drop-files-grid-card-info">';
+    $grid_cards .= '<a href="' . check_url($file_url) . '" target="_blank" class="drop-files-grid-card-name" title="' . check_plain($file->filename) . '">'
       . check_plain($file->filename) . '</a>';
-    $grid_cards .= '<span class="dropfiles-grid-card-size">' . format_size($file->filesize) . '</span>';
+    $grid_cards .= '<span class="drop-files-grid-card-size">' . format_size($file->filesize) . '</span>';
     $grid_cards .= '</div>';
-    $grid_cards .= '<div class="dropfiles-grid-card-actions">' . $actions . '</div>';
+    $grid_cards .= '<div class="drop-files-grid-card-actions">' . $actions . '</div>';
     $grid_cards .= '</div>';
   }
 
   // List view (table).
   $output['list_view'] = array(
-    '#markup' => '<div class="dropfiles-list-view" style="display:none">'
+    '#markup' => '<div class="drop-files-list-view" style="display:none">'
       . theme('table', array(
         'header' => $header,
         'rows' => $rows,
-        'attributes' => array('class' => array('dropfiles-table')),
+        'attributes' => array('class' => array('drop-files-table')),
       ))
       . '</div>',
   );
 
   // Grid view.
   $output['grid_view'] = array(
-    '#markup' => '<div class="dropfiles-grid-view">'
-      . '<div class="dropfiles-grid">' . $grid_cards . '</div>'
+    '#markup' => '<div class="drop-files-grid-view">'
+      . '<div class="drop-files-grid">' . $grid_cards . '</div>'
       . '</div>',
   );
 
@@ -232,19 +232,19 @@ function dropfiles_library_page() {
 /**
  * Form constructor: upload a file to the library.
  */
-function dropfiles_upload_form($form, &$form_state) {
+function drop_files_upload_form($form, &$form_state) {
   backdrop_set_title(t('Upload file'));
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropfiles_display_name(), 'drop/files'),
+    l(drop_files_display_name(), 'drop/files'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
-  $form['#attached']['css'][] = $module_path . '/dropfiles.css';
+  $module_path = backdrop_get_path('module', 'drop_files');
+  $form['#attached']['css'][] = $module_path . '/drop_files.css';
 
-  $config = config('dropfiles.settings');
+  $config = config('drop_files.settings');
   $extensions = $config->get('allowed_extensions');
   $upload_dir = 'public://' . $config->get('upload_directory');
 
@@ -283,7 +283,7 @@ function dropfiles_upload_form($form, &$form_state) {
 /**
  * Submit handler: save uploaded file to the library.
  */
-function dropfiles_upload_form_submit($form, &$form_state) {
+function drop_files_upload_form_submit($form, &$form_state) {
   $file = file_load($form_state['values']['file']);
   if (!$file) {
     backdrop_set_message(t('File upload failed.'), 'error');
@@ -294,18 +294,18 @@ function dropfiles_upload_form_submit($form, &$form_state) {
   $file->status = FILE_STATUS_PERMANENT;
   file_save($file);
 
-  // Register with the dropfiles library.
-  file_usage_add($file, 'dropfiles', 'library', 1);
+  // Register with the drop_files library.
+  file_usage_add($file, 'drop_files', 'library', 1);
 
   // Generate PDF thumbnail if applicable.
-  dropfiles_generate_pdf_thumbnail($file);
+  drop_files_generate_pdf_thumbnail($file);
 
   // Save tags if provided.
   $tags_string = trim($form_state['values']['tags']);
   if ($tags_string !== '') {
     $tag_names = array_map('trim', explode(',', $tags_string));
     $tag_names = array_filter($tag_names, 'strlen');
-    dropfiles_save_file_tags($file->fid, $tag_names);
+    drop_files_save_file_tags($file->fid, $tag_names);
   }
 
   backdrop_set_message(t('File !link uploaded.', array('!link' => l($file->filename, 'drop/files/' . $file->fid . '/view'))));
@@ -318,18 +318,18 @@ function dropfiles_upload_form_submit($form, &$form_state) {
  * @param object $file
  *   The file object to edit.
  */
-function dropfiles_edit_form($form, &$form_state, $file) {
+function drop_files_edit_form($form, &$form_state, $file) {
   backdrop_set_title(t('Edit @name', array('@name' => $file->filename)), PASS_THROUGH);
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropfiles_display_name(), 'drop/files'),
+    l(drop_files_display_name(), 'drop/files'),
     l($file->filename, 'drop/files/' . $file->fid . '/view'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
-  $form['#attached']['css'][] = $module_path . '/dropfiles.css';
+  $module_path = backdrop_get_path('module', 'drop_files');
+  $form['#attached']['css'][] = $module_path . '/drop_files.css';
 
   $form['#file'] = $file;
 
@@ -342,7 +342,7 @@ function dropfiles_edit_form($form, &$form_state, $file) {
   );
 
   // Load existing tags as comma-separated string.
-  $existing_tags = dropfiles_get_file_tags($file->fid);
+  $existing_tags = drop_files_get_file_tags($file->fid);
   $tag_names = array();
   foreach ($existing_tags as $tag) {
     $tag_names[] = $tag->name;
@@ -372,7 +372,7 @@ function dropfiles_edit_form($form, &$form_state, $file) {
 /**
  * Submit handler: save file title and tags.
  */
-function dropfiles_edit_form_submit($form, &$form_state) {
+function drop_files_edit_form_submit($form, &$form_state) {
   $file = $form['#file'];
 
   // Update filename if changed.
@@ -391,7 +391,7 @@ function dropfiles_edit_form_submit($form, &$form_state) {
   else {
     $tag_names = array();
   }
-  dropfiles_save_file_tags($file->fid, $tag_names);
+  drop_files_save_file_tags($file->fid, $tag_names);
 
   backdrop_set_message(t('File !link updated.', array('!link' => l($file->filename, 'drop/files/' . $file->fid . '/view'))));
   $form_state['redirect'] = 'drop/files/' . $file->fid . '/view';
@@ -406,93 +406,93 @@ function dropfiles_edit_form_submit($form, &$form_state) {
  * @return array
  *   A render array.
  */
-function dropfiles_file_view_page($file) {
+function drop_files_file_view_page($file) {
   backdrop_set_title(check_plain($file->filename));
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropfiles_display_name(), 'drop/files'),
+    l(drop_files_display_name(), 'drop/files'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
+  $module_path = backdrop_get_path('module', 'drop_files');
 
   $output = array(
     '#attached' => array(
-      'css' => array($module_path . '/dropfiles.css'),
+      'css' => array($module_path . '/drop_files.css'),
     ),
   );
 
   // Build detail display.
-  $thumb = dropfiles_file_thumbnail($file, 300, 'medium');
+  $thumb = drop_files_file_thumbnail($file, 300, 'medium');
 
-  $tags = dropfiles_get_file_tags($file->fid);
+  $tags = drop_files_get_file_tags($file->fid);
   $tag_html = '';
   foreach ($tags as $tag) {
-    $tag_html .= '<span class="dropfiles-tag">' . check_plain($tag->name) . '</span>';
+    $tag_html .= '<span class="drop-files-tag">' . check_plain($tag->name) . '</span>';
   }
 
   $account = user_load($file->uid);
   $uploader = $account ? check_plain(format_username($account)) : t('Unknown');
 
   $download_url = file_create_url($file->uri);
-  $file_type = dropfiles_human_type($file->filemime, $file->filename);
+  $file_type = drop_files_human_type($file->filemime, $file->filename);
   $ext = strtoupper(pathinfo($file->filename, PATHINFO_EXTENSION));
 
   // Two-column layout: preview left, metadata right.
-  $html = '<div class="dropfiles-detail-layout">';
+  $html = '<div class="drop-files-detail-layout">';
 
   // Left: preview thumbnail (clickable — opens the file in the browser).
-  $html .= '<div class="dropfiles-detail-preview">';
+  $html .= '<div class="drop-files-detail-preview">';
   $html .= '<a href="' . check_url($download_url) . '" target="_blank">' . $thumb . '</a>';
   $html .= '</div>';
 
   // Right: metadata.
-  $html .= '<div class="dropfiles-detail-meta">';
+  $html .= '<div class="drop-files-detail-meta">';
 
-  $html .= '<div class="dropfiles-meta-row">';
-  $html .= '<span class="dropfiles-meta-label">' . t('Type') . '</span>';
-  $html .= '<span class="dropfiles-meta-value">' . check_plain($file_type) . '</span>';
+  $html .= '<div class="drop-files-meta-row">';
+  $html .= '<span class="drop-files-meta-label">' . t('Type') . '</span>';
+  $html .= '<span class="drop-files-meta-value">' . check_plain($file_type) . '</span>';
   $html .= '</div>';
 
-  $html .= '<div class="dropfiles-meta-row">';
-  $html .= '<span class="dropfiles-meta-label">' . t('Size') . '</span>';
-  $html .= '<span class="dropfiles-meta-value">' . format_size($file->filesize) . '</span>';
+  $html .= '<div class="drop-files-meta-row">';
+  $html .= '<span class="drop-files-meta-label">' . t('Size') . '</span>';
+  $html .= '<span class="drop-files-meta-value">' . format_size($file->filesize) . '</span>';
   $html .= '</div>';
 
-  $html .= '<div class="dropfiles-meta-row">';
-  $html .= '<span class="dropfiles-meta-label">' . t('Uploaded') . '</span>';
-  $html .= '<span class="dropfiles-meta-value">' . format_date($file->timestamp, 'short') . '</span>';
+  $html .= '<div class="drop-files-meta-row">';
+  $html .= '<span class="drop-files-meta-label">' . t('Uploaded') . '</span>';
+  $html .= '<span class="drop-files-meta-value">' . format_date($file->timestamp, 'short') . '</span>';
   $html .= '</div>';
 
-  $html .= '<div class="dropfiles-meta-row">';
-  $html .= '<span class="dropfiles-meta-label">' . t('Uploaded by') . '</span>';
-  $html .= '<span class="dropfiles-meta-value">' . $uploader . '</span>';
+  $html .= '<div class="drop-files-meta-row">';
+  $html .= '<span class="drop-files-meta-label">' . t('Uploaded by') . '</span>';
+  $html .= '<span class="drop-files-meta-value">' . $uploader . '</span>';
   $html .= '</div>';
 
   if (!empty($tag_html)) {
-    $html .= '<div class="dropfiles-meta-row">';
-    $html .= '<span class="dropfiles-meta-label">' . t('Tags') . '</span>';
-    $html .= '<span class="dropfiles-meta-value">' . $tag_html . '</span>';
+    $html .= '<div class="drop-files-meta-row">';
+    $html .= '<span class="drop-files-meta-label">' . t('Tags') . '</span>';
+    $html .= '<span class="drop-files-meta-value">' . $tag_html . '</span>';
     $html .= '</div>';
   }
 
-  $html .= '<div class="dropfiles-detail-actions">';
-  $html .= '<a href="' . check_url($download_url) . '" target="_blank" class="dropfiles-open-link">'
+  $html .= '<div class="drop-files-detail-actions">';
+  $html .= '<a href="' . check_url($download_url) . '" target="_blank" class="drop-files-open-link">'
     . icon('eye', array('attributes' => array('width' => 16, 'height' => 16)))
     . ' ' . t('Open') . '</a>';
-  $html .= '<a href="' . check_url($download_url) . '" download class="dropfiles-download-link">'
+  $html .= '<a href="' . check_url($download_url) . '" download class="drop-files-download-link">'
     . icon('download', array('attributes' => array('width' => 16, 'height' => 16)))
     . ' ' . t('Download') . '</a>';
-  if (user_access('upload dropfiles')) {
-    $html .= l(t('Edit'), 'drop/files/' . $file->fid . '/edit', array('attributes' => array('class' => array('dropfiles-action-link'))));
-    $html .= l(t('Replace'), 'drop/files/' . $file->fid . '/replace', array('attributes' => array('class' => array('dropfiles-action-link'))));
-    $html .= l(t('Delete'), 'drop/files/' . $file->fid . '/delete', array('attributes' => array('class' => array('dropfiles-action-link', 'dropfiles-action-delete'))));
+  if (user_access('upload drop_files')) {
+    $html .= l(t('Edit'), 'drop/files/' . $file->fid . '/edit', array('attributes' => array('class' => array('drop-files-action-link'))));
+    $html .= l(t('Replace'), 'drop/files/' . $file->fid . '/replace', array('attributes' => array('class' => array('drop-files-action-link'))));
+    $html .= l(t('Delete'), 'drop/files/' . $file->fid . '/delete', array('attributes' => array('class' => array('drop-files-action-link', 'drop-files-action-delete'))));
   }
   $html .= '</div>';
 
-  $html .= '</div>'; // .dropfiles-detail-meta
-  $html .= '</div>'; // .dropfiles-detail-layout
+  $html .= '</div>'; // .drop-files-detail-meta
+  $html .= '</div>'; // .drop-files-detail-layout
 
   $output['detail'] = array(
     '#markup' => $html,
@@ -507,24 +507,24 @@ function dropfiles_file_view_page($file) {
  * @param object $file
  *   The file object to replace.
  */
-function dropfiles_replace_form($form, &$form_state, $file) {
+function drop_files_replace_form($form, &$form_state, $file) {
   backdrop_set_title(t('Replace @name', array('@name' => $file->filename)), PASS_THROUGH);
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropfiles_display_name(), 'drop/files'),
+    l(drop_files_display_name(), 'drop/files'),
     l($file->filename, 'drop/files/' . $file->fid . '/view'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
-  $form['#attached']['css'][] = $module_path . '/dropfiles.css';
+  $module_path = backdrop_get_path('module', 'drop_files');
+  $form['#attached']['css'][] = $module_path . '/drop_files.css';
 
   $form['#file'] = $file;
 
   // Current file info.
   $form['current'] = array(
-    '#markup' => '<div class="dropfiles-current-file">'
+    '#markup' => '<div class="drop-files-current-file">'
       . '<strong>' . t('Current file') . '</strong>'
       . check_plain($file->filename) . ' &mdash; '
       . format_size($file->filesize) . ' &mdash; '
@@ -533,7 +533,7 @@ function dropfiles_replace_form($form, &$form_state, $file) {
     '#weight' => -30,
   );
 
-  $config = config('dropfiles.settings');
+  $config = config('drop_files.settings');
   $extensions = $config->get('allowed_extensions');
   $upload_dir = 'public://' . $config->get('upload_directory');
 
@@ -564,7 +564,7 @@ function dropfiles_replace_form($form, &$form_state, $file) {
 /**
  * Submit handler: replace the file content.
  */
-function dropfiles_replace_form_submit($form, &$form_state) {
+function drop_files_replace_form_submit($form, &$form_state) {
   $old_file = $form['#file'];
   $new_file = file_load($form_state['values']['new_file']);
   if (!$new_file) {
@@ -586,11 +586,11 @@ function dropfiles_replace_form_submit($form, &$form_state) {
   file_delete($new_file->fid);
 
   // Regenerate PDF thumbnail if the replacement is a PDF.
-  $thumb_uri = dropfiles_pdf_thumbnail_uri($old_file->fid);
+  $thumb_uri = drop_files_pdf_thumbnail_uri($old_file->fid);
   if (file_exists($thumb_uri)) {
     file_unmanaged_delete($thumb_uri);
   }
-  dropfiles_generate_pdf_thumbnail($old_file);
+  drop_files_generate_pdf_thumbnail($old_file);
 
   backdrop_set_message(t('File !link has been replaced.', array('!link' => l($old_file->filename, 'drop/files/' . $old_file->fid . '/view'))));
   $form_state['redirect'] = 'drop/files';
@@ -602,7 +602,7 @@ function dropfiles_replace_form_submit($form, &$form_state) {
  * @param object $file
  *   The file object to delete.
  */
-function dropfiles_delete_form($form, &$form_state, $file) {
+function drop_files_delete_form($form, &$form_state, $file) {
   $form['#file'] = $file;
   return confirm_form(
     $form,
@@ -617,14 +617,14 @@ function dropfiles_delete_form($form, &$form_state, $file) {
 /**
  * Submit handler: delete a file from the library.
  */
-function dropfiles_delete_form_submit($form, &$form_state) {
+function drop_files_delete_form_submit($form, &$form_state) {
   $file = $form['#file'];
 
   // Remove file usage tracking.
-  file_usage_delete($file, 'dropfiles', 'library', 1);
+  file_usage_delete($file, 'drop_files', 'library', 1);
 
   // Remove PDF thumbnail if it exists.
-  $thumb_uri = dropfiles_pdf_thumbnail_uri($file->fid);
+  $thumb_uri = drop_files_pdf_thumbnail_uri($file->fid);
   if (file_exists($thumb_uri)) {
     file_unmanaged_delete($thumb_uri);
   }
@@ -637,22 +637,22 @@ function dropfiles_delete_form_submit($form, &$form_state) {
 }
 
 /**
- * Form constructor: DropFiles settings.
+ * Form constructor: Drop Files settings.
  */
-function dropfiles_settings_form($form, &$form_state) {
+function drop_files_settings_form($form, &$form_state) {
   backdrop_set_title(t('Settings'));
 
   backdrop_set_breadcrumb(array(
     l(t('Home'), '<front>'),
     l(t('Drop Suite'), 'drop'),
-    l(dropfiles_display_name(), 'drop/files'),
+    l(drop_files_display_name(), 'drop/files'),
   ));
 
-  $module_path = backdrop_get_path('module', 'dropfiles');
-  $form['#attached']['css'][] = $module_path . '/dropfiles.css';
+  $module_path = backdrop_get_path('module', 'drop_files');
+  $form['#attached']['css'][] = $module_path . '/drop_files.css';
 
-  $config = config('dropfiles.settings');
-  $form['#config'] = 'dropfiles.settings';
+  $config = config('drop_files.settings');
+  $form['#config'] = 'drop_files.settings';
 
   // Display settings.
   $form['display'] = array(
@@ -704,10 +704,10 @@ function dropfiles_settings_form($form, &$form_state) {
 }
 
 /**
- * Submit handler: save DropFiles settings.
+ * Submit handler: save Drop Files settings.
  */
-function dropfiles_settings_form_submit($form, &$form_state) {
-  $config = config('dropfiles.settings');
+function drop_files_settings_form_submit($form, &$form_state) {
+  $config = config('drop_files.settings');
   $config->set('display_name', $form_state['values']['display_name']);
   $config->set('allowed_extensions', $form_state['values']['allowed_extensions']);
   $config->set('upload_directory', $form_state['values']['upload_directory']);
@@ -727,16 +727,16 @@ function dropfiles_settings_form_submit($form, &$form_state) {
  * Expects a POST with a 'file' field and a 'token' query parameter.
  * Returns JSON: {ok: true, filename: '...'} or {error: '...'}.
  */
-function dropfiles_ajax_upload() {
+function drop_files_ajax_upload() {
   // Verify CSRF token.
-  if (empty($_GET['token']) || !backdrop_valid_token($_GET['token'], 'dropfiles_ajax_upload')) {
-    watchdog('dropfiles', 'AJAX upload rejected: invalid CSRF token.', array(), WATCHDOG_WARNING);
+  if (empty($_GET['token']) || !backdrop_valid_token($_GET['token'], 'drop_files_ajax_upload')) {
+    watchdog('drop_files', 'AJAX upload rejected: invalid CSRF token.', array(), WATCHDOG_WARNING);
     backdrop_json_output(array('error' => t('Invalid token.')));
     backdrop_exit();
   }
 
   if (empty($_FILES['file'])) {
-    watchdog('dropfiles', 'AJAX upload failed: no file in request.', array(), WATCHDOG_WARNING);
+    watchdog('drop_files', 'AJAX upload failed: no file in request.', array(), WATCHDOG_WARNING);
     backdrop_json_output(array('error' => t('No file received.')));
     backdrop_exit();
   }
@@ -753,7 +753,7 @@ function dropfiles_ajax_upload() {
       UPLOAD_ERR_EXTENSION  => 'blocked by PHP extension',
     );
     $reason = isset($error_map[$upload['error']]) ? $error_map[$upload['error']] : 'code ' . $upload['error'];
-    watchdog('dropfiles', 'AJAX upload failed for %name: @reason', array(
+    watchdog('drop_files', 'AJAX upload failed for %name: @reason', array(
       '%name' => $upload['name'],
       '@reason' => $reason,
     ), WATCHDOG_ERROR);
@@ -762,12 +762,12 @@ function dropfiles_ajax_upload() {
   }
 
   // Validate file extension.
-  $config = config('dropfiles.settings');
+  $config = config('drop_files.settings');
   $allowed = $config->get('allowed_extensions');
   $ext = strtolower(pathinfo($upload['name'], PATHINFO_EXTENSION));
   $allowed_list = array_filter(array_map('trim', explode(' ', $allowed)));
   if (!empty($allowed_list) && !in_array($ext, $allowed_list)) {
-    watchdog('dropfiles', 'AJAX upload rejected %name: extension .@ext not allowed.', array(
+    watchdog('drop_files', 'AJAX upload rejected %name: extension .@ext not allowed.', array(
       '%name' => $upload['name'],
       '@ext' => $ext,
     ), WATCHDOG_WARNING);
@@ -802,7 +802,7 @@ function dropfiles_ajax_upload() {
   ), $upload_dir, FILE_EXISTS_RENAME);
 
   if (!$file) {
-    watchdog('dropfiles', 'AJAX upload failed: file_save_upload returned FALSE for %name.', array(
+    watchdog('drop_files', 'AJAX upload failed: file_save_upload returned FALSE for %name.', array(
       '%name' => $upload['name'],
     ), WATCHDOG_ERROR);
     backdrop_json_output(array('error' => t('File could not be saved.')));
@@ -812,12 +812,12 @@ function dropfiles_ajax_upload() {
   // Make permanent and register with the library.
   $file->status = FILE_STATUS_PERMANENT;
   file_save($file);
-  file_usage_add($file, 'dropfiles', 'library', 1);
+  file_usage_add($file, 'drop_files', 'library', 1);
 
   // Generate PDF thumbnail if applicable.
-  dropfiles_generate_pdf_thumbnail($file);
+  drop_files_generate_pdf_thumbnail($file);
 
-  watchdog('dropfiles', 'File %name uploaded via drag-and-drop (@size).', array(
+  watchdog('drop_files', 'File %name uploaded via drag-and-drop (@size).', array(
     '%name' => $file->filename,
     '@size' => format_size($file->filesize),
   ), WATCHDOG_INFO);
@@ -834,7 +834,7 @@ function dropfiles_ajax_upload() {
  * @param string $string
  *   The partial filename to search for.
  */
-function dropfiles_autocomplete($string = '') {
+function drop_files_autocomplete($string = '') {
   $matches = array();
 
   if (strlen($string) < 2) {
@@ -846,7 +846,7 @@ function dropfiles_autocomplete($string = '') {
     ->fields('f', array('fid', 'filename', 'filesize', 'filemime'))
     ->condition('f.status', 1)
     ->condition('f.filename', '%' . db_like($string) . '%', 'LIKE');
-  $query->innerJoin('file_usage', 'fu', 'fu.fid = f.fid AND fu.module = :mod AND fu.type = :type', array(':mod' => 'dropfiles', ':type' => 'library'));
+  $query->innerJoin('file_usage', 'fu', 'fu.fid = f.fid AND fu.module = :mod AND fu.type = :type', array(':mod' => 'drop_files', ':type' => 'library'));
   $query->orderBy('f.filename');
   $query->range(0, 10);
 
