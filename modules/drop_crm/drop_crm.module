@@ -1406,6 +1406,33 @@ function drop_crm_views_api() {
   );
 }
 
+/**
+ * Implements hook_views_pre_render().
+ *
+ * Replaces NULL activity_date values with 0 in the crm_last_contact view
+ * before the field handler runs. The date handler in core
+ * (views_handler_field_date::render()) calls strtotime() on non-numeric
+ * values; passing NULL triggers a PHP 8 deprecation. is_numeric(0) is TRUE,
+ * so 0 skips the strtotime branch entirely — and the existing hide_empty +
+ * empty_zero flags on the field still produce the "Never" text for empty
+ * cells, so visual output is unchanged.
+ */
+function drop_crm_views_pre_render(&$view) {
+  if ($view->name !== 'crm_last_contact') {
+    return;
+  }
+  if (empty($view->result)) {
+    return;
+  }
+  foreach ($view->result as $row) {
+    foreach ((array) $row as $key => $val) {
+      if ($val === NULL && strpos($key, 'activity_date') !== FALSE) {
+        $row->$key = 0;
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
