@@ -35,18 +35,6 @@ The project also ships the **Drop Suite layout** (bundled inside the parent modu
 
 Backdrop core's **Book** module is required by Drop Docs (already in core, just needs enabling). **Taxonomy** is required by Drop Files (also core).
 
-## Installation
-
-1. Place the entire `drop_suite/` directory in your site's `modules/` folder, e.g. `modules/drop_suite/`. Submodules ride along inside `modules/drop_suite/modules/`.
-2. Enable **Drop Suite** first. Backdrop will resolve dependencies for whichever submodules you enable next.
-3. The parent module's install hook adds the Drop Suite primary navigation block and switches `/drop/*` paths to the Drop Suite layout automatically.
-4. Enable submodules as needed:
-   - Minimal CRM: `drop_crm` (+ submodules as desired)
-   - Documentation/wiki: `drop_docs`
-   - File library: `drop_files`
-   - Dashboard landing page: `drop_dashboard`
-   - Sample content for evaluation: `drop_start`
-
 ## Permissions
 
 Drop Suite ships a **Team Member** role on fresh install with day-to-day perms (no admin-tier capabilities). The parent module also adds a `team_member` role config so new sites get a sensible default for non-administrator users.
@@ -70,6 +58,28 @@ Settings live at `drop/settings` — a dashboard page that lists configuration e
 
 Most configuration is stored in Backdrop's config system (JSON files in `config/active/`).
 
+---
+
+## Notes About Use of AI
+
+This module was developed with significant assistance from AI tools (specifically Claude by Anthropic). AI was used to generate code, plan features, and make iterative improvements throughout development.
+
+We encourage folks to review the code and help us identify quirky things that AI might have done or places where it may not be following Backdrop CMS best practices. Pull requests and issue reports are welcome.
+
+---
+
+## Installation
+
+Install this module using the official Backdrop CMS instructions at https://backdropcms.org/guide/modules
+
+---
+
 ## License
 
-GPL-2.0-or-later. See [LICENSE.txt](LICENSE.txt).
+This project is GPL v2 software. See the LICENSE.txt file in this directory for complete text.
+
+---
+
+## Current Maintainers
+
+- Tim Erickson ([@stpaultim](https://github.com/stpaultim))
