@@ -614,31 +614,6 @@ function drop_suite_update_1204() {
 }
 
 /**
- * De-duplicate block-position references across all layouts.
- *
- * Backdrop's layout API allows a single UUID to be referenced multiple
- * times in the same region's positions array, which triggers the "block
- * has incorrectly been positioned multiple times" warning. This update
- * cleans up any such duplicates. Seen in the wild on sites where a
- * template switch + manual layout edits produced an extra position
- * reference for the page_components:tabs block.
- */
-function drop_suite_update_1206() {
-  $cleaned = array();
-  foreach (layout_load_all() as $name => $layout) {
-    $removed = _drop_suite_dedupe_layout_positions($layout);
-    if ($removed > 0) {
-      $layout->save();
-      $cleaned[] = $name . ' (' . $removed . ')';
-    }
-  }
-  if ($cleaned) {
-    return t('Removed duplicate position references in: @list.', array('@list' => implode(', ', $cleaned)));
-  }
-  return t('No layouts had duplicate position references.');
-}
-
-/**
  * Remove the deprecated drop_pin_action block from all layouts.
  *
  * Pin/unpin for reports now renders inside the Page Local Actions list via
@@ -661,6 +636,31 @@ function drop_suite_update_1205() {
     ));
   }
   return t('No layouts contained the deprecated drop_pin_action block.');
+}
+
+/**
+ * De-duplicate block-position references across all layouts.
+ *
+ * Backdrop's layout API allows a single UUID to be referenced multiple
+ * times in the same region's positions array, which triggers the "block
+ * has incorrectly been positioned multiple times" warning. This update
+ * cleans up any such duplicates. Seen in the wild on sites where a
+ * template switch + manual layout edits produced an extra position
+ * reference for the page_components:tabs block.
+ */
+function drop_suite_update_1206() {
+  $cleaned = array();
+  foreach (layout_load_all() as $name => $layout) {
+    $removed = _drop_suite_dedupe_layout_positions($layout);
+    if ($removed > 0) {
+      $layout->save();
+      $cleaned[] = $name . ' (' . $removed . ')';
+    }
+  }
+  if ($cleaned) {
+    return t('Removed duplicate position references in: @list.', array('@list' => implode(', ', $cleaned)));
+  }
+  return t('No layouts had duplicate position references.');
 }
 
 
