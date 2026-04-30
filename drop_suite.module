@@ -1402,7 +1402,7 @@ function drop_suite_menu() {
   // Permissions — filtered view showing only Drop Suite module permissions.
   $items['admin/drop/permissions'] = array(
     'title'            => 'Drop Suite permissions',
-    'description'      => t('Configure who can access DropTickets, Drop CRM, DropTasks, and other Drop Suite modules.'),
+    'description'      => t('Configure permissions for Drop Suite modules.'),
     'page callback'    => 'drop_suite_permissions_page',
     'access callback'  => 'user_access',
     'access arguments' => array('administer permissions'),
