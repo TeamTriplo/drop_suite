@@ -3,10 +3,10 @@
  * Drop Suite — shared CSS variables and utility classes.
  *
  * This is the single source of truth for colours and patterns shared across
- * DropCRM and DropTasks. Update values here; both modules inherit the change
+ * Drop CRM and DropTasks. Update values here; both modules inherit the change
  * automatically via CSS custom properties.
  *
- * DO NOT duplicate these values in dropcrm.admin.css or droptasks.css.
+ * DO NOT duplicate these values in drop_crm.admin.css or droptasks.css.
  * Module-specific layout/structure styles belong in the module's own CSS file.
  */
 
@@ -242,7 +242,7 @@ a.drop-section-add {
 /* The primary nav block escapes whatever page-width wrapper it's in so the
  * bar stays a consistent wide width regardless of the per-user page width
  * preference, one-off narrow form wrappers, or alternative layout templates
- * (e.g. the DropDocs moscone-based layout). Inner items remain centered via
+ * (e.g. the Drop Docs moscone-based layout). Inner items remain centered via
  * flex justify-content; the hard cap of 1920px keeps the bar from spanning
  * ultra-wide displays. */
 .block-drop-suite-drop-nav {

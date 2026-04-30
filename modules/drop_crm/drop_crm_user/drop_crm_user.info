@@ -1,0 +1,8 @@
+name = Drop CRM User
+description = Bridges Backdrop user accounts to CRM contacts. Optionally auto-creates a CRM contact on new user registration.
+package = Drop Suite
+version = 1.x-1.0.0
+type = module
+backdrop = 1.x
+
+dependencies[] = drop_crm

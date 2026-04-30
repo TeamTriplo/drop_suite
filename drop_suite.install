@@ -468,7 +468,7 @@ function _drop_suite_dedupe_layout_positions($layout) {
 /**
  * Establish schema version baseline for Drop Suite.
  *
- * The drop_project table already exists (created by dropcrm). This update
+ * The drop_project table already exists (created by drop_crm). This update
  * registers Drop Suite as the schema owner going forward.
  */
 function drop_suite_update_1000() {

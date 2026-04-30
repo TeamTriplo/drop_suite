@@ -1,10 +1,10 @@
 <?php
 /**
  * @file
- * Drop Suite — shared utilities for DropCRM and DropTasks.
+ * Drop Suite — shared utilities for Drop CRM and DropTasks.
  *
  * Provides shared CSS variables and utility classes used across the Drop
- * module family. Neither DropCRM nor DropTasks should duplicate these values —
+ * module family. Neither Drop CRM nor DropTasks should duplicate these values —
  * update here and both modules stay in sync.
  */
 
@@ -180,7 +180,7 @@ function _drop_suite_is_narrow_page($path) {
     // Time entry edit.
     '#^drop/time/entry/\d+/edit$#',
     // Docs list and add form. The canonical doc view path is node/{nid},
-    // which is handled by the dropdocs sidebar layout (not narrow).
+    // which is handled by the drop_docs sidebar layout (not narrow).
     '#^drop/docs$#',
     '#^node/add/doc$#',
     // Project view and forms: drop/projects/{pid}, add, edit.
@@ -895,7 +895,7 @@ function drop_suite_library() {
 /**
  * Implements hook_page_build().
  *
- * Adds the shared CSS to every page so that DropCRM and DropTasks pages always
+ * Adds the shared CSS to every page so that Drop CRM and DropTasks pages always
  * have access to the shared variables and utility classes without each page
  * callback needing to attach them individually.
  */
@@ -1389,7 +1389,7 @@ function drop_suite_menu() {
   // Drop Suite admin hub — visible in the Backdrop Configuration menu.
   $items['admin/drop'] = array(
     'title'            => 'Drop Suite',
-    'description'      => t('Configure and administer Drop Suite modules (DropTickets, DropCRM, DropTasks, and more).'),
+    'description'      => t('Configure and administer Drop Suite modules (DropTickets, Drop CRM, DropTasks, and more).'),
     'page callback'    => 'system_admin_menu_block_page',
     'access callback'  => 'user_access',
     'access arguments' => array('administer site configuration'),
@@ -1402,7 +1402,7 @@ function drop_suite_menu() {
   // Permissions — filtered view showing only Drop Suite module permissions.
   $items['admin/drop/permissions'] = array(
     'title'            => 'Drop Suite permissions',
-    'description'      => t('Configure who can access DropTickets, DropCRM, DropTasks, and other Drop Suite modules.'),
+    'description'      => t('Configure who can access DropTickets, Drop CRM, DropTasks, and other Drop Suite modules.'),
     'page callback'    => 'drop_suite_permissions_page',
     'access callback'  => 'user_access',
     'access arguments' => array('administer permissions'),
@@ -1852,7 +1852,7 @@ function drop_suite_team_page() {
   $role_labels = user_roles();
   $can_see_tickets = module_exists('droptickets') && user_access('access droptickets');
   $can_see_users   = user_access('access user profiles');
-  $has_crm_link    = module_exists('dropcrm_user');
+  $has_crm_link    = module_exists('drop_crm_user');
 
   $rows = array();
   foreach ($ordered as $account) {
@@ -1883,7 +1883,7 @@ function drop_suite_team_page() {
       $links[] = l(t('Tickets'), 'drop/tickets/member/' . $account->uid);
     }
     if ($has_crm_link) {
-      $contact = dropcrm_user_get_contact($account->uid);
+      $contact = drop_crm_user_get_contact($account->uid);
       if ($contact) {
         $links[] = l(t('Contact'), 'drop/crm/contact/' . $contact->cid);
       }
@@ -2197,10 +2197,10 @@ function drop_suite_form_user_admin_permissions_alter(&$form, &$form_state, $for
     'drop_suite',
     'drop_start',
     'dropbridge',
-    'dropcrm',
-    'dropdocs',
+    'drop_crm',
+    'drop_docs',
     'dropemail',
-    'dropfiles',
+    'drop_files',
     'dropgoals',
     'dropmonitor',
     'dropnewsletter',

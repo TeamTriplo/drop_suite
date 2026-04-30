@@ -1,0 +1,599 @@
+<?php
+/**
+ * @file
+ * Team file sharing library for the Drop Suite.
+ */
+
+/**
+ * Return the configured display name for the file library.
+ *
+ * @param string $variant
+ *   One of 'plural' (default) or 'singular'.
+ *
+ * @return string
+ *   The display name.
+ */
+function drop_files_display_name($variant = 'plural') {
+  $name = config_get('drop_files.settings', 'display_name');
+  if (empty($name)) {
+    $name = 'Files';
+  }
+
+  switch ($variant) {
+    case 'singular':
+      // Strip trailing 's' for simple singular form.
+      return preg_match('/s$/i', $name) ? rtrim($name, 'sS') : $name;
+
+    case 'plural':
+    default:
+      return $name;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function drop_files_permission() {
+  return array(
+    'access drop_files' => array(
+      'title' => t('View the file library'),
+    ),
+    'upload drop_files' => array(
+      'title' => t('Upload and manage files'),
+    ),
+    'administer drop_files' => array(
+      'title' => t('Manage file library settings'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_files_menu() {
+  $items = array();
+
+  $items['drop/files'] = array(
+    'title' => 'Files',
+    'title callback' => 'drop_files_display_name',
+    'page callback' => 'drop_files_library_page',
+    'access callback' => 'user_access',
+    'access arguments' => array('access drop_files'),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  $items['drop/files/upload'] = array(
+    'title' => 'Upload',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('drop_files_upload_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('upload drop_files'),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  $items['drop/files/%file/view'] = array(
+    'title' => 'File details',
+    'page callback' => 'drop_files_file_view_page',
+    'page arguments' => array(2),
+    'access callback' => 'drop_files_library_file_access',
+    'access arguments' => array(2),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  $items['drop/files/%file/edit'] = array(
+    'title' => 'Edit file',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('drop_files_edit_form', 2),
+    'access callback' => 'drop_files_library_file_access',
+    'access arguments' => array(2),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  $items['drop/files/%file/replace'] = array(
+    'title' => 'Replace file',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('drop_files_replace_form', 2),
+    'access callback' => 'drop_files_library_file_access',
+    'access arguments' => array(2),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  $items['drop/files/%file/delete'] = array(
+    'title' => 'Delete file',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('drop_files_delete_form', 2),
+    'access callback' => 'drop_files_library_file_access',
+    'access arguments' => array(2),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  // AJAX upload endpoint for drag-and-drop.
+  $items['drop/files/ajax-upload'] = array(
+    'page callback' => 'drop_files_ajax_upload',
+    'access callback' => 'user_access',
+    'access arguments' => array('upload drop_files'),
+    'file' => 'drop_files.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Autocomplete callback for searching library files.
+  $items['drop/files/autocomplete'] = array(
+    'page callback' => 'drop_files_autocomplete',
+    'access callback' => 'user_access',
+    'access arguments' => array('access drop_files'),
+    'file' => 'drop_files.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['drop/files/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('drop_files_settings_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer drop_files'),
+    'file' => 'drop_files.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for library file operations.
+ *
+ * Checks that the current user has the 'upload drop_files' permission and
+ * that the file belongs to the drop_files library (tracked via file_usage).
+ *
+ * @param object $file
+ *   The file object loaded from the menu wildcard.
+ *
+ * @return bool
+ *   TRUE if the user has access, FALSE otherwise.
+ */
+function drop_files_library_file_access($file) {
+  if (!user_access('upload drop_files')) {
+    return FALSE;
+  }
+
+  // Verify the file is in the drop_files library.
+  $usage = db_select('file_usage', 'fu')
+    ->fields('fu', array('fid'))
+    ->condition('fu.fid', $file->fid)
+    ->condition('fu.module', 'drop_files')
+    ->condition('fu.type', 'library')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  return !empty($usage);
+}
+
+/**
+ * Implements hook_drop_nav_links().
+ */
+function drop_files_drop_nav_links() {
+  return array(
+    array(
+      'title'      => t('Files'),
+      'path'       => 'drop/files',
+      'permission' => 'access drop_files',
+      'weight'     => 45,
+      'icon'       => 'paperclip',
+    ),
+  );
+}
+
+/**
+ * Implements hook_drop_section_links().
+ */
+function drop_files_drop_section_links($section) {
+  if ($section !== 'files') {
+    return array();
+  }
+
+  $links = array();
+
+  $links[] = array(
+    'title' => t('All files'),
+    'href' => 'drop/files',
+    'weight' => -10,
+    'active_paths' => array('drop/files', 'drop/files/list'),
+  );
+
+  $links[] = array(
+    'title' => t('Upload'),
+    'href' => 'drop/files/upload',
+    'weight' => 0,
+    'permission' => 'upload drop_files',
+  );
+
+  return $links;
+}
+
+/**
+ * Implements hook_drop_settings_info().
+ */
+function drop_files_drop_settings_info() {
+  return array(
+    'drop_files' => array(
+      'title' => t('Drop Files'),
+      'description' => t('File library settings.'),
+      'path' => 'drop/files/settings',
+      'permission' => 'administer drop_files',
+      'weight' => 45,
+    ),
+  );
+}
+
+/**
+ * Get tags assigned to a file.
+ *
+ * @param int $fid
+ *   The file ID.
+ *
+ * @return array
+ *   Array of term objects with tid and name properties.
+ */
+function drop_files_get_file_tags($fid) {
+  $file = file_load($fid);
+  if (!$file || empty($file->field_file_tags[LANGUAGE_NONE])) {
+    return array();
+  }
+
+  $tags = array();
+  foreach ($file->field_file_tags[LANGUAGE_NONE] as $item) {
+    $term = taxonomy_term_load($item['tid']);
+    if ($term) {
+      $tags[] = (object) array('tid' => $term->tid, 'name' => $term->name);
+    }
+  }
+  return $tags;
+}
+
+/**
+ * Save tags for a file, replacing any existing tags.
+ *
+ * @param int $fid
+ *   The file ID.
+ * @param array $tag_names
+ *   Array of tag name strings.
+ */
+function drop_files_save_file_tags($fid, array $tag_names) {
+  $file = file_load($fid);
+  if (!$file) {
+    return;
+  }
+
+  // Clear existing tags.
+  $file->field_file_tags[LANGUAGE_NONE] = array();
+
+  if (empty($tag_names)) {
+    file_save($file);
+    return;
+  }
+
+  // Load the file_tags vocabulary.
+  $vocab = taxonomy_vocabulary_load('file_tags');
+  if (!$vocab) {
+    return;
+  }
+
+  foreach ($tag_names as $name) {
+    $name = trim($name);
+    if (empty($name)) {
+      continue;
+    }
+
+    // Find existing term or create a new one.
+    $terms = taxonomy_term_load_multiple_by_name($name, 'file_tags');
+    if (!empty($terms)) {
+      $term = reset($terms);
+    }
+    else {
+      $term = new TaxonomyTerm(array(
+        'vocabulary' => 'file_tags',
+        'name' => $name,
+      ));
+      taxonomy_term_save($term);
+    }
+
+    $file->field_file_tags[LANGUAGE_NONE][] = array('tid' => $term->tid);
+  }
+
+  file_save($file);
+}
+
+/**
+ * Return a thumbnail HTML string for a file.
+ *
+ * For images, uses Backdrop's thumbnail image style. For PDFs, checks for a
+ * generated thumbnail. Falls back to a Phosphor icon.
+ *
+ * @param object $file
+ *   A file object with uri and filemime properties.
+ * @param int $size
+ *   The icon size in pixels (used for fallback icons).
+ *
+ * @return string
+ *   HTML for the thumbnail or icon.
+ */
+function drop_files_file_thumbnail($file, $size = 40, $image_style = 'thumbnail') {
+  // Image files: use core image style.
+  if (strpos($file->filemime, 'image/') === 0) {
+    $url = image_style_url($image_style, $file->uri);
+    return '<img src="' . check_url($url) . '" alt="" class="drop-files-thumb" style="max-width:' . $size . 'px">';
+  }
+
+  // PDF files: check for generated thumbnail.
+  if ($file->filemime === 'application/pdf') {
+    $thumb_uri = drop_files_pdf_thumbnail_uri($file->fid);
+    if (file_exists($thumb_uri)) {
+      $url = file_create_url($thumb_uri);
+      return '<img src="' . check_url($url) . '" alt="" class="drop-files-thumb" style="max-width:' . $size . 'px">';
+    }
+  }
+
+  // Fallback to Phosphor icon.
+  $icon_name = drop_files_file_icon($file->filemime);
+  return icon($icon_name, array('attributes' => array('width' => $size, 'height' => $size)));
+}
+
+/**
+ * Return the expected URI for a PDF thumbnail.
+ *
+ * @param int $fid
+ *   The file ID.
+ *
+ * @return string
+ *   A stream wrapper URI like public://drop_files_thumbs/123.png.
+ */
+function drop_files_pdf_thumbnail_uri($fid) {
+  return 'public://drop_files_thumbs/' . $fid . '.png';
+}
+
+/**
+ * Generate a thumbnail for a PDF file using ImageMagick.
+ *
+ * Renders page 1 of the PDF as a PNG image.
+ *
+ * @param object $file
+ *   A file object with fid, uri, and filemime properties.
+ *
+ * @return bool
+ *   TRUE if the thumbnail was generated, FALSE otherwise.
+ */
+function drop_files_generate_pdf_thumbnail($file) {
+  if ($file->filemime !== 'application/pdf') {
+    return FALSE;
+  }
+
+  $source = backdrop_realpath($file->uri);
+  if (!$source || !file_exists($source)) {
+    return FALSE;
+  }
+
+  // Check that ImageMagick is available (prefer magick, fall back to convert).
+  $convert = trim((string) shell_exec('which magick 2>/dev/null'));
+  if (empty($convert)) {
+    $convert = trim((string) shell_exec('which convert 2>/dev/null'));
+  }
+  if (empty($convert)) {
+    return FALSE;
+  }
+
+  $thumb_dir = 'public://drop_files_thumbs';
+  file_prepare_directory($thumb_dir, FILE_CREATE_DIRECTORY);
+  $dest_dir = backdrop_realpath($thumb_dir);
+  if (!$dest_dir || !is_writable($dest_dir)) {
+    watchdog('drop_files', 'PDF thumbnail directory not writable: @dir', array(
+      '@dir' => $thumb_dir,
+    ), WATCHDOG_WARNING);
+    return FALSE;
+  }
+  $dest = $dest_dir . '/' . $file->fid . '.png';
+
+  // Render page 1 at 200 DPI, resize to 400px wide.
+  $cmd = escapeshellcmd($convert)
+    . ' -density 200'
+    . ' ' . escapeshellarg($source . '[0]')
+    . ' -resize 400x'
+    . ' -background white'
+    . ' -flatten'
+    . ' ' . escapeshellarg($dest);
+
+  exec($cmd . ' 2>&1', $output, $return_code);
+
+  if ($return_code !== 0) {
+    watchdog('drop_files', 'PDF thumbnail generation failed for fid @fid: @output', array(
+      '@fid' => $file->fid,
+      '@output' => implode("\n", $output),
+    ), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  return file_exists($dest);
+}
+
+/**
+ * Return a human-readable file type label.
+ *
+ * @param string $filemime
+ *   The MIME type of the file.
+ * @param string $filename
+ *   The filename (used for extension fallback).
+ *
+ * @return string
+ *   A human-readable type string, e.g. "PDF Document".
+ */
+function drop_files_human_type($filemime, $filename = '') {
+  $map = array(
+    'application/pdf' => 'PDF Document',
+    'application/msword' => 'Word Document',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'Word Document',
+    'application/vnd.ms-excel' => 'Excel Spreadsheet',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'Excel Spreadsheet',
+    'application/vnd.ms-powerpoint' => 'PowerPoint Presentation',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'PowerPoint Presentation',
+    'application/zip' => 'ZIP Archive',
+    'application/x-rar-compressed' => 'RAR Archive',
+    'text/plain' => 'Text File',
+    'text/csv' => 'CSV Spreadsheet',
+    'text/markdown' => 'Markdown Document',
+    'text/x-markdown' => 'Markdown Document',
+  );
+
+  if (isset($map[$filemime])) {
+    return $map[$filemime];
+  }
+
+  if (strpos($filemime, 'image/') === 0) {
+    $subtype = strtoupper(substr($filemime, 6));
+    return $subtype . ' Image';
+  }
+
+  // Fallback: use the file extension.
+  if ($filename) {
+    $ext = strtoupper(pathinfo($filename, PATHINFO_EXTENSION));
+    if ($ext) {
+      return $ext . ' File';
+    }
+  }
+
+  return t('File');
+}
+
+/**
+ * Return a Phosphor icon name based on a file's MIME type.
+ *
+ * @param string $filemime
+ *   The MIME type of the file.
+ *
+ * @return string
+ *   A Phosphor icon name.
+ */
+function drop_files_file_icon($filemime) {
+  if ($filemime === 'application/pdf') {
+    return 'file-pdf';
+  }
+
+  if (strpos($filemime, 'image/') === 0) {
+    return 'file-image';
+  }
+
+  // Excel / spreadsheet types.
+  $spreadsheet_types = array(
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+  );
+  if (in_array($filemime, $spreadsheet_types)) {
+    return 'file-xls';
+  }
+
+  // Word / document types.
+  $doc_types = array(
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  );
+  if (in_array($filemime, $doc_types)) {
+    return 'file-doc';
+  }
+
+  if (strpos($filemime, 'text/') === 0) {
+    return 'file-text';
+  }
+
+  return 'file';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for droptickets_ticket_form.
+ *
+ * Adds a "Attach from file library" autocomplete field so users can select
+ * existing files from the Drop Files library to attach to a ticket.
+ */
+function drop_files_form_droptickets_ticket_form_alter(&$form, &$form_state) {
+  // Place in the main column, just after field_ticket_files (weight 20).
+  $form['layout']['main']['library_files'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Attach from file library'),
+    '#description' => t('Search for files in the file library. Separate multiple files with commas.'),
+    '#autocomplete_path' => 'drop/files/autocomplete',
+    '#weight' => 21,
+  );
+
+  // Add our submit handler after the main one to attach library files
+  // post-save (avoids conflicts with the file widget's internal state).
+  $form['#submit'][] = 'drop_files_ticket_library_submit';
+}
+
+/**
+ * Submit handler: attach library files to the ticket after save.
+ *
+ * Parses the autocomplete values (format: "filename [fid:123]"), loads the
+ * just-saved ticket, appends the library files, and re-saves.
+ */
+function drop_files_ticket_library_submit($form, &$form_state) {
+  $raw = trim($form_state['values']['library_files']);
+  if (empty($raw)) {
+    return;
+  }
+
+  // Parse comma-separated autocomplete values.
+  $parts = array_map('trim', explode(',', $raw));
+  $fids = array();
+  foreach ($parts as $part) {
+    if (preg_match('/\[fid:(\d+)\]/', $part, $m)) {
+      $fids[] = (int) $m[1];
+    }
+  }
+
+  if (empty($fids)) {
+    return;
+  }
+
+  // The main submit handler has already saved the ticket. Load it fresh.
+  $ticket = $form['#ticket'];
+  if (empty($ticket->tid)) {
+    return;
+  }
+  $tickets = entity_load('drop_ticket', array($ticket->tid));
+  $ticket = $tickets ? reset($tickets) : NULL;
+  if (!$ticket) {
+    return;
+  }
+
+  // Collect fids already on the ticket to avoid duplicates.
+  $existing_fids = array();
+  if (!empty($ticket->field_ticket_files[LANGUAGE_NONE])) {
+    foreach ($ticket->field_ticket_files[LANGUAGE_NONE] as $item) {
+      $existing_fids[] = (int) $item['fid'];
+    }
+  }
+  else {
+    $ticket->field_ticket_files[LANGUAGE_NONE] = array();
+  }
+
+  $added = 0;
+  foreach ($fids as $fid) {
+    if (in_array($fid, $existing_fids)) {
+      continue;
+    }
+    $file = file_load($fid);
+    if (!$file) {
+      continue;
+    }
+
+    $ticket->field_ticket_files[LANGUAGE_NONE][] = array(
+      'fid' => $file->fid,
+      'display' => 1,
+      'description' => '',
+    );
+    $existing_fids[] = $file->fid;
+    $added++;
+  }
+
+  if ($added) {
+    $ticket->save();
+    backdrop_set_message(format_plural($added, '1 file attached from the library.', '@count files attached from the library.'));
+  }
+}

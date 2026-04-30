@@ -53,7 +53,7 @@ function drop_suite_project_list() {
     )) . '</p>';
   }
 
-  $has_crm = module_exists('dropcrm');
+  $has_crm = module_exists('drop_crm');
 
   $rows = array();
   foreach ($projects as $project) {
@@ -158,7 +158,7 @@ function drop_suite_project_view($project) {
   }
 
   // Contact — only when CRM is enabled.
-  if (module_exists('dropcrm') && (!isset($display['contact']) || $display['contact']['visible'])) {
+  if (module_exists('drop_crm') && (!isset($display['contact']) || $display['contact']['visible'])) {
     $contact_html = '—';
     if (!empty($project->cid)) {
       $contacts = entity_load('crm_contact', array((int) $project->cid));
@@ -230,7 +230,7 @@ function drop_suite_project_view($project) {
     $fields_output['status'] = array(
       '#markup' => '<div class="drop-meta-row">'
         . '<span class="drop-meta-label">' . t('Status') . '</span>'
-        . '<span class="drop-meta-value"><span class="dropcrm-project-archived">' . t('Archived') . '</span></span>'
+        . '<span class="drop-meta-value"><span class="drop_crm-project-archived">' . t('Archived') . '</span></span>'
         . '</div>',
       '#weight' => isset($display['status']['weight']) ? $display['status']['weight'] : 10,
     );
@@ -314,7 +314,7 @@ function drop_suite_project_view($project) {
         . '<h2>' . t('Tickets (@total)', array('@total' => $ticket_count)) . '</h2>'
         . '<div class="drop-section-add-group">' . $add_link . '</div>'
         . '</div>'
-        . '<div class="dropcrm-project-status-tabs">' . $tabs . '</div>',
+        . '<div class="drop_crm-project-status-tabs">' . $tabs . '</div>',
       '#weight' => $tickets_weight,
     );
 
@@ -385,7 +385,7 @@ function drop_suite_project_form($form, &$form_state, $project = NULL) {
   );
 
   // Contact autocomplete — only when CRM is enabled.
-  if (module_exists('dropcrm')) {
+  if (module_exists('drop_crm')) {
     $default_contact = '';
     if ($is_edit && !empty($project->cid)) {
       $contacts = entity_load('crm_contact', array((int) $project->cid));

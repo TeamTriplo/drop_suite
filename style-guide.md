@@ -11,7 +11,7 @@ not in a dedicated theme.
   page actions, settings cards, CSS custom properties. This file is loaded on
   every page where drop_suite is active.
 - **Module-specific styles** go in each module's own CSS file (e.g.
-  `droptickets.css`, `dropcrm.admin.css`) and are loaded via `#attached` only
+  `droptickets.css`, `drop_crm.admin.css`) and are loaded via `#attached` only
   on that module's pages.
 - **No Drop Suite theme.** The Dropper theme was an early experiment but added no
   real value — it was a Basis fork with cosmetic tweaks and no Drop-specific CSS.
@@ -111,8 +111,8 @@ Each surface sits directly below the next broader one in the layout (primary →
 **Admin path nesting.** When a module presents itself as a sub-section of a
 parent module in section nav, its admin paths should live under the parent's
 URL namespace (e.g. `drop/crm/events/*` for DropEvents since Events appears
-in CRM's section sub-nav; `drop/crm/memberships/*` for dropcrm_membership as
-a submodule of DropCRM). This keeps section detection aligned with the user's
+in CRM's section sub-nav; `drop/crm/memberships/*` for drop_crm_membership as
+a submodule of Drop CRM). This keeps section detection aligned with the user's
 mental model — the parent submenu persists across sub-section pages
 automatically, no special-casing needed in `_drop_suite_get_section()`.
 Public-facing routes for the same module are exempt and go wherever they read
@@ -126,11 +126,11 @@ Per-entity verbs — things you *do to* the entity, not alternate views of it. E
 
 ```php
 $actions = array();
-if (user_access('manage dropcrm_membership')) {
+if (user_access('manage drop_crm_membership')) {
   $actions[] = l(t('Renew'), 'drop/crm/memberships/' . $membership->mid . '/renew');
   $actions[] = l(t('Record payment'), 'drop/crm/memberships/' . $membership->mid . '/payment/add');
 }
-if (user_access('cancel dropcrm_membership')) {
+if (user_access('cancel drop_crm_membership')) {
   $actions[] = l(t('Cancel'), 'drop/crm/memberships/' . $membership->mid . '/cancel');
 }
 $output['actions'] = array(
@@ -142,7 +142,7 @@ $output['actions'] = array(
 **Routing** — the underlying paths (`/renew`, `/cancel`, etc.) are still menu items, but declared as `MENU_CALLBACK` (no tab, no action link) since they're invoked exclusively from the action bar. Keeping them routable lets modules cross-link to specific actions.
 
 **Variants:**
-- **Person contacts in DropCRM** embed the action bar inside a richer "hero" block (`_dropcrm_contact_hero`) that also renders name, rating, tags, and job title. That's a decorative wrapper — the action bar below the hero still uses the same pill styling.
+- **Person contacts in Drop CRM** embed the action bar inside a richer "hero" block (`_drop_crm_contact_hero`) that also renders name, rating, tags, and job title. That's a decorative wrapper — the action bar below the hero still uses the same pill styling.
 - **Org / household contacts** use a plain `drop_suite_page_actions()` call with Edit and Delete links.
 
 **When NOT to use the action bar:**
@@ -150,7 +150,7 @@ $output['actions'] = array(
 - "Add new X" on a listing page (→ Local Actions).
 - Site-wide or section-level navigation (→ Primary nav / Section nav).
 
-**Existing usage:** DropCRM (org/household contact view pages), DropTasks (list page), DropGoals (history page), DropTickets (ticket list shortcut buttons). New entity view pages should follow the same pattern.
+**Existing usage:** Drop CRM (org/household contact view pages), DropTasks (list page), DropGoals (history page), DropTickets (ticket list shortcut buttons). New entity view pages should follow the same pattern.
 
 ## Tables
 
@@ -223,11 +223,11 @@ The section nav block (placed in the layout) provides sub-page links automatical
 | Module      | Landing path    | Content style                          |
 |-------------|-----------------|----------------------------------------|
 | droptickets | drop/tickets    | Filter bar + paginated table (25/page) |
-| dropcrm     | drop/crm        | Summary counts + outreach goal widget  |
+| drop_crm     | drop/crm        | Summary counts + outreach goal widget  |
 | droptasks   | drop/tasks      | Filter tabs + themed task list         |
 | droptime    | drop/time       | Date nav + timer + daily entry list    |
 | dropgoals   | drop/goals      | Goal cards with completion rates       |
-| dropdocs    | drop/docs       | Document list                          |
+| drop_docs    | drop/docs       | Document list                          |
 
 ## Page Width
 
@@ -391,10 +391,10 @@ Rules:
 | Task            | droptasks    | No          | Single     | Needs fix       | Yes    | No           |
 | Goal            | dropgoals    | No          | Single     | Needs fix       | Yes    | Yes          |
 | Time Entry      | droptime     | No          | Single     | Needs fix       | Yes    | No           |
-| Person          | dropcrm      | No          | Single     | Yes (99)        | No     | No           |
-| Organization    | dropcrm      | No          | Single     | Yes (99)        | No     | No           |
-| Household       | dropcrm      | No          | Single     | Yes (99)        | No     | No           |
-| Activity        | dropcrm      | No          | Single     | Needs fix       | No     | No           |
+| Person          | drop_crm      | No          | Single     | Yes (99)        | No     | No           |
+| Organization    | drop_crm      | No          | Single     | Yes (99)        | No     | No           |
+| Household       | drop_crm      | No          | Single     | Yes (99)        | No     | No           |
+| Activity        | drop_crm      | No          | Single     | Needs fix       | No     | No           |
 | Project         | drop_suite    | No          | Single     | Needs fix       | Yes    | No           |
 
 ## Settings Pages
@@ -407,7 +407,7 @@ Two patterns, chosen by *scope of ownership*:
   `drop/<module>/settings` for the primary form, and
   `drop/<module>/settings/<subpage>` for sub-settings
   (e.g. `drop/tickets/settings/statuses`). Use this for any setting
-  that's only meaningful when the module is enabled — DropCRM contact
+  that's only meaningful when the module is enabled — Drop CRM contact
   types, DropTickets statuses, DropBridge integration credentials.
   Keeps the module self-contained so uninstalling it doesn't leave
   orphan routes under `drop/settings/`.
@@ -522,13 +522,13 @@ function mysubmodule_form_parentmodule_settings_form_alter(&$form, &$form_state)
 | Module       | Path                      | Follows guide? | Notes                          |
 |--------------|---------------------------|----------------|--------------------------------|
 | drop_suite    | drop/settings/base        | Yes            |                                |
-| dropcrm      | drop/crm/settings         | Yes            |                                |
+| drop_crm      | drop/crm/settings         | Yes            |                                |
 | dropbridge   | drop/settings/bridge      | Yes            |                                |
 | dropbridge   | drop/settings/inbound     | Yes            |                                |
 | dropemail    | drop/email/settings       | Yes            |                                |
 | dropmonitor  | drop/monitor/settings     | Yes            |                                |
 | droptickets  | drop/tickets/settings     | Mostly         | Status link is raw markup      |
-| dropdocs     | drop/docs/settings        | Yes            |                                |
+| drop_docs     | drop/docs/settings        | Yes            |                                |
 
 ## Collapsible Details
 
@@ -624,11 +624,11 @@ hook_update_NNNN()          → import the view config for existing sites
 | Entity          | Module      | Fieldable | Extra fields | Properties | Views listing |
 |-----------------|-------------|-----------|--------------|------------|---------------|
 | Project         | drop_suite   | Yes       | Yes          | Yes        | Yes           |
-| Person          | dropcrm     | Yes       | Yes          | Yes        | Yes           |
-| Organization    | dropcrm     | Yes       | Yes          | Yes        | Yes           |
-| Household       | dropcrm     | Yes       | Yes          | Yes        | Yes           |
-| Activity        | dropcrm     | Yes       | No           | Yes        | No            |
-| Contact Method  | dropcrm     | Yes       | No           | Yes        | No            |
+| Person          | drop_crm     | Yes       | Yes          | Yes        | Yes           |
+| Organization    | drop_crm     | Yes       | Yes          | Yes        | Yes           |
+| Household       | drop_crm     | Yes       | Yes          | Yes        | Yes           |
+| Activity        | drop_crm     | Yes       | No           | Yes        | No            |
+| Contact Method  | drop_crm     | Yes       | No           | Yes        | No            |
 | Ticket          | droptickets | Yes       | No           | Partial    | No            |
 | Task            | droptasks   | Yes       | No           | Partial    | No            |
 | Time Entry      | droptime    | Yes       | No           | Partial    | No            |
