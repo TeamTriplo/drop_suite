@@ -1,0 +1,35 @@
+[Drop CRMContactCRUDTest]
+name = Drop CRM Contact CRUD
+description = Create, view, edit, and delete contacts (organization and person bundles) via entity API and UI.
+group = Drop CRM
+file = drop_crm.test
+
+[Drop CRMActivityCRUDTest]
+name = Drop CRM Activity CRUD
+description = Create, view, edit, and delete CRM activities via entity API and UI.
+group = Drop CRM
+file = drop_crm.test
+
+[Drop CRMAccessTest]
+name = Drop CRM Access Control
+description = Verifies that permissions gate contact and activity operations.
+group = Drop CRM
+file = drop_crm.test
+
+[Drop CRMProjectFieldUITest]
+name = Drop CRM Project Field UI Access
+description = Verifies that a user with administer crm can manage fields on projects.
+group = Drop CRM
+file = drop_crm.test
+
+[Drop CRMContactMethodTest]
+name = Drop CRM Contact Methods
+description = Primary email replacement notification and contact method operations.
+group = Drop CRM
+file = drop_crm.test
+
+[Drop CRMLinksSmokeTest]
+name = Drop list-page link smoke test
+description = Discovers every drop/* page-display View and verifies its result-row links load without error.
+group = Drop CRM
+file = drop_crm_links.test

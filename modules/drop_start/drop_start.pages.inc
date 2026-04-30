@@ -246,12 +246,12 @@ function drop_start_generate_form_submit($form, &$form_state) {
 
   // Contacts — needed before tickets if we want to link them.
   $contact_ids = array();
-  if (!empty($selected['dropcrm'])) {
+  if (!empty($selected['drop_crm'])) {
     $contact_ids = _drop_start_generate_contacts($uid);
   }
 
   // Memberships — need contact_ids to attach to.
-  if (!empty($selected['dropcrm_membership']) && !empty($contact_ids)) {
+  if (!empty($selected['drop_crm_membership']) && !empty($contact_ids)) {
     _drop_start_generate_memberships($uid, $contact_ids);
   }
 
@@ -646,7 +646,7 @@ function _drop_start_generate_memberships($uid, $contact_ids) {
   }
 
   // Pick a membership type key that actually exists in settings.
-  $types = config_get('dropcrm_membership.settings', 'types');
+  $types = config_get('drop_crm_membership.settings', 'types');
   if (empty($types) || !is_array($types)) {
     return;
   }
@@ -682,8 +682,8 @@ function _drop_start_generate_memberships($uid, $contact_ids) {
     ));
     $m->save();
     // Auto-assign member_id now that mid is known.
-    if (empty($m->member_id) && function_exists('_dropcrm_membership_generate_member_id')) {
-      $m->member_id = _dropcrm_membership_generate_member_id($m->mid);
+    if (empty($m->member_id) && function_exists('_drop_crm_membership_generate_member_id')) {
+      $m->member_id = _drop_crm_membership_generate_member_id($m->mid);
       $m->save();
     }
     drop_start_track('crm_membership', $m->mid);
@@ -725,8 +725,8 @@ function _drop_start_generate_memberships($uid, $contact_ids) {
       'status' => DROPCRM_MEMBERSHIP_STATUS_ACTIVE,
     ));
     $m->save();
-    if (empty($m->member_id) && function_exists('_dropcrm_membership_generate_member_id')) {
-      $m->member_id = _dropcrm_membership_generate_member_id($m->mid);
+    if (empty($m->member_id) && function_exists('_drop_crm_membership_generate_member_id')) {
+      $m->member_id = _drop_crm_membership_generate_member_id($m->mid);
       $m->save();
     }
     drop_start_track('crm_membership', $m->mid);

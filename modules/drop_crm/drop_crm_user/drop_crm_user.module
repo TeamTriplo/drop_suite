@@ -1,0 +1,326 @@
+<?php
+/**
+ * @file
+ * Drop CRM User — bridges Backdrop user accounts to CRM contacts.
+ *
+ * Features:
+ *  - Optional auto-creation of a CRM person on new user registration.
+ *  - First/last name fields added to the registration form when enabled.
+ *  - CRM section on user profile pages (admin only): view, create, or change link.
+ *  - "User Accounts" settings section added to the Drop CRM settings form.
+ */
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function drop_crm_user_menu() {
+  $items = array();
+
+  // Create a new CRM contact from a user account.
+  $items['user/%user/crm-create'] = array(
+    'title'            => 'Create CRM Contact',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_crm_user_create_contact_form', 1),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'file'             => 'drop_crm_user.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Change (or remove) the CRM contact linked to a user account.
+  $items['user/%user/crm-link'] = array(
+    'title'            => 'Change Linked CRM Contact',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_crm_user_link_contact_form', 1),
+    'access callback'  => 'user_access',
+    'access arguments' => array('administer crm'),
+    'file'             => 'drop_crm_user.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+// ---------------------------------------------------------------------------
+// User profile view — inject CRM section
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_user_view().
+ *
+ * Adds a "CRM Contact" section to the user profile page for admins.
+ * Shows links to view, create, or change the linked CRM contact.
+ */
+function drop_crm_user_user_view($account, $view_mode, $langcode) {
+  if (!user_access('administer crm')) {
+    return;
+  }
+
+  $contact = drop_crm_user_get_contact($account->uid);
+
+  if ($contact) {
+    $contact_name = entity_label('crm_contact', $contact);
+    $links = array();
+    $links[] = l(t('View contact'), 'drop/crm/contact/' . $contact->cid);
+    $links[] = l(t('Change linked contact'), 'user/' . $account->uid . '/crm-link');
+    $markup = '<strong>' . check_plain($contact_name) . '</strong>'
+      . ' &nbsp; ' . implode(' &nbsp; ', $links);
+  }
+  else {
+    $markup = t('No contact linked.') . ' &nbsp; '
+      . l(t('Create CRM contact'), 'user/' . $account->uid . '/crm-create');
+  }
+
+  $account->content['drop_crm_user'] = array(
+    '#type'   => 'item',
+    '#title'  => t('CRM Contact'),
+    '#markup' => $markup,
+    '#weight' => 20,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Registration form
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_FORM_ID_alter() for user_register_form.
+ *
+ * Adds first/last name fields to the registration form when auto-create
+ * is enabled. Values are used in hook_user_insert() to create the CRM contact.
+ */
+function drop_crm_user_form_user_register_form_alter(&$form, &$form_state) {
+  if (!config_get('drop_crm_user.settings', 'auto_create')) {
+    return;
+  }
+
+  $form['crm_name'] = array(
+    '#type'   => 'fieldset',
+    '#title'  => t('Your name'),
+    '#weight' => -5,
+  );
+
+  $form['crm_name']['first_name'] = array(
+    '#type'      => 'textfield',
+    '#title'     => t('First name'),
+    '#required'  => TRUE,
+    '#maxlength' => 128,
+    '#weight'    => 0,
+  );
+
+  $form['crm_name']['last_name'] = array(
+    '#type'      => 'textfield',
+    '#title'     => t('Last name'),
+    '#maxlength' => 128,
+    '#weight'    => 1,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Auto-create on registration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_user_insert().
+ *
+ * When auto-create is enabled and first/last name fields were submitted,
+ * creates a CRM person contact and links it to the new account.
+ *
+ * @param array $edit
+ *   Submitted form values (includes first_name, last_name from registration).
+ * @param object $account
+ *   The newly created user account.
+ * @param string $category
+ *   The form category.
+ */
+function drop_crm_user_user_insert($account) {
+  if (!config_get('drop_crm_user.settings', 'auto_create')) {
+    return;
+  }
+
+  $first_name = isset($account->first_name) ? trim($account->first_name) : '';
+  if ($first_name === '') {
+    // Fields weren't present (e.g. admin-created account without the form).
+    return;
+  }
+
+  $last_name = isset($account->last_name) ? trim($account->last_name) : '';
+
+  _drop_crm_user_create_contact_for_user($account, $first_name, $last_name, $account->mail);
+}
+
+// ---------------------------------------------------------------------------
+// Settings form integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_FORM_ID_alter() for drop_crm_settings_form.
+ *
+ * Appends a "User Accounts" fieldset to the Drop CRM settings form.
+ */
+function drop_crm_user_form_drop_crm_settings_form_alter(&$form, &$form_state) {
+  $form['user_accounts'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('User Accounts'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => 50,
+  );
+
+  $form['user_accounts']['auto_create'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Auto-create a CRM contact when a new person registers'),
+    '#default_value' => config_get('drop_crm_user.settings', 'auto_create'),
+    '#description'   => t('When enabled, first and last name fields are added to the registration form and a CRM person contact is automatically created and linked to the new account.'),
+  );
+
+  $form['#submit'][] = 'drop_crm_user_settings_submit';
+}
+
+/**
+ * Submit handler for the Drop CRM settings form — saves Drop CRM User settings.
+ */
+function drop_crm_user_settings_submit($form, &$form_state) {
+  $config = config('drop_crm_user.settings');
+  $config->set('auto_create', (bool) $form_state['values']['auto_create']);
+  $config->save();
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the CRM contact linked to a user account, or FALSE.
+ *
+ * @param int $uid
+ *   The Backdrop user ID.
+ *
+ * @return CrmContact|FALSE
+ */
+function drop_crm_user_get_contact($uid) {
+  $cid = db_select('crm_user_contact', 'uc')
+    ->fields('uc', array('cid'))
+    ->condition('uid', (int) $uid)
+    ->execute()
+    ->fetchField();
+
+  return $cid ? crm_contact_load($cid) : FALSE;
+}
+
+/**
+ * Returns the user account linked to a CRM contact, or FALSE.
+ *
+ * @param int $cid
+ *   The CRM contact ID.
+ *
+ * @return object|FALSE
+ *   The Backdrop user account object, or FALSE.
+ */
+function drop_crm_user_get_user($cid) {
+  $uid = db_select('crm_user_contact', 'uc')
+    ->fields('uc', array('uid'))
+    ->condition('cid', (int) $cid)
+    ->execute()
+    ->fetchField();
+
+  return $uid ? user_load($uid) : FALSE;
+}
+
+/**
+ * Creates or updates the link between a user account and a CRM contact.
+ *
+ * If either side is already linked elsewhere, that previous link is removed
+ * before the new one is created.
+ *
+ * @param int $uid
+ *   The Backdrop user ID.
+ * @param int $cid
+ *   The CRM contact ID.
+ */
+function drop_crm_user_link($uid, $cid) {
+  $uid = (int) $uid;
+  $cid = (int) $cid;
+
+  // Remove any existing rows for this uid or this cid.
+  db_delete('crm_user_contact')
+    ->condition(db_or()
+      ->condition('uid', $uid)
+      ->condition('cid', $cid)
+    )
+    ->execute();
+
+  db_insert('crm_user_contact')
+    ->fields(array(
+      'uid'     => $uid,
+      'cid'     => $cid,
+      'created' => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Removes the link between a user account and any CRM contact.
+ *
+ * @param int $uid
+ *   The Backdrop user ID.
+ */
+function drop_crm_user_unlink($uid) {
+  db_delete('crm_user_contact')
+    ->condition('uid', (int) $uid)
+    ->execute();
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a CRM person contact for a user account and links them.
+ *
+ * @param object $account
+ *   The Backdrop user account.
+ * @param string $first_name
+ * @param string $last_name
+ * @param string $email
+ *   Optional email address to add as a primary email contact method.
+ *
+ * @return CrmContact|FALSE
+ *   The newly created contact, or FALSE on failure.
+ */
+function _drop_crm_user_create_contact_for_user($account, $first_name, $last_name, $email = '') {
+  try {
+    $lang = LANGUAGE_NONE;
+
+    $contact = new CrmContact(array('type' => 'crm_person'));
+    $contact->uid    = $account->uid;
+    $contact->status = 1;
+    $contact->field_crm_first_name[$lang][0]['value'] = $first_name;
+    $contact->field_crm_last_name[$lang][0]['value']  = $last_name;
+    $contact->save();
+
+    if (!empty($email)) {
+      $method = new CrmContactMethod(array(
+        'type'       => 'email',
+        'cid'        => $contact->cid,
+        'value'      => $email,
+        'label'      => '',
+        'is_primary' => 1,
+      ));
+      $method->save();
+    }
+
+    drop_crm_user_link($account->uid, $contact->cid);
+
+    return $contact;
+  }
+  catch (Exception $e) {
+    watchdog('drop_crm_user', 'Failed to create CRM contact for user %uid: @message',
+      array('%uid' => $account->uid, '@message' => $e->getMessage()), WATCHDOG_ERROR);
+    return FALSE;
+  }
+}

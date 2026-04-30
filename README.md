@@ -16,30 +16,30 @@ over time.
 |--------|-------------|------|--------------|
 | [drop_suite](drop_suite/) | Shared CSS, helpers, nav bar, team directory | — | *none* |
 | [DropBridge](dropbridge/) | Unified daily dashboard, Slack DMs, inbound email | `drop/` | drop_suite |
-| [DropCRM](dropcrm/) | Contacts, activities, projects, contact methods | `drop/crm` | drop_suite, entity_plus, entity_ui, entityreference |
+| [Drop CRM](drop_crm/) | Contacts, activities, projects, contact methods | `drop/crm` | drop_suite, entity_plus, entity_ui, entityreference |
 | [DropDocs](dropdocs/) | Hierarchical team wiki / documentation | `drop/docs` | drop_suite |
-| [DropEmail](dropemail/) | Outbound email from contacts & tickets, activity logging | — | dropcrm |
+| [DropEmail](dropemail/) | Outbound email from contacts & tickets, activity logging | — | drop_crm |
 | [DropGoals](dropgoals/) | Daily habit / goal tracking with flexible frequency | `drop/goals` | drop_suite |
-| [DropNewsletter](dropnewsletter/) | Newsletter subscriptions on CRM contacts | — | dropcrm, simplenews |
+| [DropNewsletter](dropnewsletter/) | Newsletter subscriptions on CRM contacts | — | drop_crm, simplenews |
 | [DropStrategic](dropstrategic/) | OKR-style strategic goal tracking | `drop/strategic` | drop_suite, entity_plus |
 | [DropTasks](droptasks/) | Personal task management with tags and priorities | `drop/tasks` | drop_suite |
-| [DropTickets](droptickets/) | Team ticket tracker with kanban, watchers, Slack | `drop/tickets` | drop_suite, dropcrm, entity_plus |
-| [DropTime](droptime/) | Project time tracking, timesheets, reports | `drop/time` | drop_suite, dropcrm |
+| [DropTickets](droptickets/) | Team ticket tracker with kanban, watchers, Slack | `drop/tickets` | drop_suite, drop_crm, entity_plus |
+| [DropTime](droptime/) | Project time tracking, timesheets, reports | `drop/time` | drop_suite, drop_crm |
 
 ### Architecture at a glance
 
 - **drop_suite** is the foundation. Every other Drop module depends on it (directly or transitively). It provides shared CSS custom properties, priority helpers, the Drop navigation bar, and the team directory.
-- **DropCRM** is the core data module. It defines contacts, activities, contact methods, and the `drop_project` entity used by DropTickets and DropTime.
-- **DropBridge** is the integration hub. It pulls from DropCRM, DropTasks, DropGoals, DropTickets, and DropTime via `module_exists()` checks — all are optional.
-- **DropEmail**, **DropNewsletter**, and **DropTime** extend DropCRM with email, newsletter, and time tracking capabilities.
+- **Drop CRM** is the core data module. It defines contacts, activities, contact methods, and the `drop_project` entity used by DropTickets and DropTime.
+- **DropBridge** is the integration hub. It pulls from Drop CRM, DropTasks, DropGoals, DropTickets, and DropTime via `module_exists()` checks — all are optional.
+- **DropEmail**, **DropNewsletter**, and **DropTime** extend Drop CRM with email, newsletter, and time tracking capabilities.
 - **DropTasks**, **DropGoals**, **DropDocs**, and **DropStrategic** are standalone modules that depend only on drop_suite (and entity_plus where needed).
 
 ## Requirements
 
 - Backdrop CMS 1.x
-- [Entity Plus](https://github.com/backdrop-contrib/entity_plus) (for DropCRM, DropTickets, DropStrategic)
-- [Entity UI](https://github.com/backdrop-contrib/entity_ui) (for DropCRM)
-- [Entity Reference](https://github.com/backdrop-contrib/entityreference) (for DropCRM)
+- [Entity Plus](https://github.com/backdrop-contrib/entity_plus) (for Drop CRM, DropTickets, DropStrategic)
+- [Entity UI](https://github.com/backdrop-contrib/entity_ui) (for Drop CRM)
+- [Entity Reference](https://github.com/backdrop-contrib/entityreference) (for Drop CRM)
 - [SimpleNews](https://github.com/backdrop-contrib/simplenews) (only for DropNewsletter)
 
 ## Installation
@@ -54,10 +54,10 @@ over time.
 ## Quick start
 
 For a minimal CRM setup:
-- Enable: `drop_suite`, `dropcrm`
+- Enable: `drop_suite`, `drop_crm`
 
 For a full team productivity suite:
-- Enable: `drop_suite`, `dropcrm`, `droptickets`, `droptime`, `droptasks`, `dropgoals`, `dropbridge`
+- Enable: `drop_suite`, `drop_crm`, `droptickets`, `droptime`, `droptasks`, `dropgoals`, `dropbridge`
 
 For documentation and strategic planning:
 - Add: `dropdocs`, `dropstrategic`
@@ -74,7 +74,7 @@ Each module defines its own permissions. Common patterns:
 
 Most modules store configuration in Backdrop's config system (JSON files in `config/`). Settings pages are available at:
 
-- **DropCRM**: `drop/crm/settings`
+- **Drop CRM**: `drop/crm/settings`
 - **DropTickets**: `drop/tickets/settings`
 - **DropBridge**: `drop/settings` (Slack, inbound email)
 - **DropEmail**: `drop/admin/dropemail`

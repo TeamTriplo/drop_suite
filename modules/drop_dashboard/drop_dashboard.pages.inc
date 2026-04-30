@@ -12,7 +12,7 @@
  * Page callback: unified daily to-do list.
  *
  * Pulls pending/incomplete items from whichever of DropGoals, DropTasks,
- * DropTickets, and DropCRM are enabled. Items are sorted with overdue first
+ * DropTickets, and Drop CRM are enabled. Items are sorted with overdue first
  * (oldest first), then due today, then goals (which have no due date).
  *
  * @return array
@@ -136,8 +136,8 @@ function drop_dashboard_daily_list() {
     }
   }
 
-  // ---- DropCRM: planned activities due on/before the active date ----------
-  if (module_exists('dropcrm') && user_access('access crm')) {
+  // ---- Drop CRM: planned activities due on/before the active date ----------
+  if (module_exists('drop_crm') && user_access('access crm')) {
     $act_q = db_select('crm_activity', 'a')
       ->fields('a')
       ->condition('a.status', 'planned')
@@ -513,7 +513,7 @@ function theme_drop_dashboard_daily_list($variables) {
   if (module_exists('droptasks')) {
     $module_links[] = l(t('Tasks'), 'drop/tasks');
   }
-  if (module_exists('dropcrm')) {
+  if (module_exists('drop_crm')) {
     $module_links[] = l(t('CRM'), 'drop/crm');
   }
   if ($module_links) {

@@ -3,10 +3,10 @@
  * Drop Suite — shared CSS variables and utility classes.
  *
  * This is the single source of truth for colours and patterns shared across
- * DropCRM and DropTasks. Update values here; both modules inherit the change
+ * Drop CRM and DropTasks. Update values here; both modules inherit the change
  * automatically via CSS custom properties.
  *
- * DO NOT duplicate these values in dropcrm.admin.css or droptasks.css.
+ * DO NOT duplicate these values in drop_crm.admin.css or droptasks.css.
  * Module-specific layout/structure styles belong in the module's own CSS file.
  */
 

@@ -1,0 +1,187 @@
+{
+    "_config_name": "views.view.crm_contacts",
+    "name": "crm_contacts",
+    "description": "Contact listings for the CRM: people, organizations, and households.",
+    "module": "drop_crm",
+    "tag": "Drop Suite",
+    "disabled": false,
+    "base_table": "crm_contact",
+    "human_name": "CRM Contacts",
+    "core": "1.x",
+    "display": {
+        "default": {
+            "display_title": "Default",
+            "display_plugin": "default",
+            "display_options": {
+                "query": {
+                    "type": "views_query",
+                    "options": []
+                },
+                "title": "Contacts",
+                "access": {
+                    "type": "perm",
+                    "perm": "access crm"
+                },
+                "style_plugin": "table",
+                "style_options": {
+                    "columns": {
+                        "name": "name",
+                        "status": "status"
+                    },
+                    "default": "name",
+                    "info": {
+                        "name": {
+                            "sortable": true,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": ""
+                        },
+                        "status": {
+                            "sortable": true,
+                            "default_sort_order": "desc",
+                            "align": "",
+                            "separator": ""
+                        }
+                    }
+                },
+                "fields": {
+                    "name": {
+                        "id": "name",
+                        "table": "crm_contact",
+                        "field": "name",
+                        "label": "Name",
+                        "link_to_entity": true
+                    },
+                    "status": {
+                        "id": "status",
+                        "table": "crm_contact",
+                        "field": "status",
+                        "label": "Status",
+                        "type": "custom",
+                        "type_custom_true": "Active",
+                        "type_custom_false": "Inactive",
+                        "not": false
+                    },
+                    "cid": {
+                        "id": "cid",
+                        "table": "crm_contact",
+                        "field": "cid",
+                        "label": "Actions",
+                        "separator": "",
+                        "alter": {
+                            "alter_text": true,
+                            "text": "<a href=\"/drop/crm/contacts/[cid]/edit\">Edit</a> \u00b7 <a href=\"/drop/crm/contacts/[cid]/delete\">Delete</a>"
+                        }
+                    }
+                },
+                "filters": {
+                    "type": {
+                        "id": "type",
+                        "table": "crm_contact",
+                        "field": "type",
+                        "value": {
+                            "crm_person": "crm_person"
+                        }
+                    }
+                },
+                "sorts": {
+                    "name": {
+                        "id": "name",
+                        "table": "crm_contact",
+                        "field": "name",
+                        "order": "ASC"
+                    }
+                },
+                "pager": {
+                    "type": "full",
+                    "options": {
+                        "items_per_page": 50
+                    }
+                },
+                "empty": {
+                    "area": {
+                        "id": "area",
+                        "table": "views",
+                        "field": "area",
+                        "content": "No contacts found."
+                    }
+                }
+            }
+        },
+        "people": {
+            "display_title": "People",
+            "display_plugin": "page",
+            "display_options": {
+                "path": "drop/crm/people",
+                "title": "People",
+                "defaults": {
+                    "title": false,
+                    "filters": false
+                },
+                "filters": {
+                    "type": {
+                        "id": "type",
+                        "table": "crm_contact",
+                        "field": "type",
+                        "value": {
+                            "crm_person": "crm_person"
+                        }
+                    }
+                },
+                "menu": {
+                    "type": "none"
+                }
+            }
+        },
+        "organizations": {
+            "display_title": "Organizations",
+            "display_plugin": "page",
+            "display_options": {
+                "path": "drop/crm/organizations",
+                "title": "Organizations",
+                "defaults": {
+                    "title": false,
+                    "filters": false
+                },
+                "filters": {
+                    "type": {
+                        "id": "type",
+                        "table": "crm_contact",
+                        "field": "type",
+                        "value": {
+                            "crm_organization": "crm_organization"
+                        }
+                    }
+                },
+                "menu": {
+                    "type": "none"
+                }
+            }
+        },
+        "households": {
+            "display_title": "Households",
+            "display_plugin": "page",
+            "display_options": {
+                "path": "drop/crm/households",
+                "title": "Households",
+                "defaults": {
+                    "title": false,
+                    "filters": false
+                },
+                "filters": {
+                    "type": {
+                        "id": "type",
+                        "table": "crm_contact",
+                        "field": "type",
+                        "value": {
+                            "crm_household": "crm_household"
+                        }
+                    }
+                },
+                "menu": {
+                    "type": "none"
+                }
+            }
+        }
+    }
+}
