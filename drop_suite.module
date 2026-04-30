@@ -1749,7 +1749,7 @@ function drop_suite_layout_info() {
     'default region' => 'content',
     'preview' => 'drop_suite.png',
     'stylesheets' => array(
-      'all' => array('drop_suite.css'),
+      'all' => array('layout--drop-suite.css'),
     ),
     'template' => 'layout--drop-suite',
     'libraries' => array('bootstrap4-gs'),
