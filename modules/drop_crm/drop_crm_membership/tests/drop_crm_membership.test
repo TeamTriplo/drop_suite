@@ -7,7 +7,7 @@
 /**
  * Shared base: contact + membership + term + payment factory helpers.
  */
-abstract class Drop CRMMembershipTestBase extends BackdropWebTestCase {
+abstract class DropCrmMembershipTestBase extends BackdropWebTestCase {
 
   /** @var object User with full membership administration. */
   protected $adminUser;
@@ -106,7 +106,7 @@ abstract class Drop CRMMembershipTestBase extends BackdropWebTestCase {
 /**
  * Verifies ACTIVE → GRACE → LAPSED transitions under cron.
  */
-class Drop CRMMembershipStateMachineTest extends Drop CRMMembershipTestBase {
+class DropCrmMembershipStateMachineTest extends DropCrmMembershipTestBase {
 
   public static function getInfo() {
     return array(
@@ -220,7 +220,7 @@ class Drop CRMMembershipStateMachineTest extends Drop CRMMembershipTestBase {
 /**
  * Verifies renewal creates a new term and does not mutate prior terms.
  */
-class Drop CRMMembershipRenewalTest extends Drop CRMMembershipTestBase {
+class DropCrmMembershipRenewalTest extends DropCrmMembershipTestBase {
 
   public static function getInfo() {
     return array(
@@ -297,7 +297,7 @@ class Drop CRMMembershipRenewalTest extends Drop CRMMembershipTestBase {
 /**
  * Payments record correctly and total_paid aggregates.
  */
-class Drop CRMMembershipPaymentTest extends Drop CRMMembershipTestBase {
+class DropCrmMembershipPaymentTest extends DropCrmMembershipTestBase {
 
   public static function getInfo() {
     return array(
@@ -351,7 +351,7 @@ class Drop CRMMembershipPaymentTest extends Drop CRMMembershipTestBase {
 /**
  * Permission gates work as designed.
  */
-class Drop CRMMembershipAccessTest extends Drop CRMMembershipTestBase {
+class DropCrmMembershipAccessTest extends DropCrmMembershipTestBase {
 
   public static function getInfo() {
     return array(
@@ -400,7 +400,7 @@ class Drop CRMMembershipAccessTest extends Drop CRMMembershipTestBase {
 /**
  * Renewal and cancellation log corresponding crm_activity rows.
  */
-class Drop CRMMembershipActivityIntegrationTest extends Drop CRMMembershipTestBase {
+class DropCrmMembershipActivityIntegrationTest extends DropCrmMembershipTestBase {
 
   public static function getInfo() {
     return array(

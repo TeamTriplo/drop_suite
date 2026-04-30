@@ -1402,7 +1402,7 @@ function drop_suite_menu() {
   // Permissions — filtered view showing only Drop Suite module permissions.
   $items['admin/drop/permissions'] = array(
     'title'            => 'Drop Suite permissions',
-    'description'      => t('Configure who can access DropTickets, Drop CRM, DropTasks, and other Drop Suite modules.'),
+    'description'      => t('Configure permissions for Drop Suite modules.'),
     'page callback'    => 'drop_suite_permissions_page',
     'access callback'  => 'user_access',
     'access arguments' => array('administer permissions'),
@@ -1749,7 +1749,7 @@ function drop_suite_layout_info() {
     'default region' => 'content',
     'preview' => 'drop_suite.png',
     'stylesheets' => array(
-      'all' => array('drop_suite.css'),
+      'all' => array('layout--drop-suite.css'),
     ),
     'template' => 'layout--drop-suite',
     'libraries' => array('bootstrap4-gs'),
@@ -1933,7 +1933,16 @@ function drop_suite_grant_admin_permissions($module_name) {
   if (empty($perms)) {
     return;
   }
-  user_role_grant_permissions($admin_role, array_keys($perms));
+  // user_role_grant_permissions() silently drops the ENTIRE list if any
+  // single perm key is undefined (not declared by any enabled module's
+  // hook_permission). Filter to known-good perms first so a typo in one
+  // module's hook_permission doesn't take out admin access to all the
+  // module's other perms.
+  $available = array_keys(user_permission_get_modules());
+  $grant = array_intersect(array_keys($perms), $available);
+  if ($grant) {
+    user_role_grant_permissions($admin_role, $grant);
+  }
 }
 
 /**

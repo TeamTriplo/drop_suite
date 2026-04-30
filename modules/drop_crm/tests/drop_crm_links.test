@@ -20,7 +20,7 @@
  * fail. To extend coverage to a new entity-backed list view, add a row
  * factory call in seedFixtures().
  */
-class Drop CRMLinksSmokeTest extends BackdropWebTestCase {
+class DropCrmLinksSmokeTest extends BackdropWebTestCase {
 
   /** @var object User with every permission declared by enabled modules. */
   protected $adminUser;

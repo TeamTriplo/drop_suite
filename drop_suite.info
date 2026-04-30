@@ -5,3 +5,5 @@ backdrop = 1.x
 version = 1.x-1.0-dev
 package = Drop Suite
 dependencies[] = entity_plus
+
+stylesheets[all][] = drop_suite.css

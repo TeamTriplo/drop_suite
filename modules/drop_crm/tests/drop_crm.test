@@ -7,7 +7,7 @@
 /**
  * Shared base: helpers for creating test contacts and activities.
  */
-abstract class Drop CRMTestBase extends BackdropWebTestCase {
+abstract class DropCrmTestBase extends BackdropWebTestCase {
 
   /** @var object User with full CRM admin access. */
   protected $adminUser;
@@ -88,7 +88,7 @@ abstract class Drop CRMTestBase extends BackdropWebTestCase {
 /**
  * Tests create, view, edit, and delete operations on CRM contacts.
  */
-class Drop CRMContactCRUDTest extends Drop CRMTestBase {
+class DropCrmContactCRUDTest extends DropCrmTestBase {
 
   public static function getInfo() {
     return array(
@@ -391,7 +391,7 @@ class Drop CRMContactCRUDTest extends Drop CRMTestBase {
 /**
  * Tests create, view, edit, and delete operations on CRM activities.
  */
-class Drop CRMActivityCRUDTest extends Drop CRMTestBase {
+class DropCrmActivityCRUDTest extends DropCrmTestBase {
 
   public static function getInfo() {
     return array(
@@ -578,7 +578,7 @@ class Drop CRMActivityCRUDTest extends Drop CRMTestBase {
 /**
  * Tests that permissions correctly gate CRM contact and activity operations.
  */
-class Drop CRMAccessTest extends Drop CRMTestBase {
+class DropCrmAccessTest extends DropCrmTestBase {
 
   public static function getInfo() {
     return array(
@@ -812,7 +812,7 @@ class Drop CRMAccessTest extends Drop CRMTestBase {
 /**
  * Tests that an admin user can access the Project Field UI page.
  */
-class Drop CRMProjectFieldUITest extends Drop CRMTestBase {
+class DropCrmProjectFieldUITest extends DropCrmTestBase {
 
   public static function getInfo() {
     return array(
@@ -856,7 +856,7 @@ class Drop CRMProjectFieldUITest extends Drop CRMTestBase {
 /**
  * Tests for primary email change notification and duplicate warnings.
  */
-class Drop CRMContactMethodTest extends Drop CRMTestBase {
+class DropCrmContactMethodTest extends DropCrmTestBase {
 
   public static function getInfo() {
     return array(
