@@ -1,16 +1,16 @@
-[DropBaseLayoutSetupTest]
+[DropSuiteLayoutSetupTest]
 name = Drop Suite Layout Setup
 description = Verifies that enabling Drop Suite places all essential blocks in the default layout.
 group = Drop Suite
 file = drop_suite.test
 
-[DropBaseSettingsDashboardTest]
+[DropSuiteSettingsDashboardTest]
 name = Settings Dashboard
 description = Verifies settings cards appear for enabled modules and access is restricted.
 group = Drop Suite
 file = drop_suite.test
 
-[DropBaseAdminPermissionsTest]
+[DropSuiteAdminPermissionsTest]
 name = Admin permissions granted on install
 description = Verifies Drop modules grant all declared permissions to the admin role on fresh install.
 group = Drop Suite
