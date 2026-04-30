@@ -1,16 +1,16 @@
-[Drop DocsAccessTest]
+[DropDocsAccessTest]
 name = Drop Docs Access Control
 description = Verifies that permissions gate the docs index and view pages.
 group = Drop Docs
 file = drop_docs.test
 
-[Drop DocsBookIntegrationTest]
+[DropDocsBookIntegrationTest]
 name = Drop Docs Book Integration
 description = Verifies doc nodes are book-enabled, render with the book sidebar, and preserve book ancestry.
 group = Drop Docs
 file = drop_docs.test
 
-[Drop DocsDisplayNameTest]
+[DropDocsDisplayNameTest]
 name = Drop Docs Display Name
 description = Verifies the display_name config changes nav, empty state, and sidebar heading.
 group = Drop Docs

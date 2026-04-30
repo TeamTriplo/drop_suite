@@ -7,7 +7,7 @@
 /**
  * Shared base class: helpers for creating book-enabled doc nodes.
  */
-abstract class Drop DocsTestBase extends BackdropWebTestCase {
+abstract class DropDocsTestBase extends BackdropWebTestCase {
 
   /** @var object User with full admin access to docs. */
   protected $adminUser;
@@ -65,7 +65,7 @@ abstract class Drop DocsTestBase extends BackdropWebTestCase {
  * Tests that Drop Docs pages respect the access drop_docs and administer
  * drop_docs permissions.
  */
-class Drop DocsAccessTest extends Drop DocsTestBase {
+class DropDocsAccessTest extends DropDocsTestBase {
 
   public static function getInfo() {
     return array(
@@ -176,7 +176,7 @@ class Drop DocsAccessTest extends Drop DocsTestBase {
 /**
  * Tests that Drop Docs correctly integrates with the core Book module.
  */
-class Drop DocsBookIntegrationTest extends Drop DocsTestBase {
+class DropDocsBookIntegrationTest extends DropDocsTestBase {
 
   public static function getInfo() {
     return array(
@@ -302,7 +302,7 @@ class Drop DocsBookIntegrationTest extends Drop DocsTestBase {
 /**
  * Tests the configurable display_name setting and empty-state messaging.
  */
-class Drop DocsDisplayNameTest extends Drop DocsTestBase {
+class DropDocsDisplayNameTest extends DropDocsTestBase {
 
   public static function getInfo() {
     return array(
