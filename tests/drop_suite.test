@@ -10,7 +10,7 @@
  * Verifies that essential blocks (messages, tabs, action links, nav, title)
  * are placed in the layout after drop_suite is enabled.
  */
-class DropBaseLayoutSetupTest extends BackdropWebTestCase {
+class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
 
   public static function getInfo() {
     return array(
@@ -125,7 +125,7 @@ class DropBaseLayoutSetupTest extends BackdropWebTestCase {
  * Verifies that enabled modules with hook_drop_settings_info() show cards,
  * and that the dashboard is access-controlled.
  */
-class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
+class DropSuiteSettingsDashboardTest extends BackdropWebTestCase {
 
   public static function getInfo() {
     return array(
@@ -142,7 +142,7 @@ class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
   /**
    * Admin sees the Drop Suite settings card on the dashboard.
    */
-  public function testAdminSeesDropBaseCard() {
+  public function testAdminSeesDropSuiteCard() {
     $admin = $this->backdropCreateUser(array('administer site configuration'));
     $this->backdropLogin($admin);
     $this->backdropGet('drop/settings');
@@ -180,7 +180,7 @@ class DropBaseSettingsDashboardTest extends BackdropWebTestCase {
  * drop_suite's own install path and a second module's install path are covered
  * in a single test site without loading the full Drop Suite.
  */
-class DropBaseAdminPermissionsTest extends BackdropWebTestCase {
+class DropSuiteAdminPermissionsTest extends BackdropWebTestCase {
 
   protected $profile = 'standard';
 
@@ -199,7 +199,7 @@ class DropBaseAdminPermissionsTest extends BackdropWebTestCase {
   /**
    * drop_suite_install() grants every drop_suite permission to the admin role.
    */
-  public function testDropBasePermissionsGrantedToAdminRole() {
+  public function testDropSuitePermissionsGrantedToAdminRole() {
     $this->assertAllModulePermissionsGranted('drop_suite');
   }
 
