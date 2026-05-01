@@ -231,7 +231,7 @@ function drop_crm_contact_list_page($bundle) {
  */
 function drop_crm_contact_add_page($bundle) {
   $entity = entity_create('crm_contact', array('type' => $bundle));
-  return backdrop_get_form('crm_contact_form', $entity);
+  return backdrop_get_form('crm_contact_form', $entity, 'add');
 }
 
 // ---------------------------------------------------------------------------
