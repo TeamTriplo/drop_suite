@@ -1677,6 +1677,11 @@ function drop_suite_drop_nav_links() {
       'path'       => 'drop/meeting',
       'weight'     => 80,
       'separator'  => TRUE,
+      // Explicitly gate on logged-in status to match the page's
+      // user_is_logged_in() access callback. The nav renderer also auto-checks
+      // via menu_get_item(), but stating the gate at the entry matches the
+      // convention every other Drop Suite nav entry follows.
+      'visible'    => user_is_logged_in(),
       'hidden'     => !config_get('drop_suite.settings', 'meeting_enabled'),
       'icon'       => 'users-three',
     ),
