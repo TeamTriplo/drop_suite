@@ -5,17 +5,19 @@
  */
 
 /**
- * Tests that Drop Suite install correctly sets up the default layout.
+ * Tests that Drop Suite install correctly sets up the drop_pages layout.
  *
  * Verifies that essential blocks (messages, tabs, action links, nav, title)
- * are placed in the layout after drop_suite is enabled.
+ * are placed in the dedicated drop_pages layout after drop_suite is enabled.
+ * As of update 1207, drop_suite no longer modifies the default layout; it
+ * creates a drop_pages layout that applies to /drop/* paths.
  */
 class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
 
   public static function getInfo() {
     return array(
       'name'        => 'Drop Suite Layout Setup',
-      'description' => 'Verifies that enabling Drop Suite places all essential blocks in the default layout.',
+      'description' => 'Verifies that enabling Drop Suite places all essential blocks in the drop_pages layout.',
       'group'       => 'Drop Suite',
     );
   }
@@ -25,18 +27,19 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
   }
 
   /**
-   * The default layout uses the drop_suite template after install.
+   * The drop_pages layout uses the drop_suite template after install.
    */
   public function testLayoutUsesDropSuiteTemplate() {
-    $layout = layout_load('default');
-    $this->assertEqual('drop_suite', $layout->layout_template, 'Default layout uses the drop_suite template.');
+    $layout = layout_load('drop_pages');
+    $this->assertTrue(!empty($layout), 'drop_pages layout exists after install.');
+    $this->assertEqual('drop_suite', $layout->layout_template, 'drop_pages layout uses the drop_suite template.');
   }
 
   /**
    * A messages block is present in the layout.
    */
   public function testMessagesBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'system:page_components:messages');
     $this->assertTrue($found, 'Messages block is placed in the layout.');
   }
@@ -45,7 +48,7 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
    * A page title block is present in the layout.
    */
   public function testTitleBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'system:page_components:title');
     $this->assertTrue($found, 'Page title block is placed in the layout.');
   }
@@ -54,7 +57,7 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
    * A tabs block is present in the layout.
    */
   public function testTabsBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'system:page_components:tabs');
     $this->assertTrue($found, 'Tabs block is placed in the layout.');
   }
@@ -63,7 +66,7 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
    * An action links block is present in the layout.
    */
   public function testActionLinksBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'system:page_components:action_links');
     $this->assertTrue($found, 'Action links block is placed in the layout.');
   }
@@ -72,7 +75,7 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
    * The Drop Nav block is present in the layout.
    */
   public function testDropNavBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'drop_suite:drop_nav');
     $this->assertTrue($found, 'Drop Nav block is placed in the layout.');
   }
@@ -81,7 +84,7 @@ class DropSuiteLayoutSetupTest extends BackdropWebTestCase {
    * The Drop Section Nav block is present in the layout.
    */
   public function testDropSectionNavBlockPlaced() {
-    $layout = layout_load('default');
+    $layout = layout_load('drop_pages');
     $found = $this->layoutHasPlugin($layout, 'drop_suite:drop_section_nav');
     $this->assertTrue($found, 'Drop Section Nav block is placed in the layout.');
   }
