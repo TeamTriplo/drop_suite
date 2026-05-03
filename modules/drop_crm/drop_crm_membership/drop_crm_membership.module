@@ -647,6 +647,12 @@ function drop_crm_membership_crm_membership_presave($membership) {
 
 /**
  * Implements hook_crm_membership_term_presave().
+ *
+ * Normalizes start_date and end_date to int Unix timestamps. The schema is
+ * int but it's natural for callers (form submit, tests, migrations, the API)
+ * to pass YYYY-MM-DD strings. Without this coercion MySQL silently truncates
+ * "2026-05-01" to 2026 on insert into an INT column, which corrupts cron's
+ * date-boundary comparisons.
  */
 function drop_crm_membership_crm_membership_term_presave($term) {
   global $user;
@@ -656,10 +662,18 @@ function drop_crm_membership_crm_membership_term_presave($term) {
   if (empty($term->uid)) {
     $term->uid = $user->uid;
   }
+  if (isset($term->start_date)) {
+    $term->start_date = _drop_crm_membership_normalize_date($term->start_date);
+  }
+  if (isset($term->end_date)) {
+    $term->end_date = _drop_crm_membership_normalize_date($term->end_date);
+  }
 }
 
 /**
  * Implements hook_crm_membership_payment_presave().
+ *
+ * paid_date follows the same int-timestamp normalization as term dates.
  */
 function drop_crm_membership_crm_membership_payment_presave($payment) {
   global $user;
@@ -668,6 +682,9 @@ function drop_crm_membership_crm_membership_payment_presave($payment) {
   }
   if (empty($payment->uid)) {
     $payment->uid = $user->uid;
+  }
+  if (isset($payment->paid_date)) {
+    $payment->paid_date = _drop_crm_membership_normalize_date($payment->paid_date);
   }
 }
 
@@ -703,6 +720,28 @@ function _drop_crm_membership_status_badge($status) {
   $label = isset($labels[$status]) ? $labels[$status] : t('Unknown');
   $class = isset($classes[$status]) ? $classes[$status] : 'unknown';
   return '<span class="crm-membership-status crm-membership-status-' . $class . '">' . check_plain($label) . '</span>';
+}
+
+/**
+ * Normalizes a date value to a Unix timestamp.
+ *
+ * Accepts NULL / empty (returned as NULL for "lifetime / not set"), numeric
+ * timestamps (returned as int), or "YYYY-MM-DD" strings (converted via
+ * strtotime). Anything else returns NULL so invalid input is dropped rather
+ * than silently truncated by the INT column on insert.
+ */
+function _drop_crm_membership_normalize_date($value) {
+  if ($value === NULL || $value === '') {
+    return NULL;
+  }
+  if (is_numeric($value)) {
+    return (int) $value;
+  }
+  if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+    $ts = strtotime($value);
+    return $ts !== FALSE ? $ts : NULL;
+  }
+  return NULL;
 }
 
 /**
