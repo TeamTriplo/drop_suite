@@ -466,6 +466,55 @@ function _drop_suite_dedupe_layout_positions($layout) {
 }
 
 /**
+ * Re-parent admin/drop/* menu links under their natural parent path. Idempotent.
+ *
+ * Walks rows shallowest-first so each parent is fixed before its children.
+ * For each row, looks up the menu_link whose link_path matches the row's
+ * parent path and rewrites plid to point at it. menu_link_save() handles
+ * depth, the p1..p9 ancestor chain, and marking the parent has_children.
+ *
+ * Returns the number of rows actually changed.
+ */
+function _drop_suite_reparent_admin_drop_menu_links() {
+  $mlids = db_query(
+    "SELECT mlid FROM {menu_links}
+     WHERE menu_name = 'management'
+       AND link_path LIKE 'admin/drop/%'
+     ORDER BY LENGTH(link_path) ASC, mlid ASC"
+  )->fetchCol();
+
+  $fixed = 0;
+  foreach ($mlids as $mlid) {
+    $item = menu_link_load($mlid);
+    if (!$item) {
+      continue;
+    }
+    $slash = strrpos($item['link_path'], '/');
+    if ($slash === FALSE) {
+      continue;
+    }
+    $parent_path = substr($item['link_path'], 0, $slash);
+    $parent_mlid = (int) db_query(
+      "SELECT mlid FROM {menu_links}
+       WHERE menu_name = 'management' AND link_path = :p",
+      array(':p' => $parent_path)
+    )->fetchField();
+
+    if (!$parent_mlid || (int) $item['plid'] === $parent_mlid) {
+      continue;
+    }
+    $item['plid'] = $parent_mlid;
+    menu_link_save($item);
+    $fixed++;
+  }
+
+  if ($fixed) {
+    cache('menu')->flush();
+  }
+  return $fixed;
+}
+
+/**
  * Establish schema version baseline for Drop Suite.
  *
  * The drop_project table already exists (created by drop_crm). This update
@@ -735,4 +784,28 @@ function drop_suite_update_1209() {
     }
   }
   return t('Stripped Drop Suite nav blocks and orphan regions from admin_default and drop_pages layouts.');
+}
+
+/**
+ * Re-parent admin/drop/* admin menu items under the Drop Suite hub.
+ *
+ * Submodules (DropBridge, DropTickets, Drop Strategic, Drop Monitor, etc.)
+ * register settings shortcuts at admin/drop/<name>. Older sites have stale
+ * menu_links rows where these items still point at admin (mlid=1) as their
+ * parent — a leftover from when they lived at top-level paths like
+ * admin/dropbridge before the refactor. The result is that they render in
+ * the admin bar as siblings of Configuration instead of nesting under
+ * Drop Suite, which inflates the top-level item count and forces admin_bar
+ * to collapse the entire menu into a hamburger dropdown.
+ *
+ * menu_rebuild() does not re-parent existing rows, so this update walks
+ * the affected rows shallowest-first and rewrites their plid to the
+ * correct parent. menu_link_save() recomputes depth and the p1..p9 chain
+ * automatically.
+ *
+ * Idempotent: rows already pointing at the correct parent are skipped.
+ */
+function drop_suite_update_1210() {
+  $fixed = _drop_suite_reparent_admin_drop_menu_links();
+  return t('Re-parented @n admin/drop/* menu link(s) under the Drop Suite hub.', array('@n' => $fixed));
 }
