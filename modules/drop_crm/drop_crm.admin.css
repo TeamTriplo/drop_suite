@@ -845,6 +845,45 @@ a.crm-method-edit-link:hover {
   background-color: #fffbeb;
 }
 
+/* Clients report — last updated / staleness */
+.drop_crm-col-updated {
+  white-space: nowrap;
+}
+
+.drop_crm-updated {
+  font-size: 0.9em;
+  color: #64748b;
+}
+
+.drop_crm-updated-stale {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.drop_crm-stale-flag {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0.05em 0.45em;
+  border: 1px solid #f59e0b;
+  border-radius: 3px;
+  background-color: #fef3c7;
+  color: #92400e;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.drop_crm-clients-table tr.drop_crm-row-stale td.drop_crm-col-updated {
+  background-color: #fffbeb;
+}
+
+.drop_crm-report-sort {
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  color: #64748b;
+}
+
 /* Duplicates merge form — side-by-side compare cards. */
 .crm-merge-cards {
   display: flex;

@@ -9,6 +9,13 @@
  *  - crm_activity: logged interactions and planned tasks
  */
 
+/**
+ * Default number of days before a client is flagged as needing an update.
+ *
+ * Used by the Clients report when drop_crm.settings:client_stale_days is unset.
+ */
+define('DROP_CRM_CLIENT_STALE_DAYS', 5);
+
 // ---------------------------------------------------------------------------
 // Autoload
 // ---------------------------------------------------------------------------

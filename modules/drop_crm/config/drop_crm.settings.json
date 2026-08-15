@@ -30,5 +30,6 @@
     "url": ["LinkedIn", "Twitter", "GitHub", "Facebook", "Instagram", "Website", "Other"]
   },
   "review_enabled": false,
+  "client_stale_days": 5,
   "api_key": ""
 }
