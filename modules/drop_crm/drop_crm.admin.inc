@@ -2395,6 +2395,25 @@ function drop_crm_settings_form($form, &$form_state) {
     '#default_value' => $config->get('review_enabled'),
   );
 
+  // --- Clients report ---
+  $form['clients_report'] = array(
+    '#type'        => 'fieldset',
+    '#title'       => t('Clients report'),
+    '#collapsible' => TRUE,
+    '#collapsed'   => TRUE,
+    '#weight'      => $w + 6,
+  );
+  $form['clients_report']['client_stale_days'] = array(
+    '#type'          => 'number',
+    '#title'         => t('Flag clients not updated within'),
+    '#field_suffix'  => t('days'),
+    '#min'           => 1,
+    '#max'           => 365,
+    '#size'          => 5,
+    '#description'   => t('The Clients report marks any client whose record has not been edited within this many days as needing an update.'),
+    '#default_value' => $config->get('client_stale_days') ?: DROP_CRM_CLIENT_STALE_DAYS,
+  );
+
   // --- API ---
   $form['api'] = array(
     '#type'        => 'fieldset',
@@ -2820,6 +2839,7 @@ function drop_crm_settings_form_submit($form, &$form_state) {
   $config->set('outreach_goal_period', $values['outreach_goal_period']);
   $config->set('outreach_goal_window_weeks', (int) $values['outreach_goal_window_weeks']);
   $config->set('review_enabled', !empty($values['review_enabled']));
+  $config->set('client_stale_days', max(1, (int) $values['client_stale_days']));
   $config->set('api_key', trim($values['api_key']));
   $config->save();
 
@@ -3003,6 +3023,11 @@ function drop_crm_outreach_start_over_form_submit($form, &$form_state) {
  * Lists contacts tagged with the "Client" tag. Contact names link directly
  * to the edit form with a destination back to this report so that saving
  * returns here rather than to the bundle list.
+ *
+ * A "Last updated" column reports the age of each contact's last save
+ * (crm_contact.changed) and flags anything older than the configured
+ * staleness threshold. Note that changed reflects ANY edit to the contact
+ * record, not specifically a change to the Status note.
  */
 function drop_crm_report_clients() {
   backdrop_set_title(t('Clients'));
@@ -3025,7 +3050,7 @@ function drop_crm_report_clients() {
   }
 
   $query = db_select('crm_contact', 'c');
-  $query->fields('c', array('cid', 'name', 'type', 'status'));
+  $query->fields('c', array('cid', 'name', 'type', 'status', 'changed'));
   $query->innerJoin('field_data_field_drop_tags', 'ft',
     'ft.entity_id = c.cid AND ft.entity_type = :type',
     array(':type' => 'crm_contact'));
@@ -3067,18 +3092,42 @@ function drop_crm_report_clients() {
     }
   }
 
-  // Sort results by warmth (hot first, then warm, then cold/unset), then name.
-  $warmth_order = array('hot' => 0, 'warm' => 1, 'cold' => 2);
-  usort($results, function($a, $b) use ($warmth_by_cid, $warmth_order) {
-    $wa = isset($warmth_by_cid[$a->cid], $warmth_order[$warmth_by_cid[$a->cid]])
-      ? $warmth_order[$warmth_by_cid[$a->cid]] : 3;
-    $wb = isset($warmth_by_cid[$b->cid], $warmth_order[$warmth_by_cid[$b->cid]])
-      ? $warmth_order[$warmth_by_cid[$b->cid]] : 3;
-    if ($wa !== $wb) {
-      return $wa - $wb;
-    }
-    return strcasecmp($a->name, $b->name);
-  });
+  // Staleness threshold, in days. Anything not edited within this window is
+  // flagged as needing attention.
+  $stale_days = (int) config_get('drop_crm.settings', 'client_stale_days');
+  if ($stale_days < 1) {
+    $stale_days = DROP_CRM_CLIENT_STALE_DAYS;
+  }
+  $stale_cutoff = REQUEST_TIME - ($stale_days * 86400);
+
+  // Sort mode: 'warmth' (default) or 'stale' (oldest edit first). Kept as a
+  // query parameter rather than TableSort because the default ordering is a
+  // computed warmth rank with no single sortable column behind it.
+  $sort = (isset($_GET['sort']) && $_GET['sort'] === 'stale') ? 'stale' : 'warmth';
+
+  if ($sort === 'stale') {
+    // Oldest edit first, so the clients most overdue for an update lead.
+    usort($results, function($a, $b) {
+      if ($a->changed != $b->changed) {
+        return ($a->changed < $b->changed) ? -1 : 1;
+      }
+      return strcasecmp($a->name, $b->name);
+    });
+  }
+  else {
+    // Sort results by warmth (hot first, then warm, then cold/unset), then name.
+    $warmth_order = array('hot' => 0, 'warm' => 1, 'cold' => 2);
+    usort($results, function($a, $b) use ($warmth_by_cid, $warmth_order) {
+      $wa = isset($warmth_by_cid[$a->cid], $warmth_order[$warmth_by_cid[$a->cid]])
+        ? $warmth_order[$warmth_by_cid[$a->cid]] : 3;
+      $wb = isset($warmth_by_cid[$b->cid], $warmth_order[$warmth_by_cid[$b->cid]])
+        ? $warmth_order[$warmth_by_cid[$b->cid]] : 3;
+      if ($wa !== $wb) {
+        return $wa - $wb;
+      }
+      return strcasecmp($a->name, $b->name);
+    });
+  }
 
   $warmth_labels = array(
     'hot' => t('Hot'),
@@ -3095,6 +3144,7 @@ function drop_crm_report_clients() {
   $link_options = array('query' => array('destination' => 'drop/crm/reports/clients'));
 
   $rows = array();
+  $stale_count = 0;
   foreach ($results as $contact) {
     $type_label  = isset($bundle_labels[$contact->type]) ? $bundle_labels[$contact->type] : $contact->type;
     $status_note = !empty($status_by_cid[$contact->cid])
@@ -3105,12 +3155,35 @@ function drop_crm_report_clients() {
     $warmth_display = isset($warmth_labels[$warmth_val]) ? $warmth_labels[$warmth_val] : '—';
     $warmth_cell = '<span class="drop_crm-warmth drop_crm-warmth-' . $warmth_val . '">' . $warmth_display . '</span>';
 
+    // Last updated: relative age, flagged when past the staleness threshold.
+    $is_stale = empty($contact->changed) || $contact->changed < $stale_cutoff;
+    if (empty($contact->changed)) {
+      $updated_display = t('Never');
+    }
+    else {
+      $updated_display = t('@interval ago', array(
+        '@interval' => format_interval(REQUEST_TIME - $contact->changed, 1),
+      ));
+    }
+    $updated_cell = '<span class="drop_crm-updated' . ($is_stale ? ' drop_crm-updated-stale' : '') . '"'
+      . ' title="' . check_plain(!empty($contact->changed) ? format_date($contact->changed, 'short') : t('No recorded edit')) . '">'
+      . check_plain($updated_display) . '</span>';
+    if ($is_stale) {
+      $stale_count++;
+      $updated_cell .= ' <span class="drop_crm-stale-flag" title="'
+        . check_plain(t('Not updated in the last @count days.', array('@count' => $stale_days)))
+        . '">' . t('Needs update') . '</span>';
+    }
+
     $row_class = array();
     if ($warmth_val === 'hot') {
       $row_class[] = 'drop_crm-row-hot';
     }
     elseif ($warmth_val === 'warm') {
       $row_class[] = 'drop_crm-row-warm';
+    }
+    if ($is_stale) {
+      $row_class[] = 'drop_crm-row-stale';
     }
 
     $rows[] = array(
@@ -3119,18 +3192,38 @@ function drop_crm_report_clients() {
         check_plain($type_label),
         array('data' => $warmth_cell, 'class' => array('drop_crm-col-warmth')),
         array('data' => $status_note, 'class' => array('drop_crm-col-status')),
+        array('data' => $updated_cell, 'class' => array('drop_crm-col-updated')),
       ),
       'class' => $row_class,
     );
   }
 
-  $table  = theme('table', array(
-    'header'     => array(t('Name'), t('Type'), t('Warmth'), t('Status')),
+  // Sort toggle.
+  $toggle = '<p class="drop_crm-report-sort">' . t('Sort by:') . ' ';
+  $toggle .= ($sort === 'warmth')
+    ? '<strong>' . t('Warmth') . '</strong>'
+    : l(t('Warmth'), 'drop/crm/reports/clients');
+  $toggle .= ' | ';
+  $toggle .= ($sort === 'stale')
+    ? '<strong>' . t('Least recently updated') . '</strong>'
+    : l(t('Least recently updated'), 'drop/crm/reports/clients', array('query' => array('sort' => 'stale')));
+  $toggle .= '</p>';
+
+  $table  = $toggle;
+  $table .= theme('table', array(
+    'header'     => array(t('Name'), t('Type'), t('Warmth'), t('Status'), t('Last updated')),
     'rows'       => $rows,
     'attributes' => array('class' => array('drop_crm-clients-table')),
     'empty'      => t('No contacts found.'),
   ));
-  $table .= '<p class="drop_crm-report-count">' . format_plural(count($rows), '1 client', '@count clients') . '</p>';
+  $table .= '<p class="drop_crm-report-count">' . format_plural(count($rows), '1 client', '@count clients');
+  if ($stale_count) {
+    $table .= ' — ' . t('@count not updated in the last @days days.', array(
+      '@count' => $stale_count,
+      '@days'  => $stale_days,
+    ));
+  }
+  $table .= '</p>';
 
   $output = array(
     '#markup' => $table,
