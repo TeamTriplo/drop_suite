@@ -39,7 +39,7 @@ function drop_crm_contact_view(CrmContact $contact) {
   else {
     // Non-person contacts: simple action bar + entity view.
     $actions = array();
-    if (drop_crm_contact_access('edit', $contact)) {
+    if (drop_crm_contact_access('update', $contact)) {
       $bundle_labels = array(
         'crm_organization' => t('Edit organization'),
         'crm_household'    => t('Edit household'),
@@ -173,7 +173,7 @@ function drop_crm_contact_view(CrmContact $contact) {
         $value = check_plain($method->value);
       }
       $ops = '';
-      if (drop_crm_contact_method_access('edit', $method)) {
+      if (drop_crm_contact_method_access('update', $method)) {
         $ops .= l(t('Edit'), 'drop/crm/contact-methods/manage/' . $method->cmid . '/edit',
           array('attributes' => array('class' => array('crm-method-edit-link'))));
       }
@@ -409,7 +409,7 @@ function drop_crm_activity_view(CrmActivity $activity) {
 
   // --- Action links bar (top of page) ---
   $activity_actions = array();
-  if (drop_crm_activity_access('edit', $activity)) {
+  if (drop_crm_activity_access('update', $activity)) {
     $activity_actions[] = l(t('Edit activity'), 'drop/crm/activities/manage/' . $aid . '/edit');
   }
   if (drop_crm_activity_access('delete', $activity)) {
@@ -681,7 +681,7 @@ function _drop_crm_contact_method_bundle_label($type) {
 function _drop_crm_contact_hero(CrmContact $contact) {
   // Action links — modules may append via hook_drop_crm_contact_hero_actions_alter().
   $action_items = array();
-  if (drop_crm_contact_access('edit', $contact)) {
+  if (drop_crm_contact_access('update', $contact)) {
     $action_items[] = l(t('Edit person'), 'drop/crm/contacts/' . $contact->cid . '/edit');
   }
   if (drop_crm_contact_access('delete', $contact)) {
