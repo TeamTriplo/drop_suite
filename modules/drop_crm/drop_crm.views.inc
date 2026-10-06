@@ -20,7 +20,8 @@
 /**
  * Implements hook_views_data_alter().
  *
- * Adds a reverse relationship from crm_contact to crm_contact_method so that
+ * Gives the contact name field a handler that links to the contact page, and
+ * adds a reverse relationship from crm_contact to crm_contact_method so that
  * a contacts-based view can include the contact's email addresses, phone
  * numbers, and addresses.
  */
@@ -30,6 +31,12 @@ function drop_crm_views_data_alter(&$data) {
   // automatically because the 'cid' property on crm_contact_method has type
   // 'crm_contact' in hook_entity_property_info().
   if (isset($data['crm_contact'])) {
+    // Contact names link to the contact page. The generic handler ignored
+    // the views' "link_to_entity" option, so lists showed plain-text names.
+    if (isset($data['crm_contact']['name']['field'])) {
+      $data['crm_contact']['name']['field']['handler'] = 'drop_crm_handler_field_contact_name';
+    }
+
     $data['crm_contact']['contact_methods'] = array(
       'title'  => t('Contact Methods'),
       'help'   => t('Relate a contact to its email, telephone, and address records.'),

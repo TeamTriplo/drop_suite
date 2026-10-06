@@ -38,6 +38,7 @@ function drop_crm_autoload_info() {
     'CrmContributionController'     => 'drop_crm.entity.inc',
     'CrmContactInlineEntityFormController'                   => 'drop_crm.inline_entity_form.inc',
     'EntityReferenceSelectionHandlerGeneric_crm_contact'     => 'drop_crm.entity.inc',
+    'drop_crm_handler_field_contact_name'                    => 'views/drop_crm_handler_field_contact_name.inc',
   );
 }
 

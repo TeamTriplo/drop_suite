@@ -83,6 +83,35 @@ class DropCrmLinksSmokeTest extends BackdropWebTestCase {
   }
 
   /**
+   * Contact names on the People / Organizations / Households lists link to
+   * the contact page, not just to Edit / Delete.
+   */
+  public function testContactNamesLinkToContactPage() {
+    $household = entity_create('crm_contact', array(
+      'type'   => 'crm_household',
+      'name'   => 'Smoke Test Household',
+      'status' => 1,
+    ));
+    $household->save();
+
+    $lists = array(
+      'drop/crm/people' => 'Smoke Test',
+      'drop/crm/organizations' => 'Smoke Test Org',
+      'drop/crm/households' => 'Smoke Test Household',
+    );
+    foreach ($lists as $path => $name) {
+      $cid = db_query('SELECT cid FROM {crm_contact} WHERE name = :name', array(':name' => $name))->fetchField();
+      $this->backdropGet($path);
+      $this->assertResponse(200, "$path loads.");
+      $links = $this->xpath('//td[contains(@class, "views-field-name")]//a[@href=:href]', array(
+        ':href' => url('drop/crm/contact/' . $cid),
+      ));
+      $this->assertTrue(!empty($links), "On $path, \"$name\" links to drop/crm/contact/$cid.");
+      $this->assertLinkByHref('drop/crm/contacts/' . $cid . '/edit', 0, "On $path, the Edit link is still present.");
+    }
+  }
+
+  /**
    * Visit every drop/* list page, follow each action link rendered in its
    * results table, assert the linked page loads. Reports each broken link
    * with a "list X / link Y → HTTP Z" failure message so regressions are
