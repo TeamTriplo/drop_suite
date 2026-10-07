@@ -1087,7 +1087,7 @@ function drop_crm_activity_list_page() {
   $aids = array_column((array) $activities, 'aid');
   $contact_links = _drop_crm_activity_contact_links($aids);
 
-  // Single query: which activities have meeting notes?
+  // Single query: which activities have full notes?
   $aids_with_notes = array();
   if ($aids && db_table_exists('field_data_field_crm_meeting_notes')) {
     $notes_result = db_select('field_data_field_crm_meeting_notes', 'n')
@@ -1104,7 +1104,7 @@ function drop_crm_activity_list_page() {
   foreach ($activities as $activity) {
     $subject_cell = l($activity->subject, 'drop/crm/activity/' . $activity->aid);
     if (!empty($aids_with_notes[$activity->aid])) {
-      $subject_cell .= ' <span class="crm-notes-badge" title="' . t('Has meeting notes') . '">' . icon('note', array('attributes' => array('width' => 14, 'height' => 14))) . '</span>';
+      $subject_cell .= ' <span class="crm-notes-badge" title="' . t('Has full notes') . '">' . icon('note', array('attributes' => array('width' => 14, 'height' => 14))) . '</span>';
     }
     $rows[] = array(
       $subject_cell,
