@@ -320,6 +320,7 @@ function drop_crm_schema() {
  */
 function drop_crm_install() {
   _drop_crm_create_fields();
+  _drop_crm_ensure_activity_details();
   _drop_crm_ensure_contact_tags();
   _drop_crm_ensure_contact_types();
   _drop_crm_ensure_contact_groups();
@@ -342,6 +343,57 @@ function drop_crm_install() {
   }
 
   drop_suite_grant_admin_permissions('drop_crm');
+}
+
+/**
+ * Ensures the activity "Full notes" field exists with current labels.
+ *
+ * Creates field_crm_meeting_notes (rich text) on crm_activity if missing and
+ * sets the labels and help text that distinguish it from the Summary field
+ * (field_crm_activity_body). Idempotent; called from hook_install() and
+ * drop_crm_update_1034().
+ */
+function _drop_crm_ensure_activity_details() {
+  if (!field_info_field('field_crm_meeting_notes')) {
+    field_create_field(array(
+      'field_name' => 'field_crm_meeting_notes',
+      'type' => 'text_long',
+    ));
+  }
+  if (!field_info_instance('crm_activity', 'field_crm_meeting_notes', 'crm_activity')) {
+    field_create_instance(array(
+      'field_name' => 'field_crm_meeting_notes',
+      'entity_type' => 'crm_activity',
+      'bundle' => 'crm_activity',
+      'label' => 'Full notes',
+      'required' => FALSE,
+      'settings' => array('text_processing' => 1),
+      'widget' => array(
+        'type' => 'text_textarea',
+        'weight' => 20,
+        'settings' => array('rows' => 20),
+      ),
+    ));
+  }
+
+  $labels = array(
+    'field_crm_activity_body' => array(
+      'label' => 'Summary',
+      'description' => 'What happened and what\'s next, in a line or two.',
+    ),
+    'field_crm_meeting_notes' => array(
+      'label' => 'Full notes',
+      'description' => 'Meeting minutes, the full text of an email, or other long-form record.',
+    ),
+  );
+  foreach ($labels as $field_name => $values) {
+    $instance = field_read_instance('crm_activity', $field_name, 'crm_activity');
+    if ($instance && ($instance['label'] !== $values['label'] || (isset($instance['description']) ? $instance['description'] : '') !== $values['description'])) {
+      $instance['label'] = $values['label'];
+      $instance['description'] = $values['description'];
+      field_update_instance($instance);
+    }
+  }
 }
 
 /**
@@ -989,7 +1041,8 @@ function _drop_crm_create_fields() {
       'field_name' => 'field_crm_activity_body',
       'entity_type' => 'crm_activity',
       'bundle' => 'crm_activity',
-      'label' => t('Notes'),
+      'label' => 'Summary',
+      'description' => 'What happened and what\'s next, in a line or two.',
       'required' => FALSE,
       'widget' => array('type' => 'text_textarea', 'settings' => array('rows' => 6)),
     ),
@@ -2061,4 +2114,14 @@ function drop_crm_update_1033() {
   $config->setData($data);
   $config->save();
   return t('Re-imported the crm_last_contact view (added hide_empty on activity_date).');
+}
+
+/**
+ * Rename activity text fields to Summary / Full notes with help text, and
+ * create the Full notes field on sites that never got it (fresh installs
+ * before this update skipped drop_crm_update_1012()).
+ */
+function drop_crm_update_1034() {
+  _drop_crm_ensure_activity_details();
+  return t('Activity fields are now labelled Summary and Full notes.');
 }

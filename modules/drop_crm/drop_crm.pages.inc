@@ -260,7 +260,7 @@ function drop_crm_contact_view(CrmContact $contact) {
   $type_options   = _drop_crm_activity_type_options();
   $status_options = _drop_crm_activity_status_options();
 
-  // Find which activities have meeting notes — single query for all IDs.
+  // Find which activities have full notes — single query for all IDs.
   // Guard against the field's data table being absent on sites whose
   // schema_version says update_1012 ran but didn't actually create the
   // field/storage (tcog hit this 2026-04-26).
@@ -284,7 +284,7 @@ function drop_crm_contact_view(CrmContact $contact) {
       $subject_cell .= ' <span class="crm-outreach-badge">' . t('outreach') . '</span>';
     }
     if (!empty($aids_with_notes[$activity->aid])) {
-      $subject_cell .= ' <span class="crm-notes-badge" title="' . t('Has meeting notes') . '">'
+      $subject_cell .= ' <span class="crm-notes-badge" title="' . t('Has full notes') . '">'
         . icon('note', array('attributes' => array('width' => 14, 'height' => 14))) . '</span>';
     }
     $rows[] = array(
@@ -479,12 +479,12 @@ function drop_crm_activity_view(CrmActivity $activity) {
     '#weight' => 2,
   );
 
-  // --- Notes section ---
+  // --- Summary section ---
   try {
     $notes = entity_metadata_wrapper('crm_activity', $activity)->field_crm_activity_body->value();
     if (!empty($notes)) {
       $output['notes_heading'] = array(
-        '#markup' => drop_suite_section_header(t('Notes')),
+        '#markup' => drop_suite_section_header(t('Summary')),
         '#weight' => 10,
       );
       $output['notes'] = array(
@@ -495,12 +495,12 @@ function drop_crm_activity_view(CrmActivity $activity) {
   }
   catch (EntityMetadataWrapperException $e) {}
 
-  // --- Meeting notes — displayed as a collapsed accordion ---
+  // --- Full notes — displayed as a collapsed accordion ---
   $meeting_items = field_get_items('crm_activity', $activity, 'field_crm_meeting_notes');
   if ($meeting_items && !empty($meeting_items[0]['value'])) {
     $format = !empty($meeting_items[0]['format']) ? $meeting_items[0]['format'] : 'filtered_html';
     $output['meeting_notes_heading'] = array(
-      '#markup' => drop_suite_section_header(t('Details')),
+      '#markup' => drop_suite_section_header(t('Full notes')),
       '#weight' => 20,
     );
     $output['meeting_notes'] = array(
