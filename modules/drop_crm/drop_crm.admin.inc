@@ -3100,16 +3100,18 @@ function drop_crm_report_clients() {
   }
   $stale_cutoff = REQUEST_TIME - ($stale_days * 86400);
 
-  // Sort mode: 'warmth' (default) or 'stale' (oldest edit first). Kept as a
-  // query parameter rather than TableSort because the default ordering is a
-  // computed warmth rank with no single sortable column behind it.
-  $sort = (isset($_GET['sort']) && $_GET['sort'] === 'stale') ? 'stale' : 'warmth';
+  // Sort mode: 'warmth' (default), 'stale' (oldest edit first) or 'recent'
+  // (newest edit first). Kept as a query parameter rather than TableSort
+  // because the default ordering is a computed warmth rank with no single
+  // sortable column behind it.
+  $sort = isset($_GET['sort']) && in_array($_GET['sort'], array('stale', 'recent'), TRUE) ? $_GET['sort'] : 'warmth';
 
-  if ($sort === 'stale') {
-    // Oldest edit first, so the clients most overdue for an update lead.
-    usort($results, function($a, $b) {
+  if ($sort === 'stale' || $sort === 'recent') {
+    // 'stale' puts the clients most overdue for an update first.
+    $direction = ($sort === 'stale') ? 1 : -1;
+    usort($results, function($a, $b) use ($direction) {
       if ($a->changed != $b->changed) {
-        return ($a->changed < $b->changed) ? -1 : 1;
+        return ($a->changed < $b->changed) ? -$direction : $direction;
       }
       return strcasecmp($a->name, $b->name);
     });
@@ -3199,19 +3201,42 @@ function drop_crm_report_clients() {
   }
 
   // Sort toggle.
-  $toggle = '<p class="drop_crm-report-sort">' . t('Sort by:') . ' ';
-  $toggle .= ($sort === 'warmth')
-    ? '<strong>' . t('Warmth') . '</strong>'
-    : l(t('Warmth'), 'drop/crm/reports/clients');
-  $toggle .= ' | ';
-  $toggle .= ($sort === 'stale')
-    ? '<strong>' . t('Least recently updated') . '</strong>'
-    : l(t('Least recently updated'), 'drop/crm/reports/clients', array('query' => array('sort' => 'stale')));
-  $toggle .= '</p>';
+  $sort_options = array(
+    'warmth' => t('Warmth'),
+    'stale'  => t('Least recently updated'),
+    'recent' => t('Most recently updated'),
+  );
+  $sort_links = array();
+  foreach ($sort_options as $key => $label) {
+    $sort_links[] = ($sort === $key)
+      ? '<strong>' . $label . '</strong>'
+      : l($label, 'drop/crm/reports/clients', $key === 'warmth' ? array() : array('query' => array('sort' => $key)));
+  }
+  $toggle = '<p class="drop_crm-report-sort">' . t('Sort by:') . ' ' . implode(' | ', $sort_links) . '</p>';
+
+  // Clickable Warmth and Last updated headers. Last updated starts oldest
+  // first and flips direction on each click, like a TableSort column.
+  $warmth_header = l(t('Warmth') . ($sort === 'warmth' ? theme('tablesort_indicator', array('style' => 'asc')) : ''), 'drop/crm/reports/clients', array('html' => TRUE));
+  $updated_next = ($sort === 'stale') ? 'recent' : 'stale';
+  $updated_indicator = '';
+  if ($sort === 'stale' || $sort === 'recent') {
+    $updated_indicator = theme('tablesort_indicator', array('style' => $sort === 'stale' ? 'asc' : 'desc'));
+  }
+  $updated_header = l(t('Last updated') . $updated_indicator, 'drop/crm/reports/clients', array(
+    'query' => array('sort' => $updated_next),
+    'html' => TRUE,
+    'attributes' => array('title' => $updated_next === 'stale' ? t('Sort by least recently updated') : t('Sort by most recently updated')),
+  ));
 
   $table  = $toggle;
   $table .= theme('table', array(
-    'header'     => array(t('Name'), t('Type'), t('Warmth'), t('Status'), t('Last updated')),
+    'header'     => array(
+      t('Name'),
+      t('Type'),
+      array('data' => $warmth_header, 'class' => $sort === 'warmth' ? array('active') : array()),
+      t('Status'),
+      array('data' => $updated_header, 'class' => $sort !== 'warmth' ? array('active') : array()),
+    ),
     'rows'       => $rows,
     'attributes' => array('class' => array('drop_crm-clients-table')),
     'empty'      => t('No contacts found.'),

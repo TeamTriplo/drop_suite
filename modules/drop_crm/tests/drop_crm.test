@@ -937,3 +937,73 @@ class DropCrmContactMethodTest extends DropCrmTestBase {
     $this->assertText('new@acme.com', 'New email address appears in the notification.');
   }
 }
+
+/**
+ * Clients report sorting.
+ */
+class DropCrmClientsReportTest extends DropCrmTestBase {
+
+  /** @var object A person with CRM access. */
+  protected $crmUser;
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop CRM Clients report',
+      'description' => 'The Clients report sorts by warmth or by last updated, in either direction.',
+      'group'       => 'Drop CRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'drop_crm');
+    $this->crmUser = $this->backdropCreateUser(array('access crm'));
+
+    $tid = db_query("SELECT tid FROM {taxonomy_term_data} WHERE vocabulary = 'drop_tags' AND name = 'Client'")->fetchField();
+    $changed = array(
+      'Middle Client' => REQUEST_TIME - 86400 * 10,
+      'Oldest Client' => REQUEST_TIME - 86400 * 200,
+      'Newest Client' => REQUEST_TIME - 3600,
+    );
+    foreach ($changed as $name => $time) {
+      $org = entity_create('crm_contact', array(
+        'type'   => 'crm_organization',
+        'name'   => $name,
+        'status' => 1,
+      ));
+      $org->field_drop_tags[LANGUAGE_NONE][0]['tid'] = $tid;
+      $org->save();
+      db_update('crm_contact')->fields(array('changed' => $time))->condition('cid', $org->cid)->execute();
+    }
+  }
+
+  /**
+   * Last updated sorts oldest first, then newest first, from the header.
+   */
+  public function testSortByLastUpdated() {
+    $this->backdropLogin($this->crmUser);
+
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('sort' => 'stale')));
+    $this->assertResponse(200);
+    $this->assertEqual($this->clientOrder(), array('Oldest Client', 'Middle Client', 'Newest Client'), 'Least recently updated first.');
+    $this->assertLinkByHref('sort=recent', 0, 'The Last updated header now offers newest first.');
+
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('sort' => 'recent')));
+    $this->assertEqual($this->clientOrder(), array('Newest Client', 'Middle Client', 'Oldest Client'), 'Most recently updated first.');
+    $this->assertText('Most recently updated', 'The sort toggle names the newest-first order.');
+
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('sort' => 'bogus')));
+    $this->assertEqual($this->clientOrder(), array('Middle Client', 'Newest Client', 'Oldest Client'), 'Unknown sort falls back to warmth, then name.');
+  }
+
+  /**
+   * Client names in table order.
+   */
+  protected function clientOrder() {
+    $names = array();
+    foreach ($this->xpath('//table[contains(@class, "drop_crm-clients-table")]//tbody/tr/td[1]//a') as $link) {
+      $names[] = (string) $link;
+    }
+    return $names;
+  }
+
+}
