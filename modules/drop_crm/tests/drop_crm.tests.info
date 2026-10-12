@@ -33,3 +33,9 @@ name = Drop list-page link smoke test
 description = Discovers every drop/* page-display View and verifies its result-row links load without error.
 group = Drop CRM
 file = drop_crm_links.test
+
+[DropCrmClientsReportTest]
+name = Drop CRM Clients report
+description = The Clients report view lists active Client-tagged contacts, ranks warmth, sorts by last updated, and flags stale contacts.
+group = Drop CRM
+file = drop_crm.test
