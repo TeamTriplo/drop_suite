@@ -37,6 +37,17 @@ function drop_crm_views_data_alter(&$data) {
       $data['crm_contact']['name']['field']['handler'] = 'drop_crm_handler_field_contact_name';
     }
 
+    // "Last updated": the changed time as an age, with a staleness flag.
+    $data['crm_contact']['last_updated'] = array(
+      'title' => t('Last updated'),
+      'help' => t('How long ago the contact was saved, flagged when past the Clients report staleness threshold.'),
+      'real field' => 'changed',
+      'field' => array(
+        'handler' => 'drop_crm_handler_field_last_updated',
+        'click sortable' => TRUE,
+      ),
+    );
+
     $data['crm_contact']['contact_methods'] = array(
       'title'  => t('Contact Methods'),
       'help'   => t('Relate a contact to its email, telephone, and address records.'),
@@ -50,4 +61,22 @@ function drop_crm_views_data_alter(&$data) {
       ),
     );
   }
+
+  // Warmth sorts Hot, Warm, Cold, unset rather than alphabetically.
+  if (isset($data['field_data_field_crm_warmth']['field_crm_warmth']['field'])) {
+    $data['field_data_field_crm_warmth']['field_crm_warmth']['field']['handler'] = 'drop_crm_handler_field_warmth';
+    $data['field_data_field_crm_warmth']['field_crm_warmth_rank'] = array(
+      'title' => t('Warmth rank'),
+      'help' => t('Sort by warmth: Hot, Warm, Cold, then contacts with no warmth.'),
+      'real field' => 'field_crm_warmth_value',
+      'sort' => array('handler' => 'drop_crm_handler_sort_warmth'),
+    );
+  }
+
+  // Summary line for the Clients report.
+  $data['views']['drop_crm_client_summary'] = array(
+    'title' => t('Clients summary'),
+    'help' => t('Client count, plus how many need an update.'),
+    'area' => array('handler' => 'drop_crm_handler_area_client_summary'),
+  );
 }

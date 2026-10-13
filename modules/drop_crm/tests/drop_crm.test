@@ -937,3 +937,131 @@ class DropCrmContactMethodTest extends DropCrmTestBase {
     $this->assertText('new@acme.com', 'New email address appears in the notification.');
   }
 }
+
+/**
+ * Clients report (views.view.crm_clients).
+ */
+class DropCrmClientsReportTest extends DropCrmTestBase {
+
+  /** @var object A person with CRM access. */
+  protected $crmUser;
+
+  /** @var array Contact ids keyed by name. */
+  protected $cids = array();
+
+  public static function getInfo() {
+    return array(
+      'name'        => 'Drop CRM Clients report',
+      'description' => 'The Clients report view lists active Client-tagged contacts, ranks warmth, sorts by last updated, and flags stale contacts.',
+      'group'       => 'Drop CRM',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('drop_suite', 'drop_crm');
+    $this->crmUser = $this->backdropCreateUser(array('access crm'));
+    config_set('drop_crm.settings', 'client_stale_days', 30);
+
+    $client = $this->tagTid('Client');
+    $partner = $this->tagTid('Partner');
+    $day = 86400;
+    // name => array(tags, warmth, days since saved, active, status note).
+    // "Apex Hot Client" is saved after "Hot Client" so that name order and
+    // insertion order differ.
+    $contacts = array(
+      'Cold Client'      => array(array($client), 'cold', 2, 1, ''),
+      'Hot Client'       => array(array($client, $partner), 'hot', 100, 1, ''),
+      'Unset Client'     => array(array($client), '', 40, 1, ''),
+      'Warm Client'      => array(array($client), 'warm', 10, 1, "Renewal due.\nWaiting on board vote."),
+      'Partner Only'     => array(array($partner), 'hot', 1, 1, ''),
+      'Inactive Client'  => array(array($client), 'hot', 1, 0, ''),
+      'Apex Hot Client'  => array(array($client), 'hot', 5, 1, ''),
+    );
+    foreach ($contacts as $name => $info) {
+      list($tids, $warmth, $age, $active, $status) = $info;
+      $org = entity_create('crm_contact', array(
+        'type'   => 'crm_organization',
+        'name'   => $name,
+        'status' => $active,
+      ));
+      foreach ($tids as $delta => $tid) {
+        $org->field_drop_tags[LANGUAGE_NONE][$delta]['tid'] = $tid;
+      }
+      if ($warmth) {
+        $org->field_crm_warmth[LANGUAGE_NONE][0]['value'] = $warmth;
+      }
+      if ($status) {
+        $org->field_crm_status[LANGUAGE_NONE][0]['value'] = $status;
+      }
+      $org->save();
+      db_update('crm_contact')->fields(array('changed' => REQUEST_TIME - $age * $day))->condition('cid', $org->cid)->execute();
+      $this->cids[$name] = $org->cid;
+    }
+    entity_get_controller('crm_contact')->resetCache();
+  }
+
+  /**
+   * Default order is warmth rank then name; only active Client contacts.
+   */
+  public function testListingAndWarmthOrder() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/reports/clients');
+    $this->assertResponse(200, 'Clients report loads.');
+    $this->assertEqual($this->clientOrder(), array('Apex Hot Client', 'Hot Client', 'Warm Client', 'Cold Client', 'Unset Client'), 'Hot, Warm, Cold, then unset, by name within each; inactive and non-client contacts are left out, and a contact with two tags appears once.');
+
+    $this->assertLinkByHref('drop/crm/contacts/' . $this->cids['Hot Client'] . '/edit', 0, 'Names link to the edit form.');
+    $this->assertText('5 clients — 2 not updated in the last 30 days.', 'Summary counts clients and stale clients.');
+    $this->assertEqual(count($this->xpath('//tr[contains(@class, "drop_crm-row-stale")]')), 2, 'Stale rows are marked.');
+    $this->assertEqual(count($this->xpath('//tr[contains(@class, "drop_crm-row-hot")]')), 2, 'Hot rows are tinted.');
+    $this->assertText('Needs update', 'Stale contacts are flagged.');
+    $this->assertRaw('Renewal due.<br />', 'Line breaks in the status note are kept.');
+
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('order' => 'field_crm_warmth', 'sort' => 'desc')));
+    $this->assertEqual($this->clientOrder(), array('Unset Client', 'Cold Client', 'Warm Client', 'Apex Hot Client', 'Hot Client'), 'Clicking Warmth reverses the rank and keeps names in order within each.');
+  }
+
+  /**
+   * Last updated sorts in either direction from its column header.
+   */
+  public function testSortByLastUpdated() {
+    $this->backdropLogin($this->crmUser);
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('order' => 'last_updated', 'sort' => 'asc')));
+    $this->assertEqual($this->clientOrder(), array('Hot Client', 'Unset Client', 'Warm Client', 'Apex Hot Client', 'Cold Client'), 'Least recently updated first.');
+    $this->backdropGet('drop/crm/reports/clients', array('query' => array('order' => 'last_updated', 'sort' => 'desc')));
+    $this->assertEqual($this->clientOrder(), array('Cold Client', 'Apex Hot Client', 'Warm Client', 'Unset Client', 'Hot Client'), 'Most recently updated first.');
+  }
+
+  /**
+   * Without CRM access the report is denied.
+   */
+  public function testAccess() {
+    $this->backdropLogin($this->backdropCreateUser(array()));
+    $this->backdropGet('drop/crm/reports/clients');
+    $this->assertResponse(403, 'The report requires access crm.');
+  }
+
+  /**
+   * Client names in table order.
+   */
+  protected function clientOrder() {
+    $names = array();
+    foreach ($this->xpath('//table[contains(@class, "drop_crm-clients-table")]//tbody/tr/td[contains(@class, "views-field-name")]//a') as $link) {
+      $names[] = trim((string) $link);
+    }
+    return $names;
+  }
+
+  /**
+   * The tid of a drop_tags term, created if missing.
+   */
+  protected function tagTid($name) {
+    $tid = db_query("SELECT tid FROM {taxonomy_term_data} WHERE vocabulary = 'drop_tags' AND name = :name", array(':name' => $name))->fetchField();
+    if (!$tid) {
+      $term = entity_create('taxonomy_term', array('vocabulary' => 'drop_tags', 'name' => $name, 'parent' => array(0)));
+      taxonomy_term_save($term);
+      $tid = $term->tid;
+    }
+    return $tid;
+  }
+
+}

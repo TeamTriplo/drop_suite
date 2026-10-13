@@ -2125,3 +2125,18 @@ function drop_crm_update_1034() {
   _drop_crm_ensure_activity_details();
   return t('Activity fields are now labelled Summary and Full notes.');
 }
+
+/**
+ * Replace the hand-coded Clients report with the crm_clients view.
+ *
+ * Fresh installs get the view from config/; this imports it on existing
+ * sites. The legacy menu item is gone, so the view's page display now owns
+ * drop/crm/reports/clients.
+ */
+function drop_crm_update_1035() {
+  // Only creates the view if it is missing; an existing one is kept.
+  config_install_default_config('drop_crm', 'views.view.crm_clients');
+  views_invalidate_cache();
+  menu_rebuild();
+  return t('The Clients report is now the crm_clients view.');
+}

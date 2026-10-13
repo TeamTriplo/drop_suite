@@ -1,0 +1,216 @@
+{
+    "_config_name": "views.view.crm_clients",
+    "name": "crm_clients",
+    "description": "Clients report: active contacts tagged Client, with warmth, status note and last update.",
+    "module": "drop_crm",
+    "tag": "Drop Suite",
+    "disabled": false,
+    "base_table": "crm_contact",
+    "human_name": "CRM Clients report",
+    "core": "1.x",
+    "display": {
+        "default": {
+            "display_title": "Default",
+            "display_plugin": "default",
+            "display_options": {
+                "query": {
+                    "type": "views_query",
+                    "options": {
+                        "distinct": true
+                    }
+                },
+                "title": "Clients",
+                "access": {
+                    "type": "perm",
+                    "perm": "access crm"
+                },
+                "cache": {
+                    "type": "none"
+                },
+                "style_plugin": "table",
+                "style_options": {
+                    "columns": {
+                        "name": "name",
+                        "type": "type",
+                        "field_crm_warmth": "field_crm_warmth",
+                        "field_crm_status": "field_crm_status",
+                        "last_updated": "last_updated"
+                    },
+                    "default": "-1",
+                    "override": true,
+                    "sticky": false,
+                    "info": {
+                        "name": {
+                            "sortable": true,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": "",
+                            "empty_column": false
+                        },
+                        "type": {
+                            "sortable": false,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": "",
+                            "empty_column": false
+                        },
+                        "field_crm_warmth": {
+                            "sortable": true,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": "",
+                            "empty_column": false
+                        },
+                        "field_crm_status": {
+                            "sortable": false,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": "",
+                            "empty_column": false
+                        },
+                        "last_updated": {
+                            "sortable": true,
+                            "default_sort_order": "asc",
+                            "align": "",
+                            "separator": "",
+                            "empty_column": false
+                        }
+                    }
+                },
+                "relationships": {
+                    "field_drop_tags_tid": {
+                        "id": "field_drop_tags_tid",
+                        "table": "field_data_field_drop_tags",
+                        "field": "field_drop_tags_tid",
+                        "label": "Tag",
+                        "required": true
+                    }
+                },
+                "fields": {
+                    "cid": {
+                        "id": "cid",
+                        "table": "crm_contact",
+                        "field": "cid",
+                        "label": "",
+                        "exclude": true,
+                        "separator": ""
+                    },
+                    "name": {
+                        "id": "name",
+                        "table": "crm_contact",
+                        "field": "name",
+                        "label": "Name",
+                        "link_to_entity": false,
+                        "alter": {
+                            "make_link": true,
+                            "path": "drop/crm/contacts/[cid]/edit?destination=drop/crm/reports/clients"
+                        }
+                    },
+                    "type": {
+                        "id": "type",
+                        "table": "crm_contact",
+                        "field": "type",
+                        "label": "Type",
+                        "machine_name": false
+                    },
+                    "field_crm_warmth": {
+                        "id": "field_crm_warmth",
+                        "table": "field_data_field_crm_warmth",
+                        "field": "field_crm_warmth",
+                        "label": "Warmth",
+                        "element_class": "drop_crm-col-warmth",
+                        "type": "list_default",
+                        "click_sort_column": "value",
+                        "alter": {
+                            "alter_text": true,
+                            "text": "<span class=\"drop_crm-warmth drop_crm-warmth-[field_crm_warmth-value]\">[field_crm_warmth]</span>"
+                        },
+                        "empty": "—"
+                    },
+                    "field_crm_status": {
+                        "id": "field_crm_status",
+                        "table": "field_data_field_crm_status",
+                        "field": "field_crm_status",
+                        "label": "Status",
+                        "element_class": "drop_crm-col-status",
+                        "type": "text_default",
+                        "alter": {
+                            "alter_text": true,
+                            "text": "<span class=\"drop_crm-status-note\">[field_crm_status]</span>",
+                            "nl2br": true
+                        },
+                        "empty": "<span class=\"drop_crm-status-empty\">—</span>"
+                    },
+                    "last_updated": {
+                        "id": "last_updated",
+                        "table": "crm_contact",
+                        "field": "last_updated",
+                        "label": "Last updated",
+                        "element_class": "drop_crm-col-updated",
+                        "stale_flag": true
+                    }
+                },
+                "filters": {
+                    "status": {
+                        "id": "status",
+                        "table": "crm_contact",
+                        "field": "status",
+                        "value": "1"
+                    },
+                    "name": {
+                        "id": "name",
+                        "table": "taxonomy_term_data",
+                        "field": "name",
+                        "relationship": "field_drop_tags_tid",
+                        "operator": "=",
+                        "value": "Client",
+                        "case": false
+                    }
+                },
+                "sorts": {
+                    "field_crm_warmth_rank": {
+                        "id": "field_crm_warmth_rank",
+                        "table": "field_data_field_crm_warmth",
+                        "field": "field_crm_warmth_rank",
+                        "order": "ASC"
+                    },
+                    "name": {
+                        "id": "name",
+                        "table": "crm_contact",
+                        "field": "name",
+                        "order": "ASC"
+                    }
+                },
+                "pager": {
+                    "type": "none",
+                    "options": {
+                        "offset": 0
+                    }
+                },
+                "footer": {
+                    "drop_crm_client_summary": {
+                        "id": "drop_crm_client_summary",
+                        "table": "views",
+                        "field": "drop_crm_client_summary"
+                    }
+                },
+                "empty": {
+                    "area": {
+                        "id": "area",
+                        "table": "views",
+                        "field": "area",
+                        "content": "No active contacts tagged \"Client\". Tag an organization or person with the Client tag to list it here.",
+                        "format": "plain_text"
+                    }
+                }
+            }
+        },
+        "page": {
+            "display_title": "Page",
+            "display_plugin": "page",
+            "display_options": {
+                "path": "drop/crm/reports/clients"
+            }
+        }
+    }
+}

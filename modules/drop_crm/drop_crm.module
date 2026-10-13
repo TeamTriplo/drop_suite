@@ -39,6 +39,10 @@ function drop_crm_autoload_info() {
     'CrmContactInlineEntityFormController'                   => 'drop_crm.inline_entity_form.inc',
     'EntityReferenceSelectionHandlerGeneric_crm_contact'     => 'drop_crm.entity.inc',
     'drop_crm_handler_field_contact_name'                    => 'views/drop_crm_handler_field_contact_name.inc',
+    'drop_crm_handler_field_last_updated'                    => 'views/drop_crm_handler_field_last_updated.inc',
+    'drop_crm_handler_field_warmth'                          => 'views/drop_crm_handler_field_warmth.inc',
+    'drop_crm_handler_sort_warmth'                           => 'views/drop_crm_handler_sort_warmth.inc',
+    'drop_crm_handler_area_client_summary'                   => 'views/drop_crm_handler_area_client_summary.inc',
   );
 }
 
@@ -1106,13 +1110,7 @@ function drop_crm_menu() {
       'type'             => MENU_CALLBACK,
     );
   }
-  $items['drop/crm/reports/clients'] = array(
-    'title'            => 'Clients',
-    'page callback'    => 'drop_crm_report_clients',
-    'access arguments' => array('access crm'),
-    'file'             => 'drop_crm.admin.inc',
-    'type'             => MENU_CALLBACK,
-  );
+  // drop/crm/reports/clients is the page display of views.view.crm_clients.
   $items['drop/crm/reports/tag-filter'] = array(
     'title'            => 'Tag Filter',
     'page callback'    => 'drop_crm_report_tag_filter',
@@ -1426,6 +1424,10 @@ function drop_crm_views_api() {
  * cells, so visual output is unchanged.
  */
 function drop_crm_views_pre_render(&$view) {
+  if ($view->name === 'crm_clients') {
+    backdrop_add_css(backdrop_get_path('module', 'drop_crm') . '/drop_crm.admin.css');
+    return;
+  }
   if ($view->name !== 'crm_last_contact') {
     return;
   }
@@ -1437,6 +1439,39 @@ function drop_crm_views_pre_render(&$view) {
       if ($val === NULL && strpos($key, 'activity_date') !== FALSE) {
         $row->$key = 0;
       }
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_views_view_table().
+ *
+ * On the Clients report, tints rows by warmth and marks stale rows, matching
+ * the classes the report used before it became a view.
+ */
+function drop_crm_preprocess_views_view_table(&$variables) {
+  $view = $variables['view'];
+  if ($view->name !== 'crm_clients') {
+    return;
+  }
+  $variables['classes'][] = 'drop_crm-clients-table';
+  $updated = NULL;
+  foreach ($view->field as $field) {
+    if ($field instanceof drop_crm_handler_field_last_updated) {
+      $updated = $field;
+      break;
+    }
+  }
+  foreach ($view->result as $index => $row) {
+    if (!isset($variables['rows'][$index])) {
+      continue;
+    }
+    $warmth = isset($row->field_field_crm_warmth[0]['raw']['value']) ? $row->field_field_crm_warmth[0]['raw']['value'] : '';
+    if ($warmth === 'hot' || $warmth === 'warm') {
+      $variables['row_classes'][$index][] = 'drop_crm-row-' . $warmth;
+    }
+    if ($updated && $updated->is_stale($row)) {
+      $variables['row_classes'][$index][] = 'drop_crm-row-stale';
     }
   }
 }
@@ -1999,3 +2034,23 @@ function drop_crm_accordion_prefix($title, $extra_html = '', $open = FALSE) {
 function drop_crm_accordion_suffix() {
   return '</div></details>';
 }
+
+/**
+ * Days without an edit before a client counts as needing an update.
+ */
+function drop_crm_client_stale_days() {
+  $days = (int) config_get('drop_crm.settings', 'client_stale_days');
+  return $days > 0 ? $days : DROP_CRM_CLIENT_STALE_DAYS;
+}
+
+/**
+ * SQL expression ranking a warmth column: hot 0, warm 1, cold 2, unset 3.
+ *
+ * @param string $column
+ *   A qualified column, e.g. "alias.field_crm_warmth_value". Callers pass
+ *   Views table aliases, never input.
+ */
+function drop_crm_warmth_rank_formula($column) {
+  return "(CASE $column WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 WHEN 'cold' THEN 2 ELSE 3 END)";
+}
+
