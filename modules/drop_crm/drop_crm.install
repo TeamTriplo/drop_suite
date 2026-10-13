@@ -2134,13 +2134,9 @@ function drop_crm_update_1034() {
  * drop/crm/reports/clients.
  */
 function drop_crm_update_1035() {
-  if (!views_get_view('crm_clients')) {
-    $config_path = backdrop_get_path('module', 'drop_crm') . '/config/views.view.crm_clients.json';
-    $data = json_decode(file_get_contents($config_path), TRUE);
-    $config = config('views.view.crm_clients');
-    $config->setData($data);
-    $config->save();
-  }
+  // Only creates the view if it is missing; an existing one is kept.
+  config_install_default_config('drop_crm', 'views.view.crm_clients');
+  views_invalidate_cache();
   menu_rebuild();
   return t('The Clients report is now the crm_clients view.');
 }

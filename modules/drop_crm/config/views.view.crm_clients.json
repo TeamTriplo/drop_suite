@@ -136,7 +136,8 @@
                         "type": "text_default",
                         "alter": {
                             "alter_text": true,
-                            "text": "<span class=\"drop_crm-status-note\">[field_crm_status]</span>"
+                            "text": "<span class=\"drop_crm-status-note\">[field_crm_status]</span>",
+                            "nl2br": true
                         },
                         "empty": "<span class=\"drop_crm-status-empty\">—</span>"
                     },
