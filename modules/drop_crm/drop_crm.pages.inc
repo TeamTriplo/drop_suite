@@ -97,13 +97,17 @@ function drop_crm_contact_view(CrmContact $contact) {
     $add_person_link = l(t('+ Add person'), 'drop/crm/contacts/add/crm_person',
       array('attributes' => array('class' => array('drop-section-add')),
             'query'      => array('org' => $contact->cid)));
+    if (drop_crm_org_link_person_access($contact)) {
+      $add_person_link .= ' ' . l(t('+ Link existing person'), 'drop/crm/contact/' . $contact->cid . '/link-person',
+        array('attributes' => array('class' => array('drop-section-add'))));
+    }
     $output['affiliated_contacts'] = array(
       '#weight' => isset($display['affiliated_contacts']['weight']) ? $display['affiliated_contacts']['weight'] : 5,
       '#access' => !isset($display['affiliated_contacts']) || $display['affiliated_contacts']['visible'],
       '#prefix' => drop_crm_accordion_prefix(t('Affiliated People'), $add_person_link, TRUE),
       '#suffix' => drop_crm_accordion_suffix(),
       'help'    => array(
-        '#markup' => '<p class="crm-section-help">' . t('People who list this organization as their employer. To add someone, edit their contact profile and set the <strong>Employer</strong> field.') . '</p>',
+        '#markup' => '<p class="crm-section-help">' . t('People who list this organization in their <strong>Organization</strong> field. Use <em>Add person</em> to create someone new, or <em>Link existing person</em> to connect someone already in the CRM.') . '</p>',
         '#weight' => -1,
       ),
       'table'   => array(

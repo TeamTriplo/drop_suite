@@ -2582,8 +2582,8 @@ function drop_crm_relationship_form($form, &$form_state, $rid_or_object = NULL) 
     '#title'             => t('Person'),
     '#default_value'     => $contact_a_default,
     '#required'          => TRUE,
-    '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
-    '#description'       => t('Start typing a contact name.'),
+    '#autocomplete_path' => 'drop/crm/autocomplete/relationship-contacts',
+    '#description'       => t('Start typing the name of a person or household.'),
     '#maxlength'         => 300,
     '#weight'            => -30,
   );
@@ -2593,8 +2593,8 @@ function drop_crm_relationship_form($form, &$form_state, $rid_or_object = NULL) 
     '#title'             => t('Related Contact'),
     '#default_value'     => $contact_b_default,
     '#required'          => TRUE,
-    '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
-    '#description'       => t('Start typing a contact name.'),
+    '#autocomplete_path' => 'drop/crm/autocomplete/relationship-contacts',
+    '#description'       => t('Start typing the name of a person or household. To link a person to an organization, use the Employer field on their profile.'),
     '#maxlength'         => 300,
     '#weight'            => -25,
   );
@@ -3554,4 +3554,86 @@ function drop_crm_contribution_income_report() {
       '#attributes' => array('style' => 'font-size:0.95em;'),
     ),
   );
+}
+
+/**
+ * Form: link an existing person to an organization.
+ *
+ * Adds the organization to the person's Organization (field_crm_employer)
+ * field, alongside any organizations already listed there.
+ */
+function drop_crm_org_link_person_form($form, &$form_state, $org) {
+  $form['#attached']['css'][] = backdrop_get_path('module', 'drop_crm') . '/drop_crm.admin.css';
+  $form_state['org'] = $org;
+  $org_label = entity_label('crm_contact', $org);
+
+  backdrop_set_title(t('Link a person to @org', array('@org' => $org_label)));
+
+  $form['person'] = array(
+    '#type'              => 'textfield',
+    '#title'             => t('Person'),
+    '#required'          => TRUE,
+    '#autocomplete_path' => 'drop/crm/autocomplete/people',
+    '#description'       => t('Start typing the name of someone already in the CRM. @org will be added to their Organization field.', array('@org' => $org_label)),
+    '#maxlength'         => 300,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Link person'),
+  );
+  $form['actions']['cancel'] = array(
+    '#type'  => 'link',
+    '#title' => t('Cancel'),
+    '#href'  => 'drop/crm/contact/' . $org->cid,
+  );
+
+  return $form;
+}
+
+/**
+ * Validate callback for drop_crm_org_link_person_form().
+ */
+function drop_crm_org_link_person_form_validate($form, &$form_state) {
+  if (!preg_match('/\[cid:(\d+)\]/', $form_state['values']['person'], $m)) {
+    form_set_error('person', t('Please select a person from the autocomplete list.'));
+    return;
+  }
+  $person = crm_contact_load((int) $m[1]);
+  if (!$person || $person->bundle() !== 'crm_person') {
+    form_set_error('person', t('Please select a person from the autocomplete list.'));
+    return;
+  }
+
+  $org = $form_state['org'];
+  $items = field_get_items('crm_contact', $person, 'field_crm_employer');
+  foreach ($items ? $items : array() as $item) {
+    if ((int) $item['target_id'] === (int) $org->cid) {
+      form_set_error('person', t('@person is already linked to @org.', array(
+        '@person' => entity_label('crm_contact', $person),
+        '@org'    => entity_label('crm_contact', $org),
+      )));
+      return;
+    }
+  }
+
+  $form_state['person'] = $person;
+}
+
+/**
+ * Submit callback for drop_crm_org_link_person_form().
+ */
+function drop_crm_org_link_person_form_submit($form, &$form_state) {
+  $org = $form_state['org'];
+  $person = $form_state['person'];
+
+  $person->field_crm_employer[LANGUAGE_NONE][] = array('target_id' => (int) $org->cid);
+  $person->save();
+
+  backdrop_set_message(t('@person is now linked to @org.', array(
+    '@person' => entity_label('crm_contact', $person),
+    '@org'    => entity_label('crm_contact', $org),
+  )));
+  $form_state['redirect'] = 'drop/crm/contact/' . $org->cid;
 }
