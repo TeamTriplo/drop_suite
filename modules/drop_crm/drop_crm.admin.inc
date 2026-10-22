@@ -2582,8 +2582,8 @@ function drop_crm_relationship_form($form, &$form_state, $rid_or_object = NULL) 
     '#title'             => t('Person'),
     '#default_value'     => $contact_a_default,
     '#required'          => TRUE,
-    '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
-    '#description'       => t('Start typing a contact name.'),
+    '#autocomplete_path' => 'drop/crm/autocomplete/relationship-contacts',
+    '#description'       => t('Start typing the name of a person or household.'),
     '#maxlength'         => 300,
     '#weight'            => -30,
   );
@@ -2593,8 +2593,8 @@ function drop_crm_relationship_form($form, &$form_state, $rid_or_object = NULL) 
     '#title'             => t('Related Contact'),
     '#default_value'     => $contact_b_default,
     '#required'          => TRUE,
-    '#autocomplete_path' => 'drop/crm/autocomplete/contacts',
-    '#description'       => t('Start typing a contact name.'),
+    '#autocomplete_path' => 'drop/crm/autocomplete/relationship-contacts',
+    '#description'       => t('Start typing the name of a person or household. To link a person to an organization, use the Employer field on their profile.'),
     '#maxlength'         => 300,
     '#weight'            => -25,
   );

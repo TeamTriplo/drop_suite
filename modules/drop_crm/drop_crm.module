@@ -1030,6 +1030,15 @@ function drop_crm_menu() {
     'type'           => MENU_CALLBACK,
   );
 
+  // Relationship autocomplete — same as above minus organizations, which
+  // relationships cannot link (people connect to orgs via Employer).
+  $items['drop/crm/autocomplete/relationship-contacts'] = array(
+    'title'          => 'Relationship contact autocomplete',
+    'page callback'  => 'drop_crm_relationship_contact_autocomplete',
+    'access arguments' => array('access crm'),
+    'type'           => MENU_CALLBACK,
+  );
+
   // Organization-only autocomplete (returns entityreference-compatible format).
   // Entityreference appends /{field_name}/{entity_type}/{bundle}/{entity_id}
   // to the configured path before storing it as #autocomplete_path (7 segments
@@ -1644,6 +1653,36 @@ function _drop_crm_format_address($method) {
  *   The partial string typed by the person.
  */
 function drop_crm_contact_autocomplete($string = '') {
+  backdrop_json_output(_drop_crm_contact_autocomplete_matches($string));
+}
+
+/**
+ * Autocomplete callback: contacts that can be part of a relationship.
+ *
+ * Same as drop_crm_contact_autocomplete() but leaves out organizations, which
+ * the relationship form rejects.
+ *
+ * @param string $string
+ *   The partial string typed by the person.
+ */
+function drop_crm_relationship_contact_autocomplete($string = '') {
+  backdrop_json_output(_drop_crm_contact_autocomplete_matches($string, 'crm_organization', '<>'));
+}
+
+/**
+ * Builds "Contact Name [cid:N]" autocomplete suggestions.
+ *
+ * @param string $string
+ *   The partial string typed by the person.
+ * @param string|null $type
+ *   Optional contact bundle to filter the results by.
+ * @param string $operator
+ *   '=' to return only $type, '<>' to leave $type out.
+ *
+ * @return array
+ *   Suggestions keyed by "Contact Name [cid:N]".
+ */
+function _drop_crm_contact_autocomplete_matches($string, $type = NULL, $operator = '=') {
   $matches = array();
   if (strlen($string) >= 1) {
     $needle = '%' . db_like($string) . '%';
@@ -1655,6 +1694,9 @@ function drop_crm_contact_autocomplete($string = '') {
       ->condition('name', $needle, 'LIKE')
       ->orderBy('name')
       ->range(0, 10);
+    if ($type) {
+      $query->condition('c.type', $type, $operator);
+    }
 
     $result = $query->execute();
     foreach ($result as $row) {
@@ -1682,6 +1724,9 @@ function drop_crm_contact_autocomplete($string = '') {
       if ($found_cids) {
         $subquery->condition('c.cid', $found_cids, 'NOT IN');
       }
+      if ($type) {
+        $subquery->condition('c.type', $type, $operator);
+      }
       $subquery->orderBy('c.name')->range(0, $remaining);
 
       foreach ($subquery->execute() as $row) {
@@ -1690,7 +1735,7 @@ function drop_crm_contact_autocomplete($string = '') {
       }
     }
   }
-  backdrop_json_output($matches);
+  return $matches;
 }
 
 /**
