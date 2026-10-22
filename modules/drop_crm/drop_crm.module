@@ -609,6 +609,17 @@ function drop_crm_contact_access($op, $entity = NULL, $account = NULL) {
 }
 
 /**
+ * Access callback: link an existing person to an organization.
+ *
+ * Only organizations qualify, and the person needs permission to edit
+ * contacts because the link is saved on the person's record.
+ */
+function drop_crm_org_link_person_access($contact) {
+  return $contact->bundle() === 'crm_organization'
+    && drop_crm_contact_access('update', $contact);
+}
+
+/**
  * Access callback for crm_contact_method entities.
  */
 function drop_crm_contact_method_access($op, $entity = NULL, $account = NULL) {
@@ -949,6 +960,17 @@ function drop_crm_menu() {
     'file'             => 'drop_crm.pages.inc',
   );
 
+  // Link an existing person to an organization (sets their Organization field).
+  $items['drop/crm/contact/%crm_contact/link-person'] = array(
+    'title'            => 'Link existing person',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => array('drop_crm_org_link_person_form', 3),
+    'access callback'  => 'drop_crm_org_link_person_access',
+    'access arguments' => array(3),
+    'file'             => 'drop_crm.admin.inc',
+    'type'             => MENU_CALLBACK,
+  );
+
   // Activity view pages.
   $items['drop/crm/activity/%crm_activity'] = array(
     'title callback'   => 'entity_label',
@@ -1035,6 +1057,14 @@ function drop_crm_menu() {
   $items['drop/crm/autocomplete/relationship-contacts'] = array(
     'title'          => 'Relationship contact autocomplete',
     'page callback'  => 'drop_crm_relationship_contact_autocomplete',
+    'access arguments' => array('access crm'),
+    'type'           => MENU_CALLBACK,
+  );
+
+  // People-only autocomplete, used to link an existing person to an org.
+  $items['drop/crm/autocomplete/people'] = array(
+    'title'          => 'Person autocomplete',
+    'page callback'  => 'drop_crm_person_autocomplete',
     'access arguments' => array('access crm'),
     'type'           => MENU_CALLBACK,
   );
@@ -1667,6 +1697,18 @@ function drop_crm_contact_autocomplete($string = '') {
  */
 function drop_crm_relationship_contact_autocomplete($string = '') {
   backdrop_json_output(_drop_crm_contact_autocomplete_matches($string, 'crm_organization', '<>'));
+}
+
+/**
+ * Autocomplete callback: people only.
+ *
+ * Used when linking an existing person to an organization.
+ *
+ * @param string $string
+ *   The partial string typed by the person.
+ */
+function drop_crm_person_autocomplete($string = '') {
+  backdrop_json_output(_drop_crm_contact_autocomplete_matches($string, 'crm_person'));
 }
 
 /**
