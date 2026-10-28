@@ -809,3 +809,24 @@ function drop_suite_update_1210() {
   $fixed = _drop_suite_reparent_admin_drop_menu_links();
   return t('Re-parented @n admin/drop/* menu link(s) under the Drop Suite hub.', array('@n' => $fixed));
 }
+
+/**
+ * Reset the saved project form field order so Project name comes first.
+ *
+ * Contact, Ticket prefix and the monitoring fields were not registered as
+ * extra fields, so a saved Manage Fields order left them on their low code
+ * weights, above Project name. They are registered now; clearing the saved
+ * form order lets the new name-first defaults take effect. Field UI field
+ * weights (stored on the instances) and display settings are untouched.
+ *
+ * No hook_install() mirror: fresh installs have no saved order to reset.
+ */
+function drop_suite_update_1211() {
+  $settings = field_bundle_settings('drop_project', 'drop_project');
+  if (empty($settings['extra_fields']['form'])) {
+    return t('No saved project form order to reset.');
+  }
+  $settings['extra_fields']['form'] = array();
+  field_bundle_settings('drop_project', 'drop_project', $settings);
+  return t('Reset the saved project form field order; Project name now comes first.');
+}

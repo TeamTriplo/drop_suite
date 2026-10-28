@@ -1033,21 +1033,41 @@ function drop_suite_views_data_alter(&$data) {
 function drop_suite_field_extra_fields() {
   $extra = array();
 
-  // Form pseudo-fields.
+  // Form pseudo-fields. Every element drop_suite_project_form() builds must
+  // be registered here: once Field UI saves an order, registered elements
+  // get their saved weight while unregistered ones keep their code weight,
+  // so a missing entry lets that element jump above Project name. Default
+  // weights mirror the #weight values in drop_suite_project_form(). Modules
+  // that add elements via form alter register them in
+  // hook_field_extra_fields_alter().
   $extra['drop_project']['drop_project']['form']['name'] = array(
     'label' => t('Project name'),
     'description' => t('The project name (required).'),
-    'weight' => -10,
+    'weight' => -20,
   );
+  if (module_exists('drop_crm')) {
+    $extra['drop_project']['drop_project']['form']['cid_autocomplete'] = array(
+      'label' => t('Contact'),
+      'description' => t('Linked CRM contact.'),
+      'weight' => -18,
+    );
+  }
   $extra['drop_project']['drop_project']['form']['site_url'] = array(
     'label' => t('Website URL'),
     'description' => t('Primary URL for the project.'),
-    'weight' => 0,
+    'weight' => -16,
   );
+  if (module_exists('dropmonitor')) {
+    $extra['drop_project']['drop_project']['form']['monitoring'] = array(
+      'label' => t('Server monitoring'),
+      'description' => t('Link to a monitored server and site.'),
+      'weight' => 40,
+    );
+  }
   $extra['drop_project']['drop_project']['form']['active'] = array(
     'label' => t('Active'),
     'description' => t('Whether the project is active or archived.'),
-    'weight' => 5,
+    'weight' => 50,
   );
 
   // Display pseudo-fields.
